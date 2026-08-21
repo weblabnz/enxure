@@ -1,0 +1,137 @@
+services:
+
+  db:
+    image: mysql:8.0
+    container_name: invoxa-db
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-invoxa}
+      MYSQL_USER: ${DB_USER:-invoxa}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-invoxa_default_change_me}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-invoxa_root_default_change_me}
+      # Keeps stored timestamps in APP_TIMEZONE — MySQL defaults to UTC
+      # otherwise, and the app reads DATETIME columns as already being local.
+      TZ: ${APP_TIMEZONE:-UTC}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./sql/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - invoxa-net
+    labels:
+      wud.watch: "false"
+
+  php:
+    build:
+      context: .
+      dockerfile: php/Dockerfile
+    container_name: invoxa-php
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-invoxa}
+      DB_USER: ${DB_USER:-invoxa}
+      DB_PASSWORD: ${DB_PASSWORD:-invoxa_default_change_me}
+      # Leave unset — a unique secret is generated automatically on first boot
+      # (see php/docker-entrypoint.sh). Never reuse the same value across
+      # installs: this secret gates an endpoint reachable over the public HTTP
+      # port.
+      CRON_SECRET: ${CRON_SECRET:-}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+      APP_CURRENCY: ${APP_CURRENCY:-USD}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Invoxa}
+      SMTP_ENCRYPTION: ${SMTP_ENCRYPTION:-tls}
+    volumes:
+      - ./src:/usr/share/nginx/html:ro
+      # Host bind mounts so invoices/backups are ordinary files you can browse
+      # or back up with normal host tools, not buried in Docker volume storage.
+      - ./invoxa-invoices:/usr/share/nginx/html/invoxa-invoices
+      - ./invoxa-backups:/usr/share/nginx/html/invoxa-backups
+      - crontab-data:/etc/invoxa-crontab
+      # Rendered in-app on the Docs tab — only the php container needs these.
+      - ./README.md:/usr/share/nginx/html/docs/README.md:ro
+      - ./INSTALL.md:/usr/share/nginx/html/docs/INSTALL.md:ro
+      - ./CHANGELOG.md:/usr/share/nginx/html/docs/CHANGELOG.md:ro
+      - ./LICENSE:/usr/share/nginx/html/docs/LICENSE:ro
+    networks:
+      - invoxa-net
+    healthcheck:
+      # Checks that php-fpm itself is responding, independent of nginx or the
+      # database (covered by the healthchecks below).
+      test: ["CMD", "cgi-fcgi", "-bind", "-connect", "127.0.0.1:9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      wud.watch: "false"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: invoxa-nginx
+    restart: unless-stopped
+    depends_on:
+      - php
+    ports:
+      - "${HTTP_PORT:-8090}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./src:/usr/share/nginx/html:ro
+      - ./invoxa-invoices:/usr/share/nginx/html/invoxa-invoices:ro
+      # Backups and docs are deliberately not mounted here — backups are full
+      # DB dumps and must only be reachable through the authenticated app, and
+      # docs are rendered in-app by php (see above), never served by nginx.
+    networks:
+      - invoxa-net
+    healthcheck:
+      # Exercises the full request path (nginx -> php -> db); fails if the app
+      # can't reach the database.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/invoxa.php?health=1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      wud.watch: "false"
+
+  cron:
+    build:
+      context: .
+      dockerfile: cron/Dockerfile
+    container_name: invoxa-cron
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+      CRON_SCHEDULE: ${CRON_SCHEDULE:-15 7 3 * *}
+      # Keeps cron schedules matched to APP_TIMEZONE rather than UTC, so
+      # scheduled times fire when expected.
+      TZ: ${APP_TIMEZONE:-UTC}
+    volumes:
+      - crontab-data:/etc/crontabs
+    networks:
+      - invoxa-net    
+    labels:
+      wud.watch: "false"
+
+volumes:
+  db-data:
+  crontab-data:
+
+networks:
+  invoxa-net:
+    driver: bridge

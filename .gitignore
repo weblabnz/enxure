@@ -1,0 +1,12 @@
+.env
+
+# Local deployment notes, not part of the product.
+DEPLOY.md
+docker-compose.traefik.yml
+
+# Generated invoices/quotes and database backups: real client data, never
+# committed.
+invoxa-invoices/*
+!invoxa-invoices/.gitkeep
+invoxa-backups/*
+!invoxa-backups/.gitkeep
