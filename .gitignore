@@ -2,6 +2,7 @@
 
 # Local deployment notes, not part of the product.
 DEPLOY.md
+GIT.md
 docker-compose.traefik.yml
 
 # Generated invoices/quotes and database backups: real client data, never
