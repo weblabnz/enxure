@@ -11,6 +11,7 @@ services:
     container_name: invoxa-demo-php
     environment:
       INVOXA_DEMO_MODE: "1"
+      INVOXA_INSTANCE_LABEL: Demo
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
       SMTP_ENCRYPTION: none

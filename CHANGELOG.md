@@ -2,6 +2,49 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.3.5] - 2026-08-22
+
+### Fixed
+- Statistics' Revenue/Forecasting/Clients/Tax & Compliance/Activity/System sub-tabs were unclickable when unlicensed — the dimmed, view-only preview treatment was applied to the whole subnav (buttons included) instead of just the content panes, so a prospective buyer couldn't even browse between sections to see what each one offers. The sub-tab buttons are now always clickable; only the actual data underneath stays dimmed and non-interactive.
+
+## [2.3.4] - 2026-08-22
+
+### Changed
+- Password-reset and email-confirmation emails now send as "Invoxa (No-Reply)" instead of the business's own configured name — they're system-generated security emails, not business correspondence, so they shouldn't look like they came from (or expect a reply to) the business itself. The sending address is unchanged, still whatever `SMTP_FROM_EMAIL` the install has configured, so deliverability through the installer's own mail setup isn't affected.
+
+## [2.3.3] - 2026-08-22
+
+### Added
+- Settings > Authentication now shows the account email's verification status — a green "Verified" line once confirmed, or an amber "Not verified" warning with a **Verify Now** button if not, so the state from the first-login onboarding guide (2.3.0) doesn't just disappear once that one-time modal is dismissed.
+
+## [2.3.2] - 2026-08-22
+
+### Fixed
+- Signup and Settings > Authentication's password change accepted anything non-empty — a password like "test" went straight through with no length check, while the newer password-reset flow (2.2.0) already enforced an 8-character minimum. All three now share the same `PASSWORD_MIN_LENGTH` (8) requirement, both server-side and as a `minlength` hint on the fields themselves.
+
+## [2.3.1] - 2026-08-22
+
+### Added
+- New `INVOXA_INSTANCE_LABEL` env var appends to the browser tab title (e.g. "Invoxa (Demo)") on both the login screen and the main app shell, so a Demo or Test instance running alongside production is identifiable at a glance across tabs. Set on the `docker-compose.demo.yml` override; unset by default, so production's tab title is unchanged.
+
+## [2.3.0] - 2026-08-22
+
+### Added
+- Email confirmation: signup only checked that the account email was well-formed, never that it was actually reachable — since that same address is now the sole recovery path (2.2.0), a typo'd or fake email would silently break recovery later with no way to tell. A confirmation link is now emailed at signup (and again whenever the email is changed in Settings), with a **Resend confirmation email** option in the first-login onboarding guide until it's clicked.
+
+## [2.2.0] - 2026-08-22
+
+### Added
+- Account recovery: a **Forgot your password or username?** link on the login screen sends a reset email (containing the account's username plus a one-time link, valid 30 minutes) to the address on file. Whether or not that email matches an account, the same generic confirmation is shown, so the login screen never reveals which email is registered. Following a valid link also offers **Erase Everything & Start Over** — typing `RESET` wipes every client, invoice, and setting and returns to the signup screen — available only via a verified reset link rather than as an unauthenticated action on the login screen, since proving control of the account's email is the only thing standing between an anonymous visitor and a full data wipe.
+
+## [2.1.0] - 2026-08-22
+
+### Added
+- A one-time onboarding guide appears right after the very first signup (or after a Factory Reset, which returns the app to that same first-run state) — proper Invoxa branding (icon and wordmark, matching the sidebar), and a **Load Demo Data** button that jumps straight to Data Management > Demo Data so a new install can be populated and explored immediately, or **Start from scratch** to dismiss and begin with a clean slate.
+
+### Fixed
+- The very first sign-in after account creation showed "Welcome back, {username}" — the same flash used on every subsequent login — which is wrong for an account that has never logged in before. That first sign-in now shows the new onboarding guide instead; the "Welcome back" flash is unchanged for every login after that.
+
 ## [2.0.0] - 2026-08-19
 
 ### Changed

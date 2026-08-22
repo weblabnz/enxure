@@ -22,6 +22,7 @@ try {
 // ── Cron API Key ─────────────────────────────────────────────────────────────
 // Unset/empty means the cron path can never authenticate — fails closed, no shared default.
 define('CRON_SECRET', getenv('CRON_SECRET') ?: '');
+define('INSTANCE_LABEL', getenv('INVOXA_INSTANCE_LABEL') ?: '');
 
 // ── Paths / vendored libs ────────────────────────────────────────────────────
 define('INVOICES_DIR', '/usr/share/nginx/html/invoxa-invoices/');
@@ -40,12 +41,13 @@ define('CRONTAB_PATH', '/etc/invoxa-crontab/root');
 define('DOCS_DIR', __DIR__ . '/docs/');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.0.0');
+define('APP_VERSION', '2.3.5');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
 define('LOGIN_MAX_ATTEMPTS', 5);
 define('LOGIN_LOCKOUT_MINUTES', 15);
+define('PASSWORD_MIN_LENGTH', 8);
 
 // ── Email template defaults ──────────────────────────────────────────────────
 // Used when the matching invoxa_settings key (Settings > Email Templates)
@@ -157,6 +159,14 @@ $hasLockoutCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE 
 if (!$hasLockoutCol) {
     $mysqli->query("ALTER TABLE invoxa_users ADD COLUMN failed_login_attempts INT NOT NULL DEFAULT 0, ADD COLUMN locked_until DATETIME DEFAULT NULL");
 }
+$hasResetTokenCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_users' AND COLUMN_NAME = 'reset_token_hash'")->num_rows > 0;
+if (!$hasResetTokenCol) {
+    $mysqli->query("ALTER TABLE invoxa_users ADD COLUMN reset_token_hash VARCHAR(64) DEFAULT NULL, ADD COLUMN reset_token_expires DATETIME DEFAULT NULL");
+}
+$hasVerifyTokenCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_users' AND COLUMN_NAME = 'verify_token_hash'")->num_rows > 0;
+if (!$hasVerifyTokenCol) {
+    $mysqli->query("ALTER TABLE invoxa_users ADD COLUMN email_verified_at DATETIME DEFAULT NULL, ADD COLUMN verify_token_hash VARCHAR(64) DEFAULT NULL, ADD COLUMN verify_token_expires DATETIME DEFAULT NULL");
+}
 $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_totp_backup_codes (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, code_hash VARCHAR(255) NOT NULL, used_at DATETIME DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_user_id (user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_api_tokens (id INT AUTO_INCREMENT PRIMARY KEY, label VARCHAR(100) NOT NULL, token_hash VARCHAR(64) NOT NULL, token_prefix VARCHAR(16) NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, last_used_at DATETIME DEFAULT NULL, expires_at DATETIME DEFAULT NULL, revoked_at DATETIME DEFAULT NULL, UNIQUE KEY uniq_token_hash (token_hash), INDEX idx_revoked (revoked_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 // Portal link expiry — NULL (never expires) for every link generated before
@@ -175,31 +185,41 @@ if ($statusColType && strpos($statusColType, "'void'") === false) {
 
 $userCount = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users")->fetch_assoc()['c'] ?? 0;
 $authError = '';
-// A pending 2FA challenge takes over the auth screen even on a plain GET
-// (e.g. mid-login refresh) — cleared only by a successful verify_totp or
-// logout.
-$authMode = $userCount == 0 ? 'signup' : (isset($_SESSION['invoxa_2fa_pending_user']) ? 'totp' : 'login');
+$forgotSent = false;
+$resetTokenUser = null;
+if (isset($_GET['reset_token'])) {
+    $resetTokenHash = hash('sha256', (string) $_GET['reset_token']);
+    $stmt = $mysqli->prepare("SELECT id, username FROM invoxa_users WHERE reset_token_hash = ? AND reset_token_expires > NOW()");
+    $stmt->bind_param("s", $resetTokenHash);
+    $stmt->execute();
+    $resetTokenUser = $stmt->get_result()->fetch_assoc() ?: null;
+    if (!$resetTokenUser) {
+        $authError = "This reset link is invalid or has expired.";
+    }
+}
+$authMode = $userCount == 0 ? 'signup' : (isset($_SESSION['invoxa_2fa_pending_user']) ? 'totp' : ($resetTokenUser ? 'reset' : (isset($_GET['forgot']) ? 'forgot' : 'login')));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
     if ($_POST['auth_action'] === 'signup' && $userCount == 0) {
         $user = trim($_POST['username'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $pass = $_POST['password'] ?? '';
-        if ($user && $pass && $email && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if ($user && $pass && $email && filter_var($email, FILTER_VALIDATE_EMAIL) && strlen($pass) >= PASSWORD_MIN_LENGTH) {
             $hash = password_hash($pass, PASSWORD_DEFAULT);
             $stmt = $mysqli->prepare("INSERT INTO invoxa_users (username, email, password_hash) VALUES (?, ?, ?)");
             $stmt->bind_param("sss", $user, $email, $hash);
             $stmt->execute();
+            invoxaIssueEmailVerification($mysqli, (int) $mysqli->insert_id, $user, $email);
             $_SESSION['invoxa_auth'] = true;
             $_SESSION['invoxa_username'] = $user;
-            // ?login=1 tells the app shell's JS to land on Dashboard for this load
-            // regardless of whatever tab was last active before — see the storedTab
-            // handling further down. Normal in-session tab persistence (refreshing
-            // while still logged in) is untouched.
-            header("Location: ?login=1");
+            header("Location: ?login=1&welcome=1");
             exit;
+        } elseif ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $authError = "Enter a valid email address.";
+        } elseif ($pass && strlen($pass) < PASSWORD_MIN_LENGTH) {
+            $authError = "Password must be at least " . PASSWORD_MIN_LENGTH . " characters.";
         } else {
-            $authError = ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) ? "Enter a valid email address." : "Please fill all fields.";
+            $authError = "Please fill all fields.";
         }
     } elseif ($_POST['auth_action'] === 'login') {
         $user = trim($_POST['username'] ?? '');
@@ -267,6 +287,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
                 $authMode = 'totp';
             }
         }
+    } elseif ($_POST['auth_action'] === 'forgot_password') {
+        $email = trim($_POST['email'] ?? '');
+        if ($email) {
+            $stmt = $mysqli->prepare("SELECT id, username FROM invoxa_users WHERE email = ?");
+            $stmt->bind_param("s", $email);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            if ($row) {
+                $rawToken = bin2hex(random_bytes(32));
+                $resetTokenHash = hash('sha256', $rawToken);
+                $stmt = $mysqli->prepare("UPDATE invoxa_users SET reset_token_hash = ?, reset_token_expires = DATE_ADD(NOW(), INTERVAL 30 MINUTE) WHERE id = ?");
+                $stmt->bind_param("si", $resetTokenHash, $row['id']);
+                $stmt->execute();
+                invoxaSendPasswordResetEmail($row['username'], $email, $rawToken);
+            }
+        }
+        $authMode = 'forgot';
+        $forgotSent = true;
+    } elseif ($_POST['auth_action'] === 'reset_password') {
+        $rawToken = $_POST['token'] ?? '';
+        $resetTokenHash = hash('sha256', $rawToken);
+        $stmt = $mysqli->prepare("SELECT id, username FROM invoxa_users WHERE reset_token_hash = ? AND reset_token_expires > NOW()");
+        $stmt->bind_param("s", $resetTokenHash);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        if (!$row) {
+            $authError = "This reset link is invalid or has expired.";
+            $authMode = 'login';
+        } else {
+            $pass = $_POST['password'] ?? '';
+            $confirm = $_POST['password_confirm'] ?? '';
+            if (strlen($pass) < PASSWORD_MIN_LENGTH) {
+                $authError = "Password must be at least " . PASSWORD_MIN_LENGTH . " characters.";
+                $authMode = 'reset';
+            } elseif ($pass !== $confirm) {
+                $authError = "Passwords don't match.";
+                $authMode = 'reset';
+            } else {
+                $hash = password_hash($pass, PASSWORD_DEFAULT);
+                $stmt = $mysqli->prepare("UPDATE invoxa_users SET password_hash = ?, reset_token_hash = NULL, reset_token_expires = NULL, failed_login_attempts = 0, locked_until = NULL WHERE id = ?");
+                $stmt->bind_param("si", $hash, $row['id']);
+                $stmt->execute();
+                $_SESSION['invoxa_auth'] = true;
+                $_SESSION['invoxa_username'] = $row['username'];
+                header("Location: ?login=1");
+                exit;
+            }
+        }
+    } elseif ($_POST['auth_action'] === 'start_over') {
+        $rawToken = $_POST['token'] ?? '';
+        $resetTokenHash = hash('sha256', $rawToken);
+        $stmt = $mysqli->prepare("SELECT id FROM invoxa_users WHERE reset_token_hash = ? AND reset_token_expires > NOW()");
+        $stmt->bind_param("s", $resetTokenHash);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        if (!$row) {
+            $authError = "This reset link is invalid or has expired.";
+            $authMode = 'login';
+        } elseif (($_POST['confirm'] ?? '') !== 'RESET') {
+            $authError = "Type RESET to confirm.";
+            $authMode = 'reset';
+        } else {
+            invoxaWipeAllData($mysqli);
+            session_destroy();
+            header("Location: ?");
+            exit;
+        }
     } elseif ($_POST['auth_action'] === 'logout') {
         session_destroy();
         header("Location: ?");
@@ -276,6 +363,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
 
 $isAuth = isset($_SESSION['invoxa_auth']) && $_SESSION['invoxa_auth'] === true;
 $isCron = CRON_SECRET !== '' && isset($_REQUEST['cron_key']) && hash_equals(CRON_SECRET, (string) $_REQUEST['cron_key']);
+
+if (isset($_GET['verify_token'])) {
+    $verifyHash = hash('sha256', (string) $_GET['verify_token']);
+    $stmt = $mysqli->prepare("UPDATE invoxa_users SET email_verified_at = NOW(), verify_token_hash = NULL, verify_token_expires = NULL WHERE verify_token_hash = ? AND verify_token_expires > NOW()");
+    $stmt->bind_param("s", $verifyHash);
+    $stmt->execute();
+    header("Location: ?" . ($stmt->affected_rows > 0 ? "email_verified=1" : "email_verify_failed=1"));
+    exit;
+}
 
 // Settings + license load before the auth gate — the login screen needs the
 // brand name, and the AJAX action dispatch block below needs both for every
@@ -799,19 +895,40 @@ if (isset($_GET['apiv1'])) {
 if (!$isAuth && !$isCron) {
     // Product identity (favicon/title/chrome) is always "Invoxa" — brand settings only
     // customize invoice output (see processInvoice()/generateInvoiceHTML()), not the tool itself.
-    echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Invoxa - ' . ($authMode === 'signup' ? 'Setup' : ($authMode === 'totp' ? 'Two-Factor' : 'Login')) . '</title><link rel="icon" type="image/svg+xml" href="assets/img/invoxa-mark.svg"><link rel="alternate icon" href="assets/img/favicon.ico"><link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0a0f1c"><style>*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:radial-gradient(1100px 500px at 15% -10%, rgba(79,124,255,0.14), transparent 60%), #0a0f1c;color:#f7f9fc;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}.auth-box{background:#131b2e;padding:2.75rem 2.5rem;border-radius:18px;width:100%;max-width:400px;border:1px solid rgba(255,255,255,0.08);box-shadow:0 24px 48px -16px rgba(0,0,0,0.55);}.auth-logo{display:flex;justify-content:center;margin-bottom:1.25rem;}.auth-logo img{width:52px;height:52px;border-radius:14px;box-shadow:0 8px 24px -8px rgba(79,124,255,0.5);}h2{margin-top:0;text-align:center;margin-bottom:1.75rem;font-weight:700;letter-spacing:-0.01em;font-size:1.35rem;}.form-group{margin-bottom:1.25rem;}label{display:block;margin-bottom:0.5rem;color:#90a0bb;font-size:0.85rem;font-weight:600;}input{width:100%;padding:0.75rem 0.9rem;background:#1a2439;border:1px solid rgba(255,255,255,0.08);color:#f7f9fc;border-radius:10px;box-sizing:border-box;font-family:inherit;font-size:0.95rem;transition:border-color .15s ease, box-shadow .15s ease;}input:focus{outline:none;border-color:#4f7cff;box-shadow:0 0 0 3px rgba(79,124,255,0.15);}button{width:100%;padding:0.8rem;background:#4f7cff;border:none;color:white;border-radius:10px;font-weight:600;cursor:pointer;margin-top:0.5rem;font-family:inherit;font-size:0.95rem;transition:background 0.15s ease, transform .1s ease;box-shadow:0 4px 14px -4px rgba(79,124,255,0.5);}button:hover{background:#3d63e0;}button:active{transform:translateY(1px);}.error{color:#f5455c;margin-bottom:1.25rem;text-align:center;font-size:0.875rem;background:rgba(245,69,92,0.1);padding:0.6rem;border-radius:8px;}.doc-links{display:flex;justify-content:center;gap:1.25rem;margin-top:1.75rem;padding-top:1.25rem;border-top:1px solid rgba(255,255,255,0.08);}.doc-links a{color:#90a0bb;font-size:0.8rem;text-decoration:none;font-weight:500;background:none;border:none;padding:0;cursor:pointer;width:auto;margin:0;box-shadow:none;}.doc-links a:hover{color:#4f7cff;}.doc-modal-overlay{position:fixed;inset:0;background:rgba(5,8,16,0.65);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:1000;}.doc-modal-overlay.active{display:flex;}.doc-modal{background:#131b2e;border:1px solid rgba(255,255,255,0.08);border-radius:16px;width:90%;max-width:640px;max-height:78vh;display:flex;flex-direction:column;box-shadow:0 24px 48px -16px rgba(0,0,0,0.55);}.doc-modal-header{padding:1.1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;font-weight:700;}.doc-modal-actions{display:flex;gap:0.5rem;align-items:center;}.doc-modal button{width:auto;margin:0;box-shadow:none;font-family:inherit;}.doc-tab-btn{padding:0.4rem 0.7rem;font-size:0.75rem;background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#f7f9fc;}.doc-tab-btn:hover{background:#212d47;}.doc-close-btn{padding:0.3rem 0.6rem;background:transparent;font-size:1.1rem;line-height:1;border:none;color:#90a0bb;}.doc-close-btn:hover{background:transparent;color:#f5455c;}.doc-modal-body{padding:1.25rem 1.5rem;overflow-y:auto;}.doc-modal-body .doc-content h1,.doc-modal-body .doc-content h2,.doc-modal-body .doc-content h3,.doc-modal-body .doc-content h4{color:#f7f9fc;margin:1.25rem 0 0.6rem;line-height:1.3;}.doc-modal-body .doc-content h1:first-child,.doc-modal-body .doc-content h2:first-child{margin-top:0;}.doc-modal-body .doc-content h1{font-size:1.25rem;}.doc-modal-body .doc-content h2{font-size:1.05rem;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:0.35rem;}.doc-modal-body .doc-content h3{font-size:0.95rem;}.doc-modal-body .doc-content p,.doc-modal-body .doc-content li{color:#90a0bb;font-size:0.88rem;line-height:1.6;}.doc-modal-body .doc-content ul,.doc-modal-body .doc-content ol{margin:0.5rem 0 0.75rem;padding-left:1.3rem;}.doc-modal-body .doc-content strong{color:#f7f9fc;}.doc-modal-body .doc-content a{color:#4f7cff;text-decoration:none;}.doc-modal-body .doc-content a:hover{text-decoration:underline;}.doc-modal-body .doc-content code{background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.8rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#f7f9fc;}.doc-modal-body .doc-content pre{background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:0.8rem 1rem;overflow-x:auto;margin:0.75rem 0;}.doc-modal-body .doc-content pre code{background:none;border:none;padding:0;}.doc-modal-body .doc-content table{width:100%;border-collapse:collapse;margin:0.75rem 0 1.1rem;font-size:0.82rem;}.doc-modal-body .doc-content th,.doc-modal-body .doc-content td{border:1px solid rgba(255,255,255,0.08);padding:0.45rem 0.6rem;text-align:left;}.doc-modal-body .doc-content th{background:#1a2439;color:#f7f9fc;}.doc-modal-body .doc-content td{color:#90a0bb;}</style></head><body><div class="auth-box"><div class="auth-logo"><img src="assets/img/invoxa-mark.svg" width="52" height="52" alt=""></div><h2>Invoxa ' . ($authMode === 'signup' ? 'Setup' : ($authMode === 'totp' ? 'Two-Factor Authentication' : 'Login')) . '</h2>';
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Invoxa' . (INSTANCE_LABEL ? ' (' . htmlspecialchars(INSTANCE_LABEL) . ')' : '') . ' - ' . (['signup' => 'Setup', 'totp' => 'Two-Factor', 'forgot' => 'Recover Access', 'reset' => 'Reset Password'][$authMode] ?? 'Login') . '</title><link rel="icon" type="image/svg+xml" href="assets/img/invoxa-mark.svg"><link rel="alternate icon" href="assets/img/favicon.ico"><link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0a0f1c"><style>*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:radial-gradient(1100px 500px at 15% -10%, rgba(79,124,255,0.14), transparent 60%), #0a0f1c;color:#f7f9fc;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}.auth-box{background:#131b2e;padding:2.75rem 2.5rem;border-radius:18px;width:100%;max-width:400px;border:1px solid rgba(255,255,255,0.08);box-shadow:0 24px 48px -16px rgba(0,0,0,0.55);}.auth-logo{display:flex;justify-content:center;margin-bottom:1.25rem;}.auth-logo img{width:52px;height:52px;border-radius:14px;box-shadow:0 8px 24px -8px rgba(79,124,255,0.5);}h2{margin-top:0;text-align:center;margin-bottom:1.75rem;font-weight:700;letter-spacing:-0.01em;font-size:1.35rem;}.form-group{margin-bottom:1.25rem;}label{display:block;margin-bottom:0.5rem;color:#90a0bb;font-size:0.85rem;font-weight:600;}input{width:100%;padding:0.75rem 0.9rem;background:#1a2439;border:1px solid rgba(255,255,255,0.08);color:#f7f9fc;border-radius:10px;box-sizing:border-box;font-family:inherit;font-size:0.95rem;transition:border-color .15s ease, box-shadow .15s ease;}input:focus{outline:none;border-color:#4f7cff;box-shadow:0 0 0 3px rgba(79,124,255,0.15);}button{width:100%;padding:0.8rem;background:#4f7cff;border:none;color:white;border-radius:10px;font-weight:600;cursor:pointer;margin-top:0.5rem;font-family:inherit;font-size:0.95rem;transition:background 0.15s ease, transform .1s ease;box-shadow:0 4px 14px -4px rgba(79,124,255,0.5);}button:hover{background:#3d63e0;}button:active{transform:translateY(1px);}.error{color:#f5455c;margin-bottom:1.25rem;text-align:center;font-size:0.875rem;background:rgba(245,69,92,0.1);padding:0.6rem;border-radius:8px;}.doc-links{display:flex;justify-content:center;gap:1.25rem;margin-top:1.75rem;padding-top:1.25rem;border-top:1px solid rgba(255,255,255,0.08);}.doc-links a{color:#90a0bb;font-size:0.8rem;text-decoration:none;font-weight:500;background:none;border:none;padding:0;cursor:pointer;width:auto;margin:0;box-shadow:none;}.doc-links a:hover{color:#4f7cff;}.doc-modal-overlay{position:fixed;inset:0;background:rgba(5,8,16,0.65);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:1000;}.doc-modal-overlay.active{display:flex;}.doc-modal{background:#131b2e;border:1px solid rgba(255,255,255,0.08);border-radius:16px;width:90%;max-width:640px;max-height:78vh;display:flex;flex-direction:column;box-shadow:0 24px 48px -16px rgba(0,0,0,0.55);}.doc-modal-header{padding:1.1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;font-weight:700;}.doc-modal-actions{display:flex;gap:0.5rem;align-items:center;}.doc-modal button{width:auto;margin:0;box-shadow:none;font-family:inherit;}.doc-tab-btn{padding:0.4rem 0.7rem;font-size:0.75rem;background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#f7f9fc;}.doc-tab-btn:hover{background:#212d47;}.doc-close-btn{padding:0.3rem 0.6rem;background:transparent;font-size:1.1rem;line-height:1;border:none;color:#90a0bb;}.doc-close-btn:hover{background:transparent;color:#f5455c;}.doc-modal-body{padding:1.25rem 1.5rem;overflow-y:auto;}.doc-modal-body .doc-content h1,.doc-modal-body .doc-content h2,.doc-modal-body .doc-content h3,.doc-modal-body .doc-content h4{color:#f7f9fc;margin:1.25rem 0 0.6rem;line-height:1.3;}.doc-modal-body .doc-content h1:first-child,.doc-modal-body .doc-content h2:first-child{margin-top:0;}.doc-modal-body .doc-content h1{font-size:1.25rem;}.doc-modal-body .doc-content h2{font-size:1.05rem;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:0.35rem;}.doc-modal-body .doc-content h3{font-size:0.95rem;}.doc-modal-body .doc-content p,.doc-modal-body .doc-content li{color:#90a0bb;font-size:0.88rem;line-height:1.6;}.doc-modal-body .doc-content ul,.doc-modal-body .doc-content ol{margin:0.5rem 0 0.75rem;padding-left:1.3rem;}.doc-modal-body .doc-content strong{color:#f7f9fc;}.doc-modal-body .doc-content a{color:#4f7cff;text-decoration:none;}.doc-modal-body .doc-content a:hover{text-decoration:underline;}.doc-modal-body .doc-content code{background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.8rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#f7f9fc;}.doc-modal-body .doc-content pre{background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:0.8rem 1rem;overflow-x:auto;margin:0.75rem 0;}.doc-modal-body .doc-content pre code{background:none;border:none;padding:0;}.doc-modal-body .doc-content table{width:100%;border-collapse:collapse;margin:0.75rem 0 1.1rem;font-size:0.82rem;}.doc-modal-body .doc-content th,.doc-modal-body .doc-content td{border:1px solid rgba(255,255,255,0.08);padding:0.45rem 0.6rem;text-align:left;}.doc-modal-body .doc-content th{background:#1a2439;color:#f7f9fc;}.doc-modal-body .doc-content td{color:#90a0bb;}</style></head><body><div class="auth-box"><div class="auth-logo"><img src="assets/img/invoxa-mark.svg" width="52" height="52" alt=""></div><h2>Invoxa ' . (['signup' => 'Setup', 'totp' => 'Two-Factor Authentication', 'forgot' => 'Recover Access', 'reset' => 'Reset Password'][$authMode] ?? 'Login') . '</h2>';
     if ($authMode === 'signup')
         echo '<p style="text-align:center; color:#94a3b8; font-size:0.875rem; margin-bottom: 1.5rem;">Create your master admin account.</p>';
     if ($authMode === 'totp')
         echo '<p style="text-align:center; color:#94a3b8; font-size:0.875rem; margin-bottom: 1.5rem;">Enter the 6-digit code from your authenticator app.</p>';
+    if ($authMode === 'forgot')
+        echo '<p style="text-align:center; color:#94a3b8; font-size:0.875rem; margin-bottom: 1.5rem;">Enter your account email and we\'ll send a link to reset your password (and remind you of your username).</p>';
+    if ($authMode === 'reset')
+        echo '<p style="text-align:center; color:#94a3b8; font-size:0.875rem; margin-bottom: 1.5rem;">Set a new password for <strong>' . htmlspecialchars($resetTokenUser['username'] ?? '') . '</strong>.</p>';
+    if (isset($_GET['email_verified']))
+        echo '<div class="error" style="color:#22c55e; background:rgba(34,197,94,0.1);">Email confirmed — account recovery will reach you at that address.</div>';
+    if (isset($_GET['email_verify_failed']))
+        echo '<div class="error">That confirmation link is invalid or has expired.</div>';
     if ($authError)
         echo '<div class="error">' . $authError . '</div>';
     if ($authMode === 'totp') {
         echo '<form method="POST"><input type="hidden" name="auth_action" value="verify_totp"><div class="form-group"><label>Code</label><input type="text" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" required autofocus></div><button type="submit">Verify Code</button></form>';
         echo '<form method="POST" style="margin-top:0.5rem;"><input type="hidden" name="auth_action" value="logout"><button type="submit" style="background:transparent; color:#90a0bb; box-shadow:none;">Cancel, use a different account</button></form>';
+    } elseif ($authMode === 'forgot') {
+        if ($forgotSent) {
+            echo '<p style="text-align:center; color:#94a3b8; font-size:0.875rem;">If that email is on file, a reset link is on its way. It expires in 30 minutes.</p>';
+        } else {
+            echo '<form method="POST"><input type="hidden" name="auth_action" value="forgot_password"><div class="form-group"><label>Email</label><input type="email" name="email" required autofocus></div><button type="submit">Send Reset Link</button></form>';
+        }
+        echo '<div style="text-align:center; margin-top:1rem;"><a href="?" style="color:#90a0bb; font-size:0.85rem; text-decoration:none;">Back to login</a></div>';
+    } elseif ($authMode === 'reset') {
+        echo '<form method="POST"><input type="hidden" name="auth_action" value="reset_password"><input type="hidden" name="token" value="' . htmlspecialchars((string) $_GET['reset_token']) . '"><div class="form-group"><label>New Password</label><input type="password" name="password" minlength="' . PASSWORD_MIN_LENGTH . '" required autofocus></div><div class="form-group"><label>Confirm New Password</label><input type="password" name="password_confirm" minlength="' . PASSWORD_MIN_LENGTH . '" required></div><button type="submit">Set New Password</button></form>';
+        echo '<div style="text-align:center; margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid rgba(255,255,255,0.08);"><p style="color:#94a3b8; font-size:0.8rem; margin-bottom:0.75rem;">Rather start completely fresh instead? This erases every client, invoice, and setting.</p><form method="POST" onsubmit="return confirm(\'Erase everything and start over? This cannot be undone.\');"><input type="hidden" name="auth_action" value="start_over"><input type="hidden" name="token" value="' . htmlspecialchars((string) $_GET['reset_token']) . '"><input type="text" name="confirm" placeholder="Type RESET to confirm" required style="margin-bottom:0.75rem;"><button type="submit" style="background:#f5455c;">Erase Everything &amp; Start Over</button></form></div>';
     } else {
         $emailField = $authMode === 'signup' ? '<div class="form-group"><label>Email</label><input type="email" name="email" required placeholder="Must match the email your license was issued to"></div>' : '';
-        echo '<form method="POST"><input type="hidden" name="auth_action" value="' . $authMode . '"><div class="form-group"><label>Username</label><input type="text" name="username" required autofocus></div>' . $emailField . '<div class="form-group"><label>Password</label><input type="password" name="password" required></div><button type="submit">' . ($authMode === 'signup' ? 'Create Account' : 'Secure Login') . '</button></form>';
+        $passwordMinAttr = $authMode === 'signup' ? ' minlength="' . PASSWORD_MIN_LENGTH . '"' : '';
+        echo '<form method="POST"><input type="hidden" name="auth_action" value="' . $authMode . '"><div class="form-group"><label>Username</label><input type="text" name="username" required autofocus></div>' . $emailField . '<div class="form-group"><label>Password</label><input type="password" name="password" required' . $passwordMinAttr . '></div><button type="submit">' . ($authMode === 'signup' ? 'Create Account' : 'Secure Login') . '</button></form>';
+        if ($authMode === 'login')
+            echo '<div style="text-align:center; margin-top:1rem;"><a href="?forgot=1" style="color:#90a0bb; font-size:0.85rem; text-decoration:none;">Forgot your password or username?</a></div>';
     }
     // Plain text links, not Font Awesome icons — this standalone auth page
     // doesn't load the icon stylesheet. Docs open in an in-page modal so the
@@ -973,6 +1090,114 @@ function invoxaRegisterFailedLogin($mysqli, int $userId, int $currentAttempts): 
         $stmt = $mysqli->prepare("UPDATE invoxa_users SET failed_login_attempts = ? WHERE id = ?");
         $stmt->bind_param("ii", $attempts, $userId);
         $stmt->execute();
+    }
+}
+
+function invoxaSendPasswordResetEmail(string $username, string $toEmail, string $rawToken): bool
+{
+    require_once PHPMAILER_DIR . 'PHPMailer.php';
+    require_once PHPMAILER_DIR . 'SMTP.php';
+    require_once PHPMAILER_DIR . 'Exception.php';
+    $fromName = 'Invoxa (No-Reply)';
+    $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
+    $baseUrl = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '');
+    $resetLink = $baseUrl . '/?reset_token=' . $rawToken;
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host = getenv('SMTP_HOST') ?: '';
+        $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
+        $mail->SMTPAuth = true;
+        $mail->Username = getenv('SMTP_USER') ?: '';
+        $mail->Password = getenv('SMTP_PASSWORD') ?: '';
+        $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {
+            'ssl' => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS,
+            'none', '' => false,
+            default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
+        };
+        $mail->CharSet = 'UTF-8';
+        $mail->setFrom($fromEmail, $fromName);
+        $mail->addAddress($toEmail);
+        $mail->Subject = 'Invoxa - Password Reset Request';
+        $mail->isHTML(true);
+        $mail->Body = '<p>Your Invoxa username is <strong>' . htmlspecialchars($username) . '</strong>.</p>'
+            . '<p><a href="' . htmlspecialchars($resetLink) . '">Reset your password</a> - this link expires in 30 minutes.</p>'
+            . '<p>If you didn\'t request this, you can ignore this email.</p>';
+        $mail->send();
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function invoxaSendVerificationEmail(string $username, string $toEmail, string $rawToken): bool
+{
+    require_once PHPMAILER_DIR . 'PHPMailer.php';
+    require_once PHPMAILER_DIR . 'SMTP.php';
+    require_once PHPMAILER_DIR . 'Exception.php';
+    $fromName = 'Invoxa (No-Reply)';
+    $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
+    $baseUrl = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '');
+    $verifyLink = $baseUrl . '/?verify_token=' . $rawToken;
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host = getenv('SMTP_HOST') ?: '';
+        $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
+        $mail->SMTPAuth = true;
+        $mail->Username = getenv('SMTP_USER') ?: '';
+        $mail->Password = getenv('SMTP_PASSWORD') ?: '';
+        $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {
+            'ssl' => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS,
+            'none', '' => false,
+            default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
+        };
+        $mail->CharSet = 'UTF-8';
+        $mail->setFrom($fromEmail, $fromName);
+        $mail->addAddress($toEmail);
+        $mail->Subject = 'Invoxa - Confirm Your Email';
+        $mail->isHTML(true);
+        $mail->Body = '<p>Hi ' . htmlspecialchars($username) . ',</p>'
+            . '<p><a href="' . htmlspecialchars($verifyLink) . '">Confirm this email address</a> - this link expires in 24 hours.</p>'
+            . '<p>This confirms we can actually reach you here, so account recovery works if you ever forget your password.</p>';
+        $mail->send();
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function invoxaIssueEmailVerification($mysqli, int $userId, string $username, string $email): bool
+{
+    $rawToken = bin2hex(random_bytes(32));
+    $verifyHash = hash('sha256', $rawToken);
+    $stmt = $mysqli->prepare("UPDATE invoxa_users SET verify_token_hash = ?, verify_token_expires = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?");
+    $stmt->bind_param("si", $verifyHash, $userId);
+    $stmt->execute();
+    return invoxaSendVerificationEmail($username, $email, $rawToken);
+}
+
+function invoxaWipeAllData($mysqli): void
+{
+    $tables = [];
+    $res = $mysqli->query("SHOW TABLES LIKE 'invoxa\\_%'");
+    while ($row = $res->fetch_row()) {
+        $tables[] = $row[0];
+    }
+    $mysqli->query("SET FOREIGN_KEY_CHECKS = 0");
+    foreach ($tables as $table) {
+        $mysqli->query("TRUNCATE TABLE `" . $table . "`");
+    }
+    $mysqli->query("SET FOREIGN_KEY_CHECKS = 1");
+    foreach (glob(INVOICES_DIR . '*') as $f) {
+        if (is_file($f)) {
+            @unlink($f);
+        }
+    }
+    foreach (glob(BACKUPS_DIR . '*') as $f) {
+        if (is_file($f)) {
+            @unlink($f);
+        }
     }
 }
 
@@ -1974,7 +2199,7 @@ function renderStatsSection(): string
             </div>
         </div>
     <?php endif; ?>
-    <div style="<?= $licenseValid ? '' : 'opacity:0.5; pointer-events:none; user-select:none;' ?>">
+    <div>
     <div class="section-scroll">
     <div class="subnav-layout">
 
@@ -1993,7 +2218,7 @@ function renderStatsSection(): string
                 onclick="navStats('system')"><i class="fa-solid fa-server"></i> System</button>
         </nav>
 
-        <div class="subnav-content">
+        <div class="subnav-content" style="<?= $licenseValid ? '' : 'opacity:0.5; pointer-events:none; user-select:none;' ?>">
 
             <!-- Revenue -->
             <div class="subnav-pane active" id="stats-pane-revenue">
@@ -4444,6 +4669,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($newPassword !== '' && $newPassword !== $confirmPassword) {
                 throw new Exception('New passwords do not match');
             }
+            if ($newPassword !== '' && strlen($newPassword) < PASSWORD_MIN_LENGTH) {
+                throw new Exception('Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters');
+            }
             if ($newEmail !== '' && !filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
                 throw new Exception('Enter a valid email address');
             }
@@ -4456,10 +4684,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $params[] = $newUsername;
                 $types .= 's';
             }
-            if ($newEmail !== '' && $newEmail !== ($user['email'] ?? '')) {
+            $emailChanged = $newEmail !== '' && $newEmail !== ($user['email'] ?? '');
+            if ($emailChanged) {
                 $fields[] = 'email = ?';
                 $params[] = $newEmail;
                 $types .= 's';
+                $fields[] = 'email_verified_at = NULL';
             }
             if ($newPassword !== '') {
                 $hash = password_hash($newPassword, PASSWORD_DEFAULT);
@@ -4473,6 +4703,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $types .= 'i';
                 $stmt->bind_param($types, ...$params);
                 $stmt->execute();
+            }
+            if ($emailChanged) {
+                invoxaIssueEmailVerification($mysqli, (int) $user['id'], $newUsername !== '' ? $newUsername : $user['username'], $newEmail);
             }
             echo json_encode(['success' => true]);
             exit;
@@ -4823,10 +5056,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         if ($_POST['action'] === 'factory_reset') {
-            // Irreversible: wipes every invoxa_* table plus generated invoice files
-            // and stored backups on disk, leaving the install like a fresh one.
-            // Gated on a typed "RESET" confirmation and the admin password — the
-            // most destructive action in the app.
             error_reporting(0);
             ob_start();
             try {
@@ -4838,30 +5067,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if (!$user || !password_verify($_POST['password'] ?? '', $user['password_hash'])) {
                     throw new Exception('Current password is incorrect.');
                 }
-                $tables = [];
-                $res = $mysqli->query("SHOW TABLES LIKE 'invoxa\\_%'");
-                while ($row = $res->fetch_row()) {
-                    $tables[] = $row[0];
-                }
-                $mysqli->query("SET FOREIGN_KEY_CHECKS = 0");
-                foreach ($tables as $table) {
-                    $mysqli->query("TRUNCATE TABLE `" . $table . "`");
-                }
-                $mysqli->query("SET FOREIGN_KEY_CHECKS = 1");
-                foreach (glob(INVOICES_DIR . '*') as $f) {
-                    if (is_file($f)) {
-                        @unlink($f);
-                    }
-                }
-                foreach (glob(BACKUPS_DIR . '*') as $f) {
-                    if (is_file($f)) {
-                        @unlink($f);
-                    }
-                }
+                invoxaWipeAllData($mysqli);
                 $_SESSION = [];
                 session_destroy();
                 ob_clean();
                 echo json_encode(['success' => true]);
+            } catch (Throwable $e) {
+                ob_clean();
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            }
+            exit;
+        }
+        if ($_POST['action'] === 'resend_verification_email') {
+            error_reporting(0);
+            ob_start();
+            try {
+                $user = $mysqli->query("SELECT id, username, email FROM invoxa_users LIMIT 1")->fetch_assoc();
+                if (!$user || empty($user['email'])) {
+                    throw new Exception('No account email on file.');
+                }
+                $sent = invoxaIssueEmailVerification($mysqli, (int) $user['id'], $user['username'], $user['email']);
+                ob_clean();
+                echo json_encode(['success' => $sent, 'error' => $sent ? '' : 'Failed to send — check SMTP settings.']);
             } catch (Throwable $e) {
                 ob_clean();
                 echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -6108,7 +6335,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
     <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <meta name="theme-color" content="#0a0f1c" />
-    <title>Invoxa</title>
+    <title>Invoxa<?= INSTANCE_LABEL ? ' (' . htmlspecialchars(INSTANCE_LABEL) . ')' : '' ?></title>
     <script>
         const savedTheme = localStorage.getItem('invoxa_theme') || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
@@ -8411,7 +8638,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 <div class="form-group">
                                     <label class="form-label"
                                         style="font-size:0.8rem; color:var(--text-secondary);">Username</label>
-                                    <?php $__u = $mysqli->query("SELECT username, email, totp_secret FROM invoxa_users LIMIT 1")->fetch_assoc();
+                                    <?php $__u = $mysqli->query("SELECT username, email, totp_secret, email_verified_at FROM invoxa_users LIMIT 1")->fetch_assoc();
                                     $__totpEnabled = !empty($__u['totp_secret']); ?>
                                     <input type="text" id="newUsername" class="form-control"
                                         value="<?= htmlspecialchars($__u['username'] ?? '') ?>">
@@ -8422,6 +8649,22 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                         value="<?= htmlspecialchars($__u['email'] ?? '') ?>">
                                     <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Must match
                                         the email your license was issued to — see the License tab.</p>
+                                    <?php if (!empty($__u['email'])): ?>
+                                        <?php if (!empty($__u['email_verified_at'])): ?>
+                                            <p style="color:#22c55e; font-size:0.8rem; margin-top:0.35rem;"><i
+                                                    class="fa-solid fa-circle-check"></i> Verified</p>
+                                        <?php else: ?>
+                                            <div style="display:flex; align-items:center; gap:0.75rem; margin-top:0.5rem;">
+                                                <p style="color:var(--warning); font-size:0.8rem; margin:0;"><i
+                                                        class="fa-solid fa-triangle-exclamation"></i> Not verified —
+                                                    account recovery can't reach this address yet.</p>
+                                                <button class="btn" id="resendVerifyBtnSettings"
+                                                    style="width:auto; margin:0; padding:0.4rem 0.8rem; font-size:0.8rem;"
+                                                    onclick="resendVerificationEmail('resendVerifyBtnSettings')">Verify
+                                                    Now</button>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
                                 </div>
                                 <div class="form-group" style="margin-top:0.5rem;">
                                     <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Current
@@ -8433,13 +8676,13 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">New
                                         password <span style="color:var(--text-secondary); font-weight:400;">(leave blank to
                                             keep current)</span></label>
-                                    <input type="password" id="newPassword" class="form-control"
+                                    <input type="password" id="newPassword" class="form-control" minlength="<?= PASSWORD_MIN_LENGTH ?>"
                                         placeholder="Leave blank to keep current password">
                                 </div>
                                 <div class="form-group" style="margin-top:0.5rem;">
                                     <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Confirm
                                         new password</label>
-                                    <input type="password" id="confirmPassword" class="form-control"
+                                    <input type="password" id="confirmPassword" class="form-control" minlength="<?= PASSWORD_MIN_LENGTH ?>"
                                         placeholder="Confirm new password">
                                 </div>
                                 <button class="btn primary" id="saveProfileBtn" onclick="saveProfile()"
@@ -10064,6 +10307,37 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             </div>
         </div>
 
+        <?php $__ev = $mysqli->query("SELECT email, email_verified_at FROM invoxa_users LIMIT 1")->fetch_assoc(); ?>
+        <div id="onboardingModal" class="modal-overlay">
+            <div class="modal" style="max-width:440px; text-align:center;">
+                <div class="modal-body" style="padding-top:2.5rem;">
+                    <img src="assets/img/invoxa-mark.svg" width="48" height="48" alt=""
+                        style="border-radius:12px; box-shadow:0 6px 18px -4px rgba(79,124,255,0.55); margin-bottom:1rem;">
+                    <div style="margin-bottom:0.75rem;"><img src="assets/img/invoxa-wordmark.svg" height="26" alt="Invoxa"
+                            style="width:auto;"></div>
+                    <h2 style="margin:0 0 0.5rem; font-size:1.3rem;">Welcome to Invoxa</h2>
+                    <p style="color:var(--text-secondary); font-size:0.9rem; margin:0 0 1.5rem;">Your account is set up.
+                        Load a set of sample clients and invoices to explore the app right away, or start from a clean
+                        slate — you'll find this again under Data Management &gt; Demo Data.</p>
+                    <?php if ($__ev && empty($__ev['email_verified_at'])): ?>
+                    <div style="background:var(--surface-hover); border-radius:10px; padding:0.85rem 1rem; margin-bottom:1.5rem; text-align:left;">
+                        <p style="color:var(--text-secondary); font-size:0.82rem; margin:0 0 0.5rem;">We sent a
+                            confirmation link to <strong><?= htmlspecialchars($__ev['email']) ?></strong> — click it so
+                            account recovery can reach you if you ever forget your password.</p>
+                        <button class="btn" id="resendVerifyBtn" style="width:auto; margin:0; padding:0.4rem 0.8rem; font-size:0.8rem;"
+                            onclick="resendVerificationEmail()">Resend confirmation email</button>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="modal-footer" style="justify-content:center; gap:0.75rem;">
+                    <button class="btn" onclick="closeModal('onboardingModal')">Start from scratch</button>
+                    <button class="btn primary"
+                        onclick="closeModal('onboardingModal'); nav('backup', true); navBackup('demo');"><i
+                            class="fa-solid fa-wand-magic-sparkles"></i> Load Demo Data</button>
+                </div>
+            </div>
+        </div>
+
         <!-- CRM Slide-out Drawer -->
         <div id="crmDrawer"
             style="position:fixed; top:0; right:-440px; width:420px; height:100vh; background:var(--surface); border-left:1px solid var(--border); z-index:9999; transition:right 0.3s ease; display:flex; flex-direction:column; box-shadow:-8px 0 30px rgba(0,0,0,0.4);">
@@ -10100,29 +10374,34 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             const APP_CURRENCY = <?= json_encode($settings['currency'] ?? 'USD') ?>;
             let chartInstance = null, pieChartInstance = null, chartAllData = null, chartRange = '12';
             const CLIENT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#f97316', '#84cc16', '#a855f7', '#ec4899', '#14b8a6', '#f43f5e'];
-            // A fresh login/signup redirects here with ?login=1 so it lands on the
-            // configured default tab (Settings > General > Default Landing Tab)
-            // rather than whatever tab was last active.
             const justLoggedIn = new URLSearchParams(window.location.search).has('login');
+            const justSignedUp = new URLSearchParams(window.location.search).has('welcome');
             const defaultLandingTab = localStorage.getItem('invoxa_default_tab') || 'dashboard';
             const storedTab = justLoggedIn ? defaultLandingTab : (localStorage.getItem('activeTab') || 'dashboard');
             if (justLoggedIn) {
                 localStorage.setItem('activeTab', defaultLandingTab);
                 history.replaceState(null, '', window.location.pathname);
-                const flash = document.getElementById('welcomeFlash');
-                const flashBackdrop = document.getElementById('welcomeFlashBackdrop');
-                if (flash && localStorage.getItem('invoxa_show_welcome') !== '0') {
-                    const dismiss = () => { flash.classList.remove('show'); flashBackdrop?.classList.remove('show'); };
-                    // Double rAF so the hidden state paints first, otherwise adding
-                    // .show in the same tick can get coalesced and skip the transition.
-                    requestAnimationFrame(() => requestAnimationFrame(() => {
-                        flash.classList.add('show');
-                        flashBackdrop?.classList.add('show');
-                    }));
-                    setTimeout(dismiss, 4200);
-                    flash.addEventListener('click', dismiss);
-                    flashBackdrop?.addEventListener('click', dismiss);
+                if (justSignedUp) {
+                    document.getElementById('onboardingModal')?.classList.add('active');
+                } else {
+                    const flash = document.getElementById('welcomeFlash');
+                    const flashBackdrop = document.getElementById('welcomeFlashBackdrop');
+                    if (flash && localStorage.getItem('invoxa_show_welcome') !== '0') {
+                        const dismiss = () => { flash.classList.remove('show'); flashBackdrop?.classList.remove('show'); };
+                        requestAnimationFrame(() => requestAnimationFrame(() => {
+                            flash.classList.add('show');
+                            flashBackdrop?.classList.add('show');
+                        }));
+                        setTimeout(dismiss, 4200);
+                        flash.addEventListener('click', dismiss);
+                        flashBackdrop?.addEventListener('click', dismiss);
+                    }
                 }
+            }
+            const emailVerifyParam = new URLSearchParams(window.location.search).has('email_verified') ? 'ok' : (new URLSearchParams(window.location.search).has('email_verify_failed') ? 'failed' : null);
+            if (emailVerifyParam) {
+                history.replaceState(null, '', window.location.pathname);
+                showToast(emailVerifyParam === 'ok' ? 'Email confirmed — account recovery will reach you at that address.' : 'That confirmation link is invalid or has expired.', emailVerifyParam === 'failed');
             }
 
             function toggleOtherTables(section, showAll) {
@@ -11819,6 +12098,23 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                     showToast('Import failed (network error)', true);
                 }
                 input.value = '';
+            }
+
+            async function resendVerificationEmail(btnId = 'resendVerifyBtn') {
+                const btn = document.getElementById(btnId);
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = 'Sending…';
+                try {
+                    const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'resend_verification_email' }) });
+                    const json = await res.json();
+                    showToast(json.success ? 'Confirmation email sent' : (json.error || 'Failed to send'), !json.success);
+                } catch (e) {
+                    showToast('Failed to send (network error)', true);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
             }
 
             async function seedDemoData() {

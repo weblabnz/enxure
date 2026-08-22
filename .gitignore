@@ -1,9 +1,11 @@
 .env
+.env.test
 
 # Local deployment notes, not part of the product.
 DEPLOY.md
 GIT.md
 docker-compose.traefik.yml
+docker-compose.test.yml
 
 # Generated invoices/quotes and database backups: real client data, never
 # committed.
@@ -11,3 +13,7 @@ invoxa-invoices/*
 !invoxa-invoices/.gitkeep
 invoxa-backups/*
 !invoxa-backups/.gitkeep
+invoxa-invoices-test/*
+!invoxa-invoices-test/.gitkeep
+invoxa-backups-test/*
+!invoxa-backups-test/.gitkeep
