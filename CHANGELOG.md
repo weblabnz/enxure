@@ -2,6 +2,15 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.3.7] - 2026-08-22
+
+### Fixed
+- Dashboard's charts stayed a fixed pixel size while dragging the browser window wider/narrower (Statistics' charts already worked correctly). Root cause: `.card` — the Dashboard chart's container — is a CSS grid item with no `min-width` set, so it defaults to `min-width: auto` and can't actually shrink below the chart's own rendered width; Statistics' equivalent container already had the `min-width: 0` fix for this well-known grid/flexbox behavior, `.card` didn't. Added the same fix to `.card`, plus a debounced `window.resize` listener that explicitly resizes every chart on the page (via Chart.js's own instance registry) as a backstop.
+- Dashboard's "N Overdue Invoices" alert's **View All** button just switched to the Invoices tab without filtering — now it also applies the existing Overdue status filter, landing on the actual prefiltered list instead of the full unfiltered table.
+
+### Changed
+- Light theme is now the default for a first-time visitor (previously dark) — still remembered per-browser via the existing Settings toggle once changed. The login/signup screen, previously a separate hardcoded-dark page with no light variant, now follows the same saved preference (and defaults to light for a first-time visitor too), so there's no jarring dark-login-into-light-app mismatch.
+
 ## [2.3.5] - 2026-08-22
 
 ### Fixed

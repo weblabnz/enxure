@@ -4,6 +4,16 @@ Self-hosted invoicing & recurring billing for agencies — manage your clients, 
 
 One admin account, unlimited clients, brandable invoices (your logo, colors, footer text), CSV/tax-year reporting, database backup & restore, and a monthly billing cron — all in one `docker compose up`.
 
+## Screenshots
+
+| Dashboard | Invoices |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Invoices](docs/screenshots/invoices.png) |
+
+| Statistics | Clients |
+|---|---|
+| ![Statistics](docs/screenshots/statistics.png) | ![Clients](docs/screenshots/clients.png) |
+
 See **[INSTALL.md](INSTALL.md)** for setup (including email/SMTP configuration).
 
 ## Quick start
