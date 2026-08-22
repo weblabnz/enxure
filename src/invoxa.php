@@ -39,6 +39,7 @@ define('PDF_AUTOLOAD', __DIR__ . '/lib/pdf_autoload.php');
 define('LOGO_FILENAME', 'invoxa_logo.jpg');
 define('CRONTAB_PATH', '/etc/invoxa-crontab/root');
 define('DOCS_DIR', __DIR__ . '/docs/');
+define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
 define('APP_VERSION', '2.3.7');
@@ -9489,6 +9490,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                         ?>
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
                                             <?= htmlspecialchars($__licenseMsg) ?></p>
+                                        <a href="<?= htmlspecialchars(LICENSE_PURCHASE_URL) ?>" target="_blank" rel="noopener" class="btn primary" style="margin-top:0.5rem;"><i class="fa-solid fa-cart-shopping"></i> Buy a License</a>
                                     <?php endif; ?>
                                 </div>
                                 <div class="form-group">
