@@ -2,25 +2,27 @@
 
 Self-hosted invoicing & recurring billing for agencies — manage your clients, generate and email invoices, track payments, and run monthly recurring billing automatically. Free and open source (AGPL-3.0, see [LICENSE](LICENSE)).
 
+![Dashboard](docs/screenshots/invoxa-dashboard.webp)
+
 One admin account, unlimited clients, brandable invoices (your logo, colors, footer text), CSV/tax-year reporting, database backup & restore, and a monthly billing cron — all in one `docker compose up`.
 
 ## Screenshots
 
-| Dashboard | Invoices |
+| Invoices | Ad Hoc Invoice |
 |---|---|
-| ![Dashboard](docs/screenshots/invoxa-dashboard.webp) | ![Invoices](docs/screenshots/invoxa-invoices.webp) |
+| ![Invoices](docs/screenshots/invoxa-invoices.webp) | ![Ad Hoc Invoice](docs/screenshots/invoxa-adhoc.webp) |
 
-| Ad Hoc Invoice | Clients |
+| Clients | Data Management |
 |---|---|
-| ![Ad Hoc Invoice](docs/screenshots/invoxa-adhoc.webp) | ![Clients](docs/screenshots/invoxa-clients.webp) |
+| ![Clients](docs/screenshots/invoxa-clients.webp) | ![Data Management](docs/screenshots/invoxa-datamanagement.webp) |
 
-| Data Management | Settings |
+| Settings | Audit Log |
 |---|---|
-| ![Data Management](docs/screenshots/invoxa-datamanagement.webp) | ![Settings](docs/screenshots/invoxa-settings.webp) |
+| ![Settings](docs/screenshots/invoxa-settings.webp) | ![Audit Log](docs/screenshots/invoxa-auditlog.webp) |
 
-| Audit Log | Documentation |
+| Documentation | |
 |---|---|
-| ![Audit Log](docs/screenshots/invoxa-auditlog.webp) | ![Documentation](docs/screenshots/invoxa-documentation.webp) |
+| ![Documentation](docs/screenshots/invoxa-documentation.webp) | |
 
 See **[INSTALL.md](INSTALL.md)** for setup (including email/SMTP configuration).
 
