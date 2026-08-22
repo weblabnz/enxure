@@ -1906,10 +1906,7 @@ function renderInvoiceRows(array $invoices): string
                         class="badge <?= htmlspecialchars($inv['status']) ?>"><?= htmlspecialchars($inv['status']) ?></span>
                 <?php endif; ?>
                 <?php if ($isOverdue): ?>
-                    <!-- Hidden text, not a badge — lets the "Overdue" filter/search find this
-                         row even though "overdue" is derived (status+due_date), not a real
-                         stored status value. -->
-                    <span style="display:none;">overdue</span>
+                    <span class="badge overdue">Overdue</span>
                 <?php endif; ?>
             </td>
             <td>
@@ -3027,7 +3024,7 @@ function seedDemoData($mysqli, array $settings): int
     $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
     $fingerprint = invoiceWatermarkFingerprint($settings);
-    $monthsBack = 8;
+    $monthsBack = 24;
     $today = new DateTime();
     $insertClient = $mysqli->prepare("INSERT INTO invoxa_clients (client_key, client_name, email, account_name, account_number, monthly_rate, is_active, is_test) VALUES (?, ?, ?, ?, ?, ?, 1, 1)");
     $insertInvoice = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, paid_at, paid_amount, html_content, file_path, is_quote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -6900,6 +6897,13 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             background: rgba(245, 69, 92, 0.12);
             color: var(--danger);
             border: 1px solid rgba(245, 69, 92, 0.25);
+        }
+
+        .badge.overdue {
+            background: rgba(245, 69, 92, 0.12);
+            color: var(--danger);
+            border: 1px solid rgba(245, 69, 92, 0.25);
+            margin-left: 0.35rem;
         }
 
         .badge.test {
@@ -11001,10 +11005,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 if (type === 'tax_year_monthly') { openMonthlySummaryPreview(); return; }
                 window.location.href = '?export=' + type;
             }
-            // Drives the Status filter through simple-datatables' own (debounced) search
-            // input rather than a separate filtering mechanism. "Overdue" isn't a real
-            // stored status — renderInvoiceRows() emits a hidden "overdue" text token in
-            // the Status cell so it's findable through this same text search.
             function filterInvoicesByStatus(value) {
                 const wrapper = document.querySelector('#sec-invoices .datatable-wrapper');
                 const input = wrapper && wrapper.querySelector('input.datatable-input');
