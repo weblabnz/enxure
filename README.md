@@ -8,11 +8,19 @@ One admin account, unlimited clients, brandable invoices (your logo, colors, foo
 
 | Dashboard | Invoices |
 |---|---|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Invoices](docs/screenshots/invoices.png) |
+| ![Dashboard](docs/screenshots/invoxa-dashboard.webp) | ![Invoices](docs/screenshots/invoxa-invoices.webp) |
 
-| Statistics | Clients |
+| Ad Hoc Invoice | Clients |
 |---|---|
-| ![Statistics](docs/screenshots/statistics.png) | ![Clients](docs/screenshots/clients.png) |
+| ![Ad Hoc Invoice](docs/screenshots/invoxa-adhoc.webp) | ![Clients](docs/screenshots/invoxa-clients.webp) |
+
+| Data Management | Settings |
+|---|---|
+| ![Data Management](docs/screenshots/invoxa-datamanagement.webp) | ![Settings](docs/screenshots/invoxa-settings.webp) |
+
+| Audit Log | Documentation |
+|---|---|
+| ![Audit Log](docs/screenshots/invoxa-auditlog.webp) | ![Documentation](docs/screenshots/invoxa-documentation.webp) |
 
 See **[INSTALL.md](INSTALL.md)** for setup (including email/SMTP configuration).
 

@@ -1,10 +1,14 @@
 # Screenshots
 
-Referenced by the main [README.md](../../README.md). Drop PNGs/JPGs in here with these exact names and the main README picks them up automatically:
+Referenced by the main [README.md](../../README.md):
 
-- `dashboard.png`
-- `invoices.png`
-- `statistics.png`
-- `clients.png`
+- `invoxa-dashboard.webp`
+- `invoxa-invoices.webp`
+- `invoxa-adhoc.webp`
+- `invoxa-clients.webp`
+- `invoxa-datamanagement.webp`
+- `invoxa-settings.webp`
+- `invoxa-auditlog.webp`
+- `invoxa-documentation.webp`
 
-Recommend capturing from the demo instance with Demo Data loaded (populated screens, not empty states), browser window at a normal desktop width (~1440px), light or dark theme — whichever looks better, just be consistent across all four.
+Captured from the demo instance with Demo Data loaded, light theme.
