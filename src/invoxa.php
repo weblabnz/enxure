@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.3.7');
+define('APP_VERSION', '2.4.0');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -135,6 +135,10 @@ if (!$hasDiscountCol) {
 $hasTaxCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_clients' AND COLUMN_NAME = 'tax_rate'")->num_rows > 0;
 if (!$hasTaxCol) {
     $mysqli->query("ALTER TABLE invoxa_clients ADD COLUMN tax_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00 AFTER discount_pct");
+}
+$hasClientPhoneCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_clients' AND COLUMN_NAME = 'phone'")->num_rows > 0;
+if (!$hasClientPhoneCol) {
+    $mysqli->query("ALTER TABLE invoxa_clients ADD COLUMN phone VARCHAR(50) NOT NULL DEFAULT '' AFTER email, ADD COLUMN address TEXT AFTER phone");
 }
 // Same idea for installs that predate two-factor auth — NULL defaults keep
 // 2FA off until enabled under Settings > Authentication.
@@ -1420,7 +1424,12 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
         $taxRate,
         $invoiceTemplate,
         $payUrl,
-        $showPoweredBy
+        $showPoweredBy,
+        vatNumber: $settings['vat_number'] ?? '',
+        recipientPhone: $client['phone'] ?? '',
+        recipientAddress: $client['address'] ?? '',
+        customTemplate: $invoiceTemplate === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null,
+        businessName: $fromName
     );
 
     $folderName = strtolower(str_replace(" ", "_", $client['client_name']));
@@ -3091,8 +3100,7 @@ function seedDemoData($mysqli, array $settings): int
             $qAmount = round($dc['rate'] * (1.5 + rand(0, 50) / 100), 2);
             $quoteNum = 'Q' . strtoupper($clientKey) . '001';
             $qLineItems = [['code' => 'PROJ01', 'desc' => 'Proposed project scope', 'amount' => number_format($qAmount, 2)]];
-            $qHtml = generateInvoiceHTML($dc['name'], $qDate->format('Y-m-d'), $qDue->format('Y-m-d'), $quoteNum, number_format($qAmount, 2), $dc['acc'], $dc['accnum'], $fromEmail, $qLineItems, $brandColor, $footerText, $currencyCode, $fingerprint);
-            $qHtml = str_replace(['<h2>Invoice</h2>', '<title>Invoice</title>'], ['<h2>Quote</h2>', '<title>Quote</title>'], $qHtml);
+            $qHtml = generateInvoiceHTML($dc['name'], $qDate->format('Y-m-d'), $qDue->format('Y-m-d'), $quoteNum, number_format($qAmount, 2), $dc['acc'], $dc['accnum'], $fromEmail, $qLineItems, $brandColor, $footerText, $currencyCode, $fingerprint, documentType: 'Quote');
             $qHtmlForFile = str_replace('src="cid:logo_cid"', 'src="' . INVOICES_URL . LOGO_FILENAME . '"', $qHtml);
             @file_put_contents("$invoiceDir/$quoteNum.html", $qHtmlForFile);
             $qRelPath = "invoices/$folderName/$quoteNum.html";
@@ -3758,6 +3766,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $key = substr(md5(time()), 0, 3);
             $name = $_POST['client_name'];
             $email = $_POST['email'];
+            $phone = $_POST['phone'] ?? '';
+            $address = $_POST['address'] ?? '';
             $aname = $_POST['account_name'];
             $anum = $_POST['account_number'];
             $rate = (float) $_POST['monthly_rate'];
@@ -3772,11 +3782,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $act = (int) ($_POST['is_active'] ?? 0);
             $test = (int) ($_POST['is_test'] ?? 0);
             if ($id > 0) {
-                $stmt = $mysqli->prepare("UPDATE invoxa_clients SET client_name=?, email=?, account_name=?, account_number=?, monthly_rate=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, is_active=?, is_test=? WHERE id=?");
-                $stmt->bind_param("ssssdisddiii", $name, $email, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $act, $test, $id);
+                $stmt = $mysqli->prepare("UPDATE invoxa_clients SET client_name=?, email=?, phone=?, address=?, account_name=?, account_number=?, monthly_rate=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, is_active=?, is_test=? WHERE id=?");
+                $stmt->bind_param("ssssssdisddiii", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $act, $test, $id);
             } else {
-                $stmt = $mysqli->prepare("INSERT INTO invoxa_clients (client_name, email, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, discount_pct, tax_rate, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("ssssdisddiis", $name, $email, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $act, $test, $key);
+                $stmt = $mysqli->prepare("INSERT INTO invoxa_clients (client_name, email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, discount_pct, tax_rate, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("ssssssdisddiis", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $act, $test, $key);
             }
             $stmt->execute();
             echo json_encode(['success' => true]);
@@ -3869,8 +3879,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'import_clients_csv') {
             // Expects a CSV with header row: Client Name, Email, Rate, Billing
-            // Frequency, Account Name, Account Number, Payment Terms Days — the
-            // Add Client fields, not the richer "Export Clients" CSV format.
+            // Frequency, Account Name, Account Number, Payment Terms Days, Phone,
+            // Address — the Add Client fields, not the richer "Export Clients" CSV
+            // format. Phone/Address are trailing and optional so CSVs written
+            // before those fields existed still import cleanly.
             if (!isset($_FILES['clients_file']) || $_FILES['clients_file']['error'] !== UPLOAD_ERR_OK) {
                 echo json_encode(['success' => false, 'error' => 'No file uploaded, or the upload failed.']);
                 exit;
@@ -3889,7 +3901,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             while ($kr = $keyRes->fetch_assoc())
                 $existingKeys[$kr['client_key']] = true;
 
-            $insert = $mysqli->prepare("INSERT INTO invoxa_clients (client_name, email, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?)");
+            $insert = $mysqli->prepare("INSERT INTO invoxa_clients (client_name, email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)");
             $imported = 0;
             $skipped = 0;
             $rowNum = 0;
@@ -3915,6 +3927,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $terms = (int) ($row[6] ?? 21);
                 if ($terms < 1)
                     $terms = 21;
+                $phone = trim($row[7] ?? '');
+                $address = trim($row[8] ?? '');
 
                 $key = strtolower(substr(preg_replace('/[^a-zA-Z0-9]/', '', $name), 0, 3));
                 if (!$key)
@@ -3931,7 +3945,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
                 $existingKeys[$key] = true;
 
-                $insert->bind_param("ssssdiss", $name, $email, $aname, $anum, $rate, $terms, $freq, $key);
+                $insert->bind_param("ssssssdiss", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $key);
                 if ($insert->execute()) {
                     $imported++;
                 } else {
@@ -3963,7 +3977,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $brandColor = $settings['brand_color'] ?? '#4a90e2';
             $footerText = $settings['footer_text'] ?? '';
             $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
-            $html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'));
+            $html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'), vatNumber: $settings['vat_number'] ?? '', recipientPhone: $client['phone'] ?? '', recipientAddress: $client['address'] ?? '', customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null, businessName: $settings['business_name'] ?? '');
             echo json_encode(['success' => true, 'html' => $html, 'invoice_number' => $invNum]);
             exit;
         }
@@ -3994,7 +4008,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $brandColor = $settings['brand_color'] ?? '#4a90e2';
             $footerText = $settings['footer_text'] ?? '';
             $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
-            $html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'));
+            $html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'), vatNumber: $settings['vat_number'] ?? '', recipientPhone: $client['phone'] ?? '', recipientAddress: $client['address'] ?? '', customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null, businessName: $settings['business_name'] ?? '');
             try {
                 $pdf = generateInvoicePdf($html);
             } catch (Throwable $e) {
@@ -4068,11 +4082,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $totals['tax_rate'],
                 $settings['invoice_template'] ?? 'detailed',
                 null,
-                !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1')
+                !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'),
+                vatNumber: $settings['vat_number'] ?? '',
+                recipientPhone: $client['phone'] ?? '',
+                recipientAddress: $client['address'] ?? '',
+                customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null,
+                businessName: $settings['business_name'] ?? '',
+                documentType: 'Quote'
             );
-            // Replace "Invoice" with "Quote" in the HTML
-            $htmlContent = str_replace('<h2>Invoice</h2>', '<h2>Quote</h2>', $htmlContent);
-            $htmlContent = str_replace('<title>Invoice</title>', '<title>Quote</title>', $htmlContent);
             $folderName = strtolower(str_replace(' ', '_', $client['client_name']));
             $invoiceDir = INVOICES_DIR . $folderName;
             if (!is_dir($invoiceDir))
@@ -4777,16 +4794,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true]);
             exit;
         }
+        if ($_POST['action'] === 'get_default_invoice_template') {
+            echo json_encode(['success' => true, 'template' => defaultCustomInvoiceTemplate()]);
+            exit;
+        }
+        if ($_POST['action'] === 'preview_invoice_template') {
+            $template = in_array($_POST['template'] ?? '', ['compact', 'custom'], true) ? $_POST['template'] : 'detailed';
+            $customHtml = $_POST['custom_html'] ?? ($settings['custom_invoice_template'] ?? '');
+            echo json_encode(['success' => true, 'html' => invoxaSampleInvoiceHtml($template, $customHtml, $settings, $licenseValid)]);
+            exit;
+        }
+        if ($_POST['action'] === 'save_invoice_template') {
+            $invoiceTemplate = in_array($_POST['invoice_template'] ?? '', ['compact', 'custom'], true) ? $_POST['invoice_template'] : 'detailed';
+            $customInvoiceTemplate = $_POST['custom_invoice_template'] ?? '';
+
+            $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            foreach ([
+                'invoice_template' => $invoiceTemplate,
+                'custom_invoice_template' => $customInvoiceTemplate,
+            ] as $key => $value) {
+                $upsert->bind_param("ss", $key, $value);
+                $upsert->execute();
+            }
+            echo json_encode(['success' => true]);
+            exit;
+        }
         if ($_POST['action'] === 'save_business_identity') {
             $businessName = $_POST['business_name'] ?? '';
+            $vatNumber = trim($_POST['vat_number'] ?? '');
             $brandColor = $_POST['brand_color'] ?? '#4a90e2';
-            $invoiceTemplate = ($_POST['invoice_template'] ?? 'detailed') === 'compact' ? 'compact' : 'detailed';
 
             $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
             foreach ([
                 'business_name' => $businessName,
+                'vat_number' => $vatNumber,
                 'brand_color' => $brandColor,
-                'invoice_template' => $invoiceTemplate,
             ] as $key => $value) {
                 $upsert->bind_param("ss", $key, $value);
                 $upsert->execute();
@@ -5867,8 +5909,8 @@ if (isset($_GET['export'])) {
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="clients_export_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Client Name', 'Email', 'Rate', 'Billing Frequency', 'Invoices', 'Total Billed', 'Total Paid', 'Outstanding'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT c.client_name, c.email, c.monthly_rate, c.billing_frequency, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM invoxa_clients c LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') WHERE 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
+        fputcsv($out, ['Client Name', 'Email', 'Phone', 'Address', 'Rate', 'Billing Frequency', 'Invoices', 'Total Billed', 'Total Paid', 'Outstanding'], ',', '"', "\\");
+        $res = $mysqli->query("SELECT c.client_name, c.email, c.phone, c.address, c.monthly_rate, c.billing_frequency, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM invoxa_clients c LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') WHERE 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
         while ($r = $res->fetch_assoc()) {
             $r['outstanding'] = max(0, $r['total_billed'] - $r['total_paid']);
             fputcsv($out, $r, ',', '"', "\\");
@@ -7809,7 +7851,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         onclick="window.location.href='?export=clients'"><i class="fa-solid fa-file-csv"></i> Export
                         CSV</button>
                     <label class="btn" style="background:var(--surface-hover); cursor:pointer; margin:0;"
-                        title="CSV with a header row: Client Name, Email, Rate, Billing Frequency, Account Name, Account Number, Payment Terms Days">
+                        title="CSV with a header row: Client Name, Email, Rate, Billing Frequency, Account Name, Account Number, Payment Terms Days, Phone, Address (Phone/Address are optional)">
                         <i class="fa-solid fa-file-import"></i> Import CSV
                         <input type="file" id="importClientsFile" accept=".csv" style="display:none;"
                             onchange="importClientsCsv(this.files[0])"></label>
@@ -9319,6 +9361,14 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                             to use "Invoxa".</p>
                                     </div>
                                     <div class="form-group">
+                                        <label class="form-label" for="vatNumber">VAT / Tax ID Number</label>
+                                        <input type="text" id="vatNumber" name="vat_number" class="form-control"
+                                            value="<?= htmlspecialchars($settings['vat_number'] ?? '') ?>"
+                                            placeholder="e.g. GB123456789">
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Shown
+                                            on invoices and quotes when set. Leave blank to omit it.</p>
+                                    </div>
+                                    <div class="form-group">
                                         <label class="form-label" for="brandColor">Primary Brand Color</label>
                                         <div style="display:flex; gap:1rem; align-items:center;">
                                             <input type="color" id="brandColor" name="brand_color"
@@ -9327,24 +9377,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                         </div>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label" for="invoiceTemplate">Invoice Template</label>
-                                        <select id="invoiceTemplate" name="invoice_template" class="form-control">
-                                            <?php $__invTpl = $settings['invoice_template'] ?? 'detailed'; ?>
-                                            <option value="detailed" <?= $__invTpl === 'detailed' ? 'selected' : '' ?>>
-                                                Detailed (spacious, original layout)</option>
-                                            <option value="compact" <?= $__invTpl === 'compact' ? 'selected' : '' ?>>
-                                                Compact (tighter spacing, smaller logo — fits more line items per page)</option>
-                                        </select>
-                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
-                                            Applies to every newly generated invoice, quote, and PDF — existing invoices
-                                            already on disk keep the layout they were created with.</p>
-                                    </div>
-                                    <div class="form-group">
-                                        <label
-                                            style="display: flex; align-items: center; gap: 0.5rem; cursor: <?= $licenseValid ? 'pointer' : 'not-allowed' ?>; color: var(--text-primary); font-weight: 500;">
+                                        <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: <?= $licenseValid ? 'pointer' : 'not-allowed' ?>;">
                                             <input type="checkbox" id="hidePoweredByToggle" name="hide_powered_by"
                                                 value="1" <?= ($settings['hide_powered_by'] ?? '0') === '1' ? 'checked' : '' ?>
-                                                <?= $licenseValid ? '' : 'disabled' ?> style="width:18px;height:18px;">
+                                                <?= $licenseValid ? '' : 'disabled' ?> style="width:16px;height:16px;">
                                             Remove "Powered by Invoxa" from invoices &amp; emails
                                         </label>
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
@@ -9364,6 +9400,85 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     </div>
                                     <button type="submit" class="btn primary" id="saveBusinessIdentityBtn"><i
                                             class="fa-solid fa-save"></i> Save Business Identity</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-file-invoice"
+                                        style="color:var(--accent); margin-right:0.5rem;"></i>Invoice Template</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="invoiceTemplateForm" onsubmit="event.preventDefault(); saveInvoiceTemplate();">
+                                    <div class="form-group">
+                                        <label class="form-label" for="invoiceTemplate">Layout</label>
+                                        <div style="display:flex; gap:0.5rem; align-items:flex-start;">
+                                            <select id="invoiceTemplate" name="invoice_template" class="form-control"
+                                                onchange="document.getElementById('customTemplateGroup').style.display = this.value === 'custom' ? '' : 'none';">
+                                                <?php $__invTpl = $settings['invoice_template'] ?? 'detailed'; ?>
+                                                <option value="detailed" <?= $__invTpl === 'detailed' ? 'selected' : '' ?>>
+                                                    Detailed (spacious, original layout)</option>
+                                                <option value="compact" <?= $__invTpl === 'compact' ? 'selected' : '' ?>>
+                                                    Compact (tighter spacing, smaller logo — fits more line items per page)</option>
+                                                <option value="custom" <?= $__invTpl === 'custom' ? 'selected' : '' ?>>
+                                                    Custom (edit the HTML template yourself)</option>
+                                            </select>
+                                            <button type="button" class="btn" style="white-space:nowrap;"
+                                                onclick="previewInvoiceTemplate()"><i class="fa-solid fa-eye"></i> Preview
+                                                Sample</button>
+                                        </div>
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
+                                            Applies to every newly generated invoice, quote, and PDF — existing invoices
+                                            already on disk keep the layout they were created with. "Preview Sample" shows a
+                                            dummy invoice in the selected layout without saving anything.</p>
+                                    </div>
+                                    <div id="customTemplateGroup" style="display: <?= $__invTpl === 'custom' ? '' : 'none' ?>;">
+                                        <div class="form-group">
+                                            <label class="form-label" for="customInvoiceTemplate">Custom Template HTML</label>
+                                            <textarea id="customInvoiceTemplate" name="custom_invoice_template" class="form-control"
+                                                rows="14" spellcheck="false"
+                                                style="font-family:monospace; font-size:0.8rem; white-space:pre;"
+                                                placeholder="Click &quot;Load Default Template&quot; below to start from Invoxa's built-in layout."><?= htmlspecialchars($settings['custom_invoice_template'] ?? '') ?></textarea>
+                                            <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                                                <button type="button" class="btn" onclick="loadDefaultInvoiceTemplate()"><i
+                                                        class="fa-solid fa-rotate-left"></i> Load Default Template</button>
+                                                <button type="button" class="btn" onclick="previewInvoiceTemplate()"><i
+                                                        class="fa-solid fa-eye"></i> Preview Sample</button>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <details style="color:var(--text-secondary); font-size:0.8rem;">
+                                                <summary class="form-label" style="cursor:pointer; display:inline;">Available
+                                                    template variables</summary>
+                                                <p style="margin:0.5rem 0 0.25rem;">Output a value with
+                                                    <code>{{ variable }}</code>, or <code>{{ variable|raw }}</code> to output
+                                                    HTML without escaping. Conditionals:
+                                                    <code>{% if variable %}...{% endif %}</code> (also
+                                                    <code>{% if not variable %}</code>, and <code>{% else %}</code>). Loop
+                                                    over line items with
+                                                    <code>{% for item in line_items %}{{ item.code }} {{ item.desc }} {{
+                                                        item.amount }}{% endfor %}</code>.</p>
+                                                <p style="margin:0.5rem 0 0;"><code>business_name</code>,
+                                                    <code>document_type</code> ("Invoice" or "Quote"),
+                                                    <code>vat_number</code>, <code>recipient</code>,
+                                                    <code>recipient_phone</code>, <code>recipient_address</code>,
+                                                    <code>date</code>, <code>due_date</code>, <code>invoice_number</code>,
+                                                    <code>amount</code>, <code>currency_code</code>,
+                                                    <code>account_name</code>, <code>account_number</code>,
+                                                    <code>sender_email</code>, <code>brand_color</code>,
+                                                    <code>footer_text</code>, <code>line_items</code>,
+                                                    <code>subtotal</code>, <code>has_discount</code>,
+                                                    <code>discount_pct</code>, <code>discount</code>,
+                                                    <code>has_tax</code>, <code>tax_rate</code>, <code>tax</code>,
+                                                    <code>has_pay_url</code>, <code>pay_url</code>,
+                                                    <code>show_powered_by</code>, <code>logo_tag</code> (use with
+                                                    <code>|raw</code>).</p>
+                                            </details>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn primary" id="saveInvoiceTemplateBtn"><i
+                                            class="fa-solid fa-save"></i> Save Invoice Template</button>
                                 </form>
                             </div>
                         </div>
@@ -9944,6 +10059,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 id="clientName" class="form-control"></div>
                         <div class="form-group"><label class="form-label">Email Address</label><input type="email"
                                 id="clientEmail" class="form-control"></div>
+                        <div class="form-group"><label class="form-label">Phone</label><input type="text"
+                                id="clientPhone" class="form-control" placeholder="e.g. +1 555 123 4567"></div>
+                        <div class="form-group" style="grid-column:1 / -1;"><label class="form-label">Address</label><textarea
+                                id="clientAddress" class="form-control" rows="2" placeholder="Street, city, postal code, country"></textarea></div>
                     </div>
 
                     <!-- Billing terms -->
@@ -10716,6 +10835,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 document.getElementById('clientId').value = c ? c.id : '';
                 document.getElementById('clientName').value = c ? c.client_name : '';
                 document.getElementById('clientEmail').value = c ? c.email : '';
+                document.getElementById('clientPhone').value = c ? (c.phone || '') : '';
+                document.getElementById('clientAddress').value = c ? (c.address || '') : '';
                 document.getElementById('clientRate').value = c ? c.monthly_rate : '0.00';
                 document.getElementById('clientBillingFrequency').value = c ? c.billing_frequency : 'monthly';
                 document.getElementById('clientPaymentTerms').value = c ? c.payment_terms_days : '21';
@@ -10775,7 +10896,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const btn = document.getElementById('saveClientBtn'); btn.disabled = true;
                 const data = new URLSearchParams({
                     action: 'save_client', id: document.getElementById('clientId').value, client_name: document.getElementById('clientName').value,
-                    email: document.getElementById('clientEmail').value, monthly_rate: document.getElementById('clientRate').value,
+                    email: document.getElementById('clientEmail').value, phone: document.getElementById('clientPhone').value,
+                    address: document.getElementById('clientAddress').value, monthly_rate: document.getElementById('clientRate').value,
                     billing_frequency: document.getElementById('clientBillingFrequency').value,
                     payment_terms_days: document.getElementById('clientPaymentTerms').value,
                     discount_pct: document.getElementById('clientDiscountPct').value || '0',
@@ -11908,6 +12030,31 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                     btn.disabled = false;
                     showToast(json.error || 'Failed to deactivate', true);
                 }
+            }
+            async function loadDefaultInvoiceTemplate() {
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'get_default_invoice_template' }) });
+                const json = await res.json();
+                if (json.success) { document.getElementById('customInvoiceTemplate').value = json.template; }
+                else { showToast(json.error || 'Failed to load default template', true); }
+            }
+            async function previewInvoiceTemplate() {
+                const template = document.getElementById('invoiceTemplate').value;
+                const params = { action: 'preview_invoice_template', template };
+                if (template === 'custom') params.custom_html = document.getElementById('customInvoiceTemplate').value;
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams(params) });
+                const json = await res.json();
+                if (json.success) { _lastAdhocPreviewParams = null; viewInvoice({ invoice_number: 'INV-SAMPLE-001 (preview)', html_content: json.html }); }
+                else { showToast(json.error || 'Failed to render preview', true); }
+            }
+            async function saveInvoiceTemplate() {
+                const btn = document.getElementById('saveInvoiceTemplateBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; btn.disabled = true;
+                const form = document.getElementById('invoiceTemplateForm');
+                const data = new URLSearchParams(new FormData(form));
+                data.append('action', 'save_invoice_template');
+                const res = await fetch('', { method: 'POST', body: data });
+                const json = await res.json();
+                if (json.success) { showToast('Invoice template saved!'); } else { showToast(json.error || 'Failed to save', true); }
+                btn.innerHTML = '<i class="fa-solid fa-save"></i> Save Invoice Template'; btn.disabled = false;
             }
             async function saveBusinessIdentity() {
                 const btn = document.getElementById('saveBusinessIdentityBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; btn.disabled = true;

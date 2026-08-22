@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS `invoxa_clients` (
   `client_key`     VARCHAR(10)  NOT NULL UNIQUE COMMENT 'Short key e.g. asj, gjm',
   `client_name`    VARCHAR(100) NOT NULL,
   `email`          VARCHAR(255) NOT NULL,
+  `phone`          VARCHAR(50)  NOT NULL DEFAULT '',
+  `address`        TEXT,
   `account_name`   VARCHAR(255) DEFAULT '',
   `account_number` VARCHAR(50)  DEFAULT '',
   `monthly_rate`   DECIMAL(10,2) DEFAULT 0.00,

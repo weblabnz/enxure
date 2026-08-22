@@ -109,9 +109,49 @@ function expenseCategories(): array
 // $template selects the layout CSS only; every other element (line items,
 // summary rows, footer, watermark) is shared between templates. 'compact' is
 // a terser layout for invoices with many line items; 'detailed' is the
-// default.
-function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amount, $accountName, $accountNumber, $senderEmail, $lineItems = [], $brandColor = '#4a90e2', $footerText = '', $currencyCode = 'USD', $licenseFingerprint = '', $discountPct = 0.0, $taxRate = 0.0, $template = 'detailed', ?string $payUrl = null, bool $showPoweredBy = true)
+// default; 'custom' renders $customTemplate through invoxaRenderTemplate()
+// instead of the built-in markup below.
+function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amount, $accountName, $accountNumber, $senderEmail, $lineItems = [], $brandColor = '#4a90e2', $footerText = '', $currencyCode = 'USD', $licenseFingerprint = '', $discountPct = 0.0, $taxRate = 0.0, $template = 'detailed', ?string $payUrl = null, bool $showPoweredBy = true, string $vatNumber = '', string $recipientPhone = '', string $recipientAddress = '', ?string $customTemplate = null, string $businessName = '', string $documentType = 'Invoice')
 {
+    $watermarkComment = $licenseFingerprint !== '' ? "<!-- lic:{$licenseFingerprint} -->" : '';
+    $watermarkSpan = $licenseFingerprint !== '' ? "<span style=\"font-size:1px;color:#f9f9f8;user-select:none;\">{$licenseFingerprint}</span>" : '';
+
+    if ($template === 'custom' && $customTemplate !== null && trim($customTemplate) !== '') {
+        $subtotal = array_sum(array_map('floatval', array_column($lineItems, 'amount')));
+        $discountAmt = $subtotal * $discountPct / 100;
+        $taxAmt = ($subtotal - $discountAmt) * $taxRate / 100;
+        return $watermarkComment . invoxaRenderTemplate($customTemplate, [
+            'business_name' => $businessName,
+            'document_type' => $documentType,
+            'vat_number' => $vatNumber,
+            'recipient' => $recipient,
+            'recipient_phone' => $recipientPhone,
+            'recipient_address' => $recipientAddress,
+            'date' => $date,
+            'due_date' => $dueDate,
+            'invoice_number' => $invoiceNumber,
+            'amount' => $amount,
+            'currency_code' => $currencyCode,
+            'account_name' => $accountName,
+            'account_number' => $accountNumber,
+            'sender_email' => $senderEmail,
+            'brand_color' => $brandColor,
+            'footer_text' => $footerText,
+            'line_items' => array_map(fn($li) => ['code' => $li['code'] ?? '', 'desc' => $li['desc'] ?? '', 'amount' => $li['amount'] ?? '0.00'], $lineItems),
+            'subtotal' => number_format($subtotal, 2),
+            'discount_pct' => formatPct($discountPct),
+            'discount' => number_format($discountAmt, 2),
+            'tax_rate' => formatPct($taxRate),
+            'tax' => number_format($taxAmt, 2),
+            'has_discount' => $discountPct > 0,
+            'has_tax' => $taxRate > 0,
+            'pay_url' => $payUrl ?? '',
+            'has_pay_url' => $payUrl !== null,
+            'show_powered_by' => $showPoweredBy,
+            'logo_tag' => '<img src="cid:logo_cid" alt="Logo" />',
+        ]) . $watermarkSpan;
+    }
+
     $linesHtml = "";
     foreach ($lineItems as $item) {
         $linesHtml .= "<tr><td>" . htmlspecialchars($item['code']) . "</td><td>" . htmlspecialchars($item['desc']) . "</td><td>" . htmlspecialchars($currencyCode) . " \${$item['amount']}</td></tr>";
@@ -147,11 +187,14 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     $senderEmail = htmlspecialchars($senderEmail);
     $currencyCode = htmlspecialchars($currencyCode);
 
-    // Invisible watermark: an HTML comment plus a near-zero-contrast span
-    // (matches the page background rather than being transparent, so it
-    // still rasterizes into exported PDFs).
-    $watermarkComment = $licenseFingerprint !== '' ? "<!-- lic:{$licenseFingerprint} -->" : '';
-    $watermarkSpan = $licenseFingerprint !== '' ? "<span style=\"font-size:1px;color:#f9f9f8;user-select:none;\">{$licenseFingerprint}</span>" : '';
+    $recipientDetailsHtml = '';
+    if ($recipientAddress !== '') {
+        $recipientDetailsHtml .= "<p>" . nl2br(htmlspecialchars($recipientAddress)) . "</p>";
+    }
+    if ($recipientPhone !== '') {
+        $recipientDetailsHtml .= "<p>" . htmlspecialchars($recipientPhone) . "</p>";
+    }
+    $vatHtml = $vatNumber !== '' ? "<p><strong>VAT Number:</strong> " . htmlspecialchars($vatNumber) . "</p>" : '';
 
     // $payUrl is null when no gateway is enabled, or no Public URL is
     // configured to build one from (see invoxaPublicBaseUrl()) — omitted
@@ -170,11 +213,232 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
         ? "body {font-family: \"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif; margin: 20px 40px; font-size: 13px; color: #333;} .header {display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid {$brandColor}; padding-bottom: 6px;} .header h2 {margin: 0; font-size: 22px; font-weight: 700; color: #2c3e50; width: 80%; text-align: left;} .header img {height: 50px; width: 20%; object-fit: contain; margin-left: 10px;} .invoice-meta p, .footer p {margin: 2px 0; font-size: 13px; color: #555;} h3 {color: {$brandColor}; margin-top: 20px; font-weight: 600; font-size: 14px;} table {width: 100%; border-collapse: collapse; margin-top: 8px;} th, td {border: 1px solid #ddd; padding: 5px 8px; text-align: left; font-size: 13px;} th {background: {$brandColor}; color: #fff; font-weight: 600; text-transform: uppercase; font-size: 11px;} .summary-row td {background: #fff;} .total-row td {font-weight: 700; font-size: 14px; border-top: 2px solid {$brandColor};} .footer {margin-top: 20px; font-size: 12px; color: #555;} .footer h3 {margin-bottom: 4px; color: #2c3e50; font-size: 13px;} .footer ul {list-style: disc; margin-left: 16px; color: #555;}"
         : "body {font-family: \"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif; margin: 40px 80px; font-size: 16px; color: #333; background: #f9f9f9;} .header {display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; border-bottom: 2px solid {$brandColor}; padding-bottom: 10px;} .header h2 {margin: 0; padding-top: 35px; font-size: 36px; font-weight: 700; color: #2c3e50; width: 80%; text-align: left;} .header img {height: 100px; width: 20%; object-fit: contain; margin-left: 20px;} .invoice-meta p, .footer p {margin: 5px 0; font-size: 16px; color: #555;} h3 {color: {$brandColor}; margin-top: 40px; font-weight: 600; letter-spacing: 0.03em;} table {width: 100%; border-collapse: collapse; margin-top: 15px; background: #fff; box-shadow: 0 0 10px #ddd;} th, td {border: 1px solid #ddd; padding: 12px 15px; text-align: left;} th {background: {$brandColor}; color: #fff; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;} tr:nth-child(even) {background: #f4f9ff;} tr:hover {background: #dceffb;} .summary-row td {background: #fff;} .total-row td {font-weight: 700; font-size: 18px; border-top: 2px solid {$brandColor};} .footer {margin-top: 40px; font-size: 14px; color: #555;} .footer h3 {margin-bottom: 8px; color: #2c3e50;} .footer ul {list-style: disc; margin-left: 20px; color: #555;}";
 
+    $documentType = htmlspecialchars($documentType);
+
     return <<<HTML
-{$watermarkComment}<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Invoice</title>
+{$watermarkComment}<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>{$documentType}</title>
 <style>{$style}</style></head>
-<body><div class="header"><h2>Invoice</h2><img src="cid:logo_cid" alt="Logo" /></div><div class="invoice-meta"><p><strong>Invoice To:</strong> {$recipient}</p><p><strong>Invoice Date:</strong> {$date}</p><p><strong>Invoice Due:</strong> {$dueDate}</p><p><strong>Invoice Number:</strong> {$invoiceNumber}</p><p><strong>Amount Due:</strong> {$currencyCode} \${$amount}</p>{$payButtonHtml}</div><h3>Invoice Details</h3><table><thead><tr><th>Code</th><th>Description</th><th>Amount</th></tr></thead><tbody>{$linesHtml}{$summaryRowsHtml}<tr class="total-row"><td colspan="2">Total</td><td>{$currencyCode} \${$amount}</td></tr></tbody></table><div class="footer"><h3>Payment Instructions</h3>{$footerHtml}<h3>For Any Inquiries</h3><p>Email: {$senderEmail}</p>{$poweredByHtml}</div>{$watermarkSpan}</body></html>
+<body><div class="header"><h2>{$documentType}</h2><img src="cid:logo_cid" alt="Logo" /></div><div class="invoice-meta"><p><strong>Invoice To:</strong> {$recipient}</p>{$recipientDetailsHtml}<p><strong>Invoice Date:</strong> {$date}</p><p><strong>Invoice Due:</strong> {$dueDate}</p><p><strong>Invoice Number:</strong> {$invoiceNumber}</p><p><strong>Amount Due:</strong> {$currencyCode} \${$amount}</p>{$payButtonHtml}</div><h3>Invoice Details</h3><table><thead><tr><th>Code</th><th>Description</th><th>Amount</th></tr></thead><tbody>{$linesHtml}{$summaryRowsHtml}<tr class="total-row"><td colspan="2">Total</td><td>{$currencyCode} \${$amount}</td></tr></tbody></table><div class="footer"><h3>Payment Instructions</h3>{$footerHtml}<h3>For Any Inquiries</h3><p>Email: {$senderEmail}</p>{$vatHtml}{$poweredByHtml}</div>{$watermarkSpan}</body></html>
 HTML;
+}
+
+function invoxaSampleInvoiceHtml(string $template, string $customHtml, array $settings, bool $licenseValid): string
+{
+    $lineItems = [
+        ['code' => 'WEB01', 'desc' => 'Website design & development', 'amount' => '950.00'],
+        ['code' => 'HOST01', 'desc' => 'Hosting — 1 year', 'amount' => '150.00'],
+    ];
+    $totals = computeInvoiceTotals($lineItems, 10.0, 8.0);
+    return generateInvoiceHTML(
+        'Jane Smith - Acme Web Co',
+        date('Y-m-d'),
+        date('Y-m-d', strtotime('+21 days')),
+        'INV-SAMPLE-001',
+        number_format($totals['total'], 2),
+        $settings['default_account_name'] ?? 'Sample Business Account',
+        $settings['default_account_number'] ?? '00-0000-0000000-00',
+        getenv('SMTP_FROM_EMAIL') ?: 'billing@example.com',
+        $lineItems,
+        $settings['brand_color'] ?? '#4a90e2',
+        $settings['footer_text'] ?? '',
+        $settings['currency'] ?? 'USD',
+        '',
+        $totals['discount_pct'],
+        $totals['tax_rate'],
+        $template,
+        null,
+        !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'),
+        vatNumber: $settings['vat_number'] ?? '',
+        recipientPhone: '+1 555 123 4567',
+        recipientAddress: "123 Sample Street\nSpringfield, ST 00000",
+        customTemplate: $template === 'custom' ? $customHtml : null,
+        businessName: $settings['business_name'] ?? ''
+    );
+}
+
+function invoxaTemplateGetVar(array $vars, string $path)
+{
+    $cur = $vars;
+    foreach (explode('.', trim($path)) as $part) {
+        if (is_array($cur) && array_key_exists($part, $cur)) {
+            $cur = $cur[$part];
+        } else {
+            return null;
+        }
+    }
+    return $cur;
+}
+
+function invoxaTemplateTruthy($val): bool
+{
+    if (is_array($val))
+        return count($val) > 0;
+    if (is_string($val))
+        return $val !== '';
+    if ($val === null)
+        return false;
+    return (bool) $val;
+}
+
+function invoxaTokenizeTemplate(string $tpl): array
+{
+    $tokens = [];
+    $pos = 0;
+    if (preg_match_all('/\{\{\s*(.*?)\s*\}\}|\{%\s*(.*?)\s*%\}/s', $tpl, $matches, PREG_OFFSET_CAPTURE)) {
+        foreach ($matches[0] as $i => $m) {
+            $offset = $m[1];
+            if ($offset > $pos) {
+                $tokens[] = ['type' => 'text', 'value' => substr($tpl, $pos, $offset - $pos)];
+            }
+            if ($matches[1][$i][0] !== '') {
+                $tokens[] = ['type' => 'var', 'value' => $matches[1][$i][0]];
+            } else {
+                $tokens[] = ['type' => 'tag', 'value' => $matches[2][$i][0]];
+            }
+            $pos = $offset + strlen($m[0]);
+        }
+    }
+    if ($pos < strlen($tpl)) {
+        $tokens[] = ['type' => 'text', 'value' => substr($tpl, $pos)];
+    }
+    return $tokens;
+}
+
+function invoxaParseTemplateBlock(array $tokens, int $i, array $stopTags): array
+{
+    $nodes = [];
+    $n = count($tokens);
+    while ($i < $n) {
+        $tok = $tokens[$i];
+        if ($tok['type'] === 'text') {
+            $nodes[] = ['type' => 'text', 'value' => $tok['value']];
+            $i++;
+            continue;
+        }
+        if ($tok['type'] === 'var') {
+            $nodes[] = ['type' => 'var', 'expr' => $tok['value']];
+            $i++;
+            continue;
+        }
+        $tag = trim($tok['value']);
+        if (in_array($tag, $stopTags, true)) {
+            return [$nodes, $i];
+        }
+        if (preg_match('/^if\s+(.+)$/s', $tag, $m)) {
+            [$ifBody, $i] = invoxaParseTemplateBlock($tokens, $i + 1, ['else', 'endif']);
+            $elseBody = [];
+            if ($i < $n && trim($tokens[$i]['value']) === 'else') {
+                [$elseBody, $i] = invoxaParseTemplateBlock($tokens, $i + 1, ['endif']);
+            }
+            $i++;
+            $nodes[] = ['type' => 'if', 'cond' => trim($m[1]), 'if' => $ifBody, 'else' => $elseBody];
+            continue;
+        }
+        if (preg_match('/^for\s+(\w+)\s+in\s+(.+)$/s', $tag, $m)) {
+            [$body, $i] = invoxaParseTemplateBlock($tokens, $i + 1, ['endfor']);
+            $i++;
+            $nodes[] = ['type' => 'for', 'item' => $m[1], 'list' => trim($m[2]), 'body' => $body];
+            continue;
+        }
+        $i++;
+    }
+    return [$nodes, $i];
+}
+
+function invoxaRenderTemplateAst(array $nodes, array $vars): string
+{
+    $out = '';
+    foreach ($nodes as $node) {
+        if ($node['type'] === 'text') {
+            $out .= $node['value'];
+        } elseif ($node['type'] === 'var') {
+            $expr = $node['expr'];
+            $raw = false;
+            if (preg_match('/^(.*?)\|\s*raw$/', $expr, $m)) {
+                $expr = trim($m[1]);
+                $raw = true;
+            }
+            $val = invoxaTemplateGetVar($vars, $expr);
+            $str = is_array($val) ? '' : (string) $val;
+            $out .= $raw ? $str : htmlspecialchars($str);
+        } elseif ($node['type'] === 'if') {
+            $cond = $node['cond'];
+            $negate = false;
+            if (preg_match('/^not\s+(.+)$/', $cond, $m)) {
+                $negate = true;
+                $cond = trim($m[1]);
+            }
+            $truthy = invoxaTemplateTruthy(invoxaTemplateGetVar($vars, $cond));
+            if ($negate) {
+                $truthy = !$truthy;
+            }
+            $out .= invoxaRenderTemplateAst($truthy ? $node['if'] : $node['else'], $vars);
+        } elseif ($node['type'] === 'for') {
+            $list = invoxaTemplateGetVar($vars, $node['list']);
+            if (is_array($list)) {
+                foreach ($list as $item) {
+                    $loopVars = $vars;
+                    $loopVars[$node['item']] = $item;
+                    $out .= invoxaRenderTemplateAst($node['body'], $loopVars);
+                }
+            }
+        }
+    }
+    return $out;
+}
+
+function invoxaRenderTemplate(string $tpl, array $vars): string
+{
+    $tokens = invoxaTokenizeTemplate($tpl);
+    $parsed = invoxaParseTemplateBlock($tokens, 0, []);
+    return invoxaRenderTemplateAst($parsed[0], $vars);
+}
+
+function defaultCustomInvoiceTemplate(): string
+{
+    return <<<'TPL'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{ document_type }}</title>
+<style>
+body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; margin: 40px 80px; font-size: 16px; color: #333; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; border-bottom: 2px solid {{ brand_color }}; padding-bottom: 10px; }
+.header h2 { margin: 0; font-size: 36px; font-weight: 700; color: #2c3e50; }
+.header img { height: 100px; object-fit: contain; }
+h3 { color: {{ brand_color }}; margin-top: 40px; }
+table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+th, td { border: 1px solid #ddd; padding: 12px 15px; text-align: left; }
+th { background: {{ brand_color }}; color: #fff; }
+.total-row td { font-weight: 700; font-size: 18px; border-top: 2px solid {{ brand_color }}; }
+</style>
+</head>
+<body>
+<div class="header"><h2>{{ document_type }}</h2>{{ logo_tag|raw }}</div>
+<p><strong>{{ business_name }}</strong>{% if vat_number %}<br>VAT: {{ vat_number }}{% endif %}</p>
+<p><strong>Invoice To:</strong> {{ recipient }}{% if recipient_address %}<br>{{ recipient_address }}{% endif %}{% if recipient_phone %}<br>{{ recipient_phone }}{% endif %}</p>
+<p><strong>Invoice Date:</strong> {{ date }} &nbsp; <strong>Due:</strong> {{ due_date }} &nbsp; <strong>Invoice #:</strong> {{ invoice_number }}</p>
+{% if has_pay_url %}<p><a href="{{ pay_url }}" style="display:inline-block;background:{{ brand_color }};color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;">Pay Now</a></p>{% endif %}
+<h3>Invoice Details</h3>
+<table>
+<thead><tr><th>Code</th><th>Description</th><th>Amount</th></tr></thead>
+<tbody>
+{% for item in line_items %}<tr><td>{{ item.code }}</td><td>{{ item.desc }}</td><td>{{ currency_code }} {{ item.amount }}</td></tr>{% endfor %}
+{% if has_discount %}<tr><td colspan="2">Discount ({{ discount_pct }})</td><td>-{{ currency_code }} {{ discount }}</td></tr>{% endif %}
+{% if has_tax %}<tr><td colspan="2">Tax ({{ tax_rate }})</td><td>{{ currency_code }} {{ tax }}</td></tr>{% endif %}
+<tr class="total-row"><td colspan="2">Total</td><td>{{ currency_code }} {{ amount }}</td></tr>
+</tbody>
+</table>
+<h3>Payment Instructions</h3>
+<p>{{ footer_text }}</p>
+<h3>For Any Inquiries</h3>
+<p>Email: {{ sender_email }}</p>
+{% if show_powered_by %}<p style="margin-top:24px;font-size:11px;color:#999;">Powered by Invoxa — free, open source invoicing.</p>{% endif %}
+</body>
+</html>
+TPL;
 }
 
 // Renders invoice/quote HTML (from generateInvoiceHTML()) to a PDF byte

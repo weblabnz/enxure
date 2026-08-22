@@ -2,6 +2,18 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.4.0] - 2026-08-23
+
+### Added
+- VAT/Tax ID number field for the business (Settings > Branding > Business Identity), and Phone/Address fields for clients — both flow through to generated invoices/quotes and to the Client CSV export/import.
+- Custom invoice template mode: alongside Detailed/Compact, Settings > Branding > Invoice Template now offers a "Custom" layout with a small nunjucks-style template editor (variables, conditionals, loops over line items), a "Load Default Template" starting point, and a "Preview Sample" button that renders a dummy invoice in the selected layout without saving anything.
+
+### Fixed
+- Quotes generated with a custom invoice template kept saying "Invoice" instead of "Quote" — the document heading/title is now driven by an actual template variable (`document_type`) instead of a post-generation string replace that only worked against the built-in Detailed/Compact layouts.
+
+### Changed
+- Settings > Branding's "Business Identity" card was doing double duty as both business details and invoice-layout configuration, and its "Remove Powered by Invoxa" checkbox rendered oversized (missing the shared label styling that keeps every other form label the same size). Split into two cards — Business Identity and Invoice Template — and fixed the checkbox's styling to match the rest of the form.
+
 ## [2.3.7] - 2026-08-22
 
 ### Fixed
