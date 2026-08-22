@@ -6,6 +6,7 @@ DEPLOY.md
 GIT.md
 docker-compose.traefik.yml
 docker-compose.test.yml
+docker-compose.demo.yml
 
 # Generated invoices/quotes and database backups: real client data, never
 # committed.
@@ -13,7 +14,8 @@ invoxa-invoices/*
 !invoxa-invoices/.gitkeep
 invoxa-backups/*
 !invoxa-backups/.gitkeep
-invoxa-invoices-test/*
-!invoxa-invoices-test/.gitkeep
-invoxa-backups-test/*
-!invoxa-backups-test/.gitkeep
+
+# Local test-instance scaffolding (docker-compose.test.yml) — not part of the
+# shipped product, no reason for any of it to be tracked.
+invoxa-invoices-test/
+invoxa-backups-test/
