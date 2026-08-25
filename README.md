@@ -3,6 +3,7 @@
 ![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)
 ![Self-Hosted](https://img.shields.io/badge/self--hosted-yes-success.svg)
 ![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
+[![Source: GitLab](https://img.shields.io/badge/source-GitLab-FC6D26?logo=gitlab&logoColor=white)](https://gitlab.com/weblabnz/invoxa)
 
 Self-hosted invoicing & recurring billing for agencies and freelancers — manage your clients, send quotes that convert straight into invoices, get paid online or manually, and let recurring billing run itself on each client's own schedule. Free and open source (AGPL-3.0, see [LICENSE](LICENSE)).
 

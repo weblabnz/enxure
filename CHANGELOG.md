@@ -2,6 +2,21 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.5.0] - 2026-08-25
+
+### Added
+- Expenses now support multiple receipts per record (a scanned receipt plus a card statement excerpt, for example) instead of just one — the Expenses table shows a receipt count, and the Add/Edit Expense modal lets you upload, view, and delete individual receipts. Existing single receipts are migrated in automatically.
+- Docs > Reference now has a Source Code page linking to the public GitLab repo; the same link is also in the sidebar footer and the README.
+
+### Fixed
+- Statistics never scrolled — an extra, non-flex wrapper `<div>` around its `.section-scroll` (present only on this tab) meant the scroll container never got a bounded height, so content grew past the viewport and was silently clipped instead of scrolling.
+- On mobile, Settings/Statistics/Docs/Data Management's in-page sub-navigation was a sticky bar that wrapped into several rows and stayed pinned to the top of the tab as you scrolled, eating most of the screen (a stray `align-items: flex-start` on the shared layout also kept their content from ever stretching to full width, which was the likely cause of those tabs feeling like they wouldn't scroll at all). It's now tied into the main hamburger menu instead — each of those four tabs gets a collapsible section in the mobile sidebar, consistent with the rest of mobile navigation.
+- Dashboard's "Next Auto-Run" line could overflow past the "Dashboard" heading on narrow screens instead of wrapping to its own line.
+
+### Changed
+- The mobile hamburger menu now opens from the right edge of the screen instead of the left.
+- The Expense date field shows an explicit `YYYY-MM-DD` readout beside it, since the native date picker's displayed day/month order follows the browser's own language setting rather than the OS region and can't be forced from the page.
+
 ## [2.4.0] - 2026-08-23
 
 ### Added

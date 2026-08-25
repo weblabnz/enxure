@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.4.0');
+define('APP_VERSION', '2.5.0');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -7817,9 +7817,12 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
         <div class="user-panel">
             <form method="POST"><input type="hidden" name="auth_action" value="logout"><button type="submit"
                     class="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button></form>
-            <div style="text-align:center; font-size:0.75rem; color:var(--text-secondary); margin-top:0.5rem; cursor:pointer;"
-                title="View changelog" onclick="nav('docs', true); navDocs('changelog');">
-                <span class="brand-wordmark">Invoxa</span> v<?= htmlspecialchars(APP_VERSION) ?></div>
+            <div style="display:flex; align-items:center; justify-content:center; gap:0.6rem; margin-top:0.5rem; font-size:0.75rem; color:var(--text-secondary);">
+                <span style="cursor:pointer;" title="View changelog" onclick="nav('docs', true); navDocs('changelog');">
+                    <span class="brand-wordmark">Invoxa</span> v<?= htmlspecialchars(APP_VERSION) ?></span>
+                <a href="https://gitlab.com/weblabnz/invoxa" target="_blank" title="Source on GitLab"
+                    style="color:var(--text-secondary);"><i class="fa-brands fa-gitlab"></i></a>
+            </div>
         </div>
     </div>
 
@@ -8273,7 +8276,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         'feat-data' => 'Data Management',
                         'feat-notifications' => 'Notifications',
                     ],
-                    'Reference' => ['changelog' => 'Changelog', 'license' => 'License (AGPL-3.0)'],
+                    'Reference' => ['changelog' => 'Changelog', 'license' => 'License (AGPL-3.0)', 'source' => 'Source Code'],
                 ];
                 ?>
                 <nav class="subnav" id="docsNav" style="min-width:220px;">
@@ -8346,6 +8349,18 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     ? '<pre style="white-space:pre-wrap; font-family:inherit; font-size:0.88rem; line-height:1.55; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:1rem 1.25rem;">' . htmlspecialchars(file_get_contents($__licenseFile)) . '</pre>'
                                     : '<p>Document not found.</p>';
                                 ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="subnav-pane" id="docs-pane-source">
+                        <div class="card">
+                            <div class="card-body doc-content">
+                                <h1>Source Code</h1>
+                                <p>Invoxa's source is public on GitLab: <a href="https://gitlab.com/weblabnz/invoxa"
+                                        target="_blank">gitlab.com/weblabnz/invoxa</a>. Read the code, file an issue, or
+                                    fork it for your own self-hosted copy — see <strong>License (AGPL-3.0)</strong> for
+                                    what that license requires if you distribute a modified version.</p>
                             </div>
                         </div>
                     </div>
