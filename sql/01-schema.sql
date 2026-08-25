@@ -113,11 +113,21 @@ CREATE TABLE IF NOT EXISTS `invoxa_expenses` (
   `category`       VARCHAR(50)  NOT NULL DEFAULT 'other' COMMENT 'See expenseCategories() in invoxa.php for the whitelist',
   `amount`         DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `description`    TEXT,
-  `receipt_path`   VARCHAR(500) DEFAULT NULL COMMENT 'Relative path under invoxa-invoices/receipts/, same convention as invoxa_invoices.file_path',
+  `receipt_path`   VARCHAR(500) DEFAULT NULL COMMENT 'Legacy single-receipt path, superseded by invoxa_expense_receipts — kept for old rows, migrated into that table on boot',
   `created_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_expense_date` (`expense_date`),
   INDEX `idx_category`     (`category`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `invoxa_expense_receipts` (
+  `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `expense_id`     INT NOT NULL COMMENT 'FK to invoxa_expenses.id',
+  `filename`       VARCHAR(255) NOT NULL COMMENT 'Original uploaded filename, shown in the UI',
+  `stored_path`    VARCHAR(500) NOT NULL COMMENT 'Relative path under invoxa-invoices/receipts/<expense_id>/',
+  `file_size`      INT NOT NULL DEFAULT 0,
+  `uploaded_at`    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_expense_id` (`expense_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `invoxa_payments` (

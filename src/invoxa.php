@@ -91,6 +91,15 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_settings (setting_key VARCHAR(
 // Expenses (accounts payable) — same defensive-fallback reasoning as above;
 // sql/01-schema.sql is still canonical for a fresh install.
 $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_expenses (id INT AUTO_INCREMENT PRIMARY KEY, expense_date DATE NOT NULL, vendor VARCHAR(150) NOT NULL DEFAULT '', category VARCHAR(50) NOT NULL DEFAULT 'other', amount DECIMAL(10,2) NOT NULL DEFAULT 0.00, description TEXT, receipt_path VARCHAR(500) DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX idx_expense_date (expense_date), INDEX idx_category (category)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+// Expense receipts — one row per uploaded file (an expense can have more than
+// one, e.g. a receipt plus a card statement excerpt), files live on disk
+// under RECEIPTS_DIR/<expense_id>/. Superseded expenses.receipt_path (single
+// file, kept only for old rows) below.
+$mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_expense_receipts (id INT AUTO_INCREMENT PRIMARY KEY, expense_id INT NOT NULL, filename VARCHAR(255) NOT NULL, stored_path VARCHAR(500) NOT NULL, file_size INT NOT NULL DEFAULT 0, uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_expense_id (expense_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+$mysqli->query("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size)
+    SELECT e.id, e.receipt_path, e.receipt_path, 0 FROM invoxa_expenses e
+    WHERE e.receipt_path IS NOT NULL AND e.receipt_path != ''
+    AND NOT EXISTS (SELECT 1 FROM invoxa_expense_receipts r WHERE r.expense_id = e.id AND r.stored_path = e.receipt_path)");
 // Invoice attachments (contracts, receipts) — one row per uploaded file, files
 // themselves live on disk under INVOICES_DIR/attachments/<invoice_id>/.
 $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_invoice_attachments (id INT AUTO_INCREMENT PRIMARY KEY, invoice_id INT NOT NULL, filename VARCHAR(255) NOT NULL, stored_path VARCHAR(500) NOT NULL, file_size INT NOT NULL DEFAULT 0, uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_invoice_id (invoice_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
@@ -2072,9 +2081,10 @@ function renderExpenseRows(array $expenses): string
             <td style="color:var(--text-secondary); max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                 <?= htmlspecialchars($e['description'] ?? '') ?></td>
             <td style="text-align:center;">
-                <?php if (!empty($e['receipt_path'])): ?>
-                    <a href="<?= RECEIPTS_URL . rawurlencode(basename($e['receipt_path'])) ?>" target="_blank"
-                        title="View receipt"><i class="fa-solid fa-paperclip"></i></a>
+                <?php if ((int) $e['receipt_count'] > 0): ?>
+                    <button type="button" class="btn small" title="<?= (int) $e['receipt_count'] ?> receipt<?= (int) $e['receipt_count'] === 1 ? '' : 's' ?>"
+                        onclick="openExpenseModal(<?= htmlspecialchars(json_encode($e)) ?>)"><i class="fa-solid fa-paperclip"></i>
+                        <?= (int) $e['receipt_count'] ?></button>
                 <?php else: ?>
                     <span style="color:var(--text-secondary);">—</span>
                 <?php endif; ?>
@@ -2207,7 +2217,6 @@ function renderStatsSection(): string
             </div>
         </div>
     <?php endif; ?>
-    <div>
     <div class="section-scroll">
     <div class="subnav-layout">
 
@@ -2768,7 +2777,6 @@ function renderStatsSection(): string
             </div>
 
         </div>
-    </div>
     </div>
     </div>
     <?php
@@ -3832,37 +3840,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $amount = (float) ($_POST['amount'] ?? 0);
             $description = trim($_POST['description'] ?? '');
 
-            // Keep the existing receipt unless a new file is uploaded — re-saving
-            // the form shouldn't silently clear it.
-            $receiptPath = null;
             if ($id > 0) {
-                $existing = $mysqli->query("SELECT receipt_path FROM invoxa_expenses WHERE id = " . $id)->fetch_assoc();
-                $receiptPath = $existing['receipt_path'] ?? null;
-            }
-            if (isset($_FILES['receipt']) && $_FILES['receipt']['error'] === UPLOAD_ERR_OK) {
-                $ext = strtolower(pathinfo($_FILES['receipt']['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'], true)) {
-                    if (!is_dir(RECEIPTS_DIR))
-                        @mkdir(RECEIPTS_DIR, 0777, true);
-                    // Prefixed with a unique id so same-named receipts never collide
-                    // in the flat RECEIPTS_DIR.
-                    $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', basename($_FILES['receipt']['name']));
-                    $storedName = uniqid('exp_') . '_' . $safeName;
-                    if (move_uploaded_file($_FILES['receipt']['tmp_name'], RECEIPTS_DIR . $storedName)) {
-                        $receiptPath = $storedName;
-                    }
-                }
-            }
-
-            if ($id > 0) {
-                $stmt = $mysqli->prepare("UPDATE invoxa_expenses SET expense_date=?, vendor=?, category=?, amount=?, description=?, receipt_path=? WHERE id=?");
-                $stmt->bind_param("sssdssi", $date, $vendor, $category, $amount, $description, $receiptPath, $id);
+                $stmt = $mysqli->prepare("UPDATE invoxa_expenses SET expense_date=?, vendor=?, category=?, amount=?, description=? WHERE id=?");
+                $stmt->bind_param("sssdsi", $date, $vendor, $category, $amount, $description, $id);
+                $stmt->execute();
             } else {
-                $stmt = $mysqli->prepare("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description, receipt_path) VALUES (?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("sssdss", $date, $vendor, $category, $amount, $description, $receiptPath);
+                $stmt = $mysqli->prepare("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description) VALUES (?, ?, ?, ?, ?)");
+                $stmt->bind_param("sssds", $date, $vendor, $category, $amount, $description);
+                $stmt->execute();
+                $id = $mysqli->insert_id;
             }
-            $stmt->execute();
-            echo json_encode(['success' => true]);
+            echo json_encode(['success' => true, 'id' => $id]);
             exit;
         }
         if ($_POST['action'] === 'delete_expense') {
@@ -3871,9 +3859,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($row && !empty($row['receipt_path'])) {
                 @unlink(RECEIPTS_DIR . $row['receipt_path']);
             }
+            $recRes = $mysqli->query("SELECT stored_path FROM invoxa_expense_receipts WHERE expense_id = $id");
+            while ($recRow = $recRes->fetch_assoc())
+                @unlink(RECEIPTS_DIR . $recRow['stored_path']);
+            @rmdir(RECEIPTS_DIR . $id);
+            $mysqli->query("DELETE FROM invoxa_expense_receipts WHERE expense_id = $id");
             $stmt = $mysqli->prepare("DELETE FROM invoxa_expenses WHERE id=?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'get_expense_receipts') {
+            $expenseId = (int) ($_POST['expense_id'] ?? 0);
+            $res = $mysqli->query("SELECT id, filename, stored_path, file_size, uploaded_at FROM invoxa_expense_receipts WHERE expense_id = $expenseId ORDER BY uploaded_at DESC");
+            $receipts = [];
+            while ($r = $res->fetch_assoc()) {
+                $r['url'] = RECEIPTS_URL . implode('/', array_map('rawurlencode', explode('/', $r['stored_path'])));
+                $receipts[] = $r;
+            }
+            echo json_encode(['success' => true, 'receipts' => $receipts]);
+            exit;
+        }
+        if ($_POST['action'] === 'upload_expense_receipt') {
+            $expenseId = (int) ($_POST['expense_id'] ?? 0);
+            $expExists = $mysqli->query("SELECT id FROM invoxa_expenses WHERE id = $expenseId")->num_rows > 0;
+            if (!$expExists) {
+                echo json_encode(['success' => false, 'error' => 'Expense not found']);
+                exit;
+            }
+            if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+                echo json_encode(['success' => false, 'error' => 'No file uploaded, or the upload failed.']);
+                exit;
+            }
+            $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'], true)) {
+                echo json_encode(['success' => false, 'error' => 'Unsupported file type — receipts must be an image or PDF.']);
+                exit;
+            }
+            $expenseDir = RECEIPTS_DIR . $expenseId;
+            if (!is_dir($expenseDir))
+                @mkdir($expenseDir, 0777, true);
+            $origName = basename($_FILES['file']['name']);
+            $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $origName);
+            $storedName = uniqid('rcpt_') . '_' . $safeName;
+            if (!move_uploaded_file($_FILES['file']['tmp_name'], "$expenseDir/$storedName")) {
+                echo json_encode(['success' => false, 'error' => 'Failed to save the uploaded file.']);
+                exit;
+            }
+            $storedPath = "$expenseId/$storedName";
+            $size = (int) $_FILES['file']['size'];
+            $stmt = $mysqli->prepare("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("issi", $expenseId, $origName, $storedPath, $size);
+            $stmt->execute();
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'delete_expense_receipt') {
+            $id = (int) ($_POST['id'] ?? 0);
+            $row = $mysqli->query("SELECT stored_path FROM invoxa_expense_receipts WHERE id = $id")->fetch_assoc();
+            if ($row) {
+                @unlink(RECEIPTS_DIR . $row['stored_path']);
+                $stmt = $mysqli->prepare("DELETE FROM invoxa_expense_receipts WHERE id = ?");
+                $stmt->bind_param("i", $id);
+                $stmt->execute();
+            }
             echo json_encode(['success' => true]);
             exit;
         }
@@ -6044,7 +6094,7 @@ while ($r = $res->fetch_assoc())
     $clients[] = $r;
 
 $expenses = [];
-$res = $mysqli->query("SELECT * FROM invoxa_expenses ORDER BY expense_date DESC, id DESC");
+$res = $mysqli->query("SELECT e.*, COUNT(r.id) as receipt_count FROM invoxa_expenses e LEFT JOIN invoxa_expense_receipts r ON r.expense_id = e.id GROUP BY e.id ORDER BY e.expense_date DESC, e.id DESC");
 while ($r = $res->fetch_assoc())
     $expenses[] = $r;
 $total_expenses = $mysqli->query("SELECT SUM(amount) as s FROM invoxa_expenses")->fetch_assoc()['s'] ?? 0;
@@ -7004,16 +7054,28 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             display: flex;
         }
 
-        @media (max-width: 900px) {
-            .subnav-layout {
-                flex-direction: column;
-            }
+        .nav-subnav-toggle {
+            display: none;
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 0.75rem;
+            padding: 0.25rem;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
 
-            .subnav {
-                width: 100%;
-                flex-direction: row;
-                flex-wrap: wrap;
-            }
+        .nav-subnav-toggle i {
+            transition: transform 0.15s ease;
+        }
+
+        .nav-subnav-toggle.expanded i {
+            transform: rotate(180deg);
+        }
+
+        .nav-subnav-slot {
+            display: none;
         }
 
         .badge {
@@ -7568,7 +7630,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             display: none;
             position: fixed;
             top: 1rem;
-            left: 1rem;
+            right: 1rem;
             z-index: 1200;
             width: 42px;
             height: 42px;
@@ -7603,15 +7665,17 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             .sidebar {
                 position: fixed;
                 top: 0;
-                left: -300px;
+                right: -300px;
                 height: 100vh;
                 z-index: 1100;
-                transition: left 0.25s ease;
+                transition: right 0.25s ease;
                 box-shadow: none;
+                border-right: none;
+                border-left: 1px solid var(--border);
             }
 
             .sidebar.open {
-                left: 0;
+                right: 0;
                 box-shadow: 0 0 48px rgba(0, 0, 0, 0.55);
             }
 
@@ -7626,6 +7690,45 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
 
             .modal {
                 max-width: 94vw !important;
+            }
+
+            h2.page-title {
+                flex-wrap: wrap;
+                row-gap: 0.5rem;
+            }
+
+            .nav-subnav-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .nav-subnav-slot.expanded {
+                display: block;
+                padding: 0.25rem 0.75rem 0.5rem;
+            }
+
+            .subnav-layout {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .subnav-layout>.subnav {
+                display: none;
+            }
+
+            .subnav-content {
+                width: 100%;
+            }
+
+            .nav-subnav-slot .subnav {
+                width: 100%;
+                position: static;
+            }
+
+            .nav-subnav-slot .subnav-item {
+                font-size: 0.85rem;
+                padding: 0.55rem 0.75rem;
             }
         }
     </style>
@@ -7681,7 +7784,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 class="fa-solid fa-chart-line"></i> Statistics
             <?php if (!$licenseValid): ?><i class="fa-solid fa-lock" title="Requires a license"
                     style="margin-left:auto; color:var(--text-secondary); font-size:0.8rem;"></i><?php endif; ?>
+            <button type="button" class="nav-subnav-toggle" onclick="event.stopPropagation(); toggleNavSubnav('stats')"
+                aria-label="Expand Statistics menu"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
+        <div class="nav-subnav-slot" data-for="stats"></div>
         <div class="nav-item tool-item" data-target="sync" onclick="nav('sync', true)"><i
                 class="fa-solid fa-rotate"></i> Sync <span class="badge" title="Files needing sync"
                 style="margin-left:auto; background:<?= (count($missingFiles) + count($missingDiskData)) > 0 ? 'var(--warning)' : 'var(--surface-hover)' ?>; color:<?= (count($missingFiles) + count($missingDiskData)) > 0 ? 'white' : 'var(--text-primary)' ?>;"><?= count($missingFiles) + count($missingDiskData) ?></span>
@@ -7691,14 +7797,23 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             Audit Log</div>
         <div class="nav-item tool-item" data-target="backup" onclick="nav('backup', true)"><i
                 class="fa-solid fa-database"></i> Data Management
+            <button type="button" class="nav-subnav-toggle" onclick="event.stopPropagation(); toggleNavSubnav('backup')"
+                aria-label="Expand Data Management menu"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
+        <div class="nav-subnav-slot" data-for="backup"></div>
         <div class="nav-item tool-item" data-target="docs" onclick="nav('docs', true)"><i class="fa-solid fa-book"></i> Docs
+            <button type="button" class="nav-subnav-toggle" onclick="event.stopPropagation(); toggleNavSubnav('docs')"
+                aria-label="Expand Docs menu"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
+        <div class="nav-subnav-slot" data-for="docs"></div>
         <div class="nav-item tool-item" data-target="settings" onclick="nav('settings', true)"><i
                 class="fa-solid fa-gear"></i> Settings
             <?php if (!$licenseValid): ?><span class="badge" title="Not licensed — see License in Settings"
                     style="margin-left:auto; background:var(--warning); color:white;">!</span><?php endif; ?>
+            <button type="button" class="nav-subnav-toggle" onclick="event.stopPropagation(); toggleNavSubnav('settings')"
+                aria-label="Expand Settings menu"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
+        <div class="nav-subnav-slot" data-for="settings"></div>
         <div class="user-panel">
             <form method="POST"><input type="hidden" name="auth_action" value="logout"><button type="submit"
                     class="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button></form>
@@ -10327,10 +10442,16 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 </div>
                 <div class="modal-body">
                     <input type="hidden" id="expenseId">
-                    <div class="form-group"><label class="form-label">Date</label><input type="date"
-                            id="expenseDate" class="form-control"></div>
+                    <div class="form-group" style="width:50%;">
+                        <label class="form-label">Date</label>
+                        <div style="display:flex; align-items:center; gap:0.75rem;">
+                            <input type="date" id="expenseDate" class="form-control" style="flex:1;"
+                                oninput="document.getElementById('expenseDateIso').textContent = this.value">
+                            <span id="expenseDateIso" style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;"></span>
+                        </div>
+                    </div>
                     <div class="form-group"><label class="form-label">Vendor</label><input type="text"
-                            id="expenseVendor" class="form-control" placeholder="e.g. DigitalOcean"></div>
+                            id="expenseVendor" class="form-control" placeholder=""></div>
                     <div class="form-group"><label class="form-label">Category</label>
                         <select id="expenseCategory" class="form-control">
                             <?php foreach (expenseCategories() as $__catKey => $__catLabel): ?>
@@ -10344,14 +10465,11 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
                         <textarea id="expenseDescription" class="form-control" rows="2"></textarea>
                     </div>
-                    <div class="form-group"><label class="form-label">Receipt <span
-                                style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
-                        <input type="file" id="expenseReceipt" class="form-control" accept="image/*,.pdf"
+                    <div class="form-group"><label class="form-label">Receipts <span
+                                style="font-weight:400; color:var(--text-secondary);">(optional — a scanned receipt plus a card statement excerpt, for example)</span></label>
+                        <div id="expenseReceiptsList" style="margin-bottom:0.5rem;"></div>
+                        <input type="file" id="expenseReceiptFiles" class="form-control" accept="image/*,.pdf" multiple
                             style="padding:0.5rem;">
-                        <div id="expenseExistingReceipt" style="display:none; margin-top:0.5rem; font-size:0.85rem;">
-                            <i class="fa-solid fa-paperclip"></i> <a id="expenseExistingReceiptLink" href="#"
-                                target="_blank">Current receipt</a> — uploading a new file replaces it.
-                        </div>
                     </div>
                 </div>
                 <div class="modal-footer"><button class="btn" onclick="closeModal('expenseModal')">Cancel</button><button
@@ -10866,6 +10984,45 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             if (storedStatsTab && document.getElementById('stats-pane-' + storedStatsTab)) navStats(storedStatsTab);
             else initStatsChartsFor('revenue');
 
+            const subnavSections = ['stats', 'docs', 'backup', 'settings'];
+            const mobileMq = window.matchMedia('(max-width: 860px)');
+            function placeSubnavs(isMobile) {
+                subnavSections.forEach(name => {
+                    const subnavEl = document.querySelector('#sec-' + name + ' .subnav, .nav-subnav-slot[data-for="' + name + '"] .subnav');
+                    const slotEl = document.querySelector('.nav-subnav-slot[data-for="' + name + '"]');
+                    const layoutEl = document.querySelector('#sec-' + name + ' .subnav-layout');
+                    if (!subnavEl || !slotEl || !layoutEl) return;
+                    if (isMobile) {
+                        slotEl.replaceChildren(subnavEl);
+                    } else {
+                        layoutEl.insertBefore(subnavEl, layoutEl.firstChild);
+                        slotEl.classList.remove('expanded');
+                        const toggleEl = document.querySelector('.nav-item[data-target="' + name + '"] .nav-subnav-toggle');
+                        if (toggleEl) toggleEl.classList.remove('expanded');
+                    }
+                });
+            }
+            placeSubnavs(mobileMq.matches);
+            mobileMq.addEventListener('change', e => placeSubnavs(e.matches));
+
+            function toggleNavSubnav(name) {
+                const slotEl = document.querySelector('.nav-subnav-slot[data-for="' + name + '"]');
+                const toggleEl = document.querySelector('.nav-item[data-target="' + name + '"] .nav-subnav-toggle');
+                const isExpanded = slotEl.classList.toggle('expanded');
+                if (toggleEl) toggleEl.classList.toggle('expanded', isExpanded);
+            }
+
+            subnavSections.forEach(name => {
+                const slotEl = document.querySelector('.nav-subnav-slot[data-for="' + name + '"]');
+                if (!slotEl) return;
+                slotEl.addEventListener('click', e => {
+                    if (e.target.closest('.subnav-item')) {
+                        nav(name, true);
+                        slotEl.classList.remove('expanded');
+                    }
+                }, true);
+            });
+
             // A function, not a cached value — re-reads localStorage on every table
             // (re)build so a changed Default Page Size setting applies on the next
             // tab visit instead of requiring a hard refresh.
@@ -10934,6 +11091,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                     const stored = localStorage.getItem('statsSubTab');
                     if (stored && document.getElementById('stats-pane-' + stored)) navStats(stored);
                     else initStatsChartsFor('revenue');
+                    placeSubnavs(mobileMq.matches);
                 } catch (e) {
                     // Silent by design, same reasoning as refreshTable() above.
                 }
@@ -11074,19 +11232,38 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 document.getElementById('expenseModalTitle').textContent = e ? 'Edit Expense' : 'Add Expense';
                 document.getElementById('expenseId').value = e ? e.id : '';
                 document.getElementById('expenseDate').value = e ? e.expense_date.substring(0, 10) : new Date().toISOString().substring(0, 10);
+                document.getElementById('expenseDateIso').textContent = document.getElementById('expenseDate').value;
                 document.getElementById('expenseVendor').value = e ? e.vendor : '';
                 document.getElementById('expenseCategory').value = e ? e.category : 'other';
                 document.getElementById('expenseAmount').value = e ? e.amount : '0.00';
                 document.getElementById('expenseDescription').value = e ? (e.description || '') : '';
-                document.getElementById('expenseReceipt').value = '';
-                const existing = document.getElementById('expenseExistingReceipt');
-                if (e && e.receipt_path) {
-                    existing.style.display = '';
-                    document.getElementById('expenseExistingReceiptLink').href = '<?= RECEIPTS_URL ?>' + encodeURIComponent(e.receipt_path.split('/').pop());
-                } else {
-                    existing.style.display = 'none';
-                }
+                document.getElementById('expenseReceiptFiles').value = '';
+                document.getElementById('expenseReceiptsList').innerHTML = '';
                 document.getElementById('expenseModal').classList.add('active');
+                if (e && e.id) loadExpenseReceipts(e.id);
+            }
+            async function loadExpenseReceipts(expenseId) {
+                const list = document.getElementById('expenseReceiptsList');
+                list.innerHTML = '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Loading…</p>';
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'get_expense_receipts', expense_id: expenseId }) });
+                const json = await res.json();
+                if (!json.success || !json.receipts.length) { list.innerHTML = ''; return; }
+                list.innerHTML = json.receipts.map(r => `
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.4rem 0; border-bottom:1px solid var(--border);">
+                        <a href="${r.url}" target="_blank" style="color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.85rem;"><i class="fa-solid fa-paperclip"></i> ${r.filename}</a>
+                        <div style="display:flex; align-items:center; gap:0.5rem; white-space:nowrap;">
+                            <span style="color:var(--text-secondary); font-size:0.75rem;">${_formatFileSize(r.file_size)}</span>
+                            <button type="button" class="btn small danger" onclick="deleteExpenseReceipt(${r.id}, ${expenseId})"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            async function deleteExpenseReceipt(id, expenseId) {
+                if (!confirm('Delete this receipt?')) return;
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'delete_expense_receipt', id: id }) });
+                const json = await res.json();
+                if (json.success) { showToast('Receipt deleted!'); await loadExpenseReceipts(expenseId); refreshTable('expenses'); }
+                else showToast(json.error || 'Failed to delete', true);
             }
             async function saveExpense() {
                 const btn = document.getElementById('saveExpenseBtn'); btn.disabled = true;
@@ -11098,10 +11275,19 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 formData.append('category', document.getElementById('expenseCategory').value);
                 formData.append('amount', document.getElementById('expenseAmount').value);
                 formData.append('description', document.getElementById('expenseDescription').value);
-                const receiptFile = document.getElementById('expenseReceipt').files[0];
-                if (receiptFile) formData.append('receipt', receiptFile);
-                const res = await fetch('', { method: 'POST', body: formData }); const json = await res.json();
-                if (json.success) { showToast('Expense saved!'); setTimeout(() => window.location.reload(), 1000); } else { showToast(json.error || 'Failed to save', true); btn.disabled = false; }
+                const res = await fetch('', { method: 'POST', body: formData });
+                const json = await res.json();
+                if (!json.success) { showToast(json.error || 'Failed to save', true); btn.disabled = false; return; }
+                const receiptFiles = document.getElementById('expenseReceiptFiles').files;
+                for (const file of receiptFiles) {
+                    const rFormData = new FormData();
+                    rFormData.append('action', 'upload_expense_receipt');
+                    rFormData.append('expense_id', json.id);
+                    rFormData.append('file', file);
+                    await fetch('', { method: 'POST', body: rFormData });
+                }
+                showToast('Expense saved!');
+                setTimeout(() => window.location.reload(), 1000);
             }
             async function deleteExpense(id) {
                 if (!confirm("Are you sure you want to delete this expense?")) return;
