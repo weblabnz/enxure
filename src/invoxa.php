@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.5.0');
+define('APP_VERSION', '2.8.0');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -100,6 +100,18 @@ $mysqli->query("INSERT INTO invoxa_expense_receipts (expense_id, filename, store
     SELECT e.id, e.receipt_path, e.receipt_path, 0 FROM invoxa_expenses e
     WHERE e.receipt_path IS NOT NULL AND e.receipt_path != ''
     AND NOT EXISTS (SELECT 1 FROM invoxa_expense_receipts r WHERE r.expense_id = e.id AND r.stored_path = e.receipt_path)");
+// Recurring expense templates (hosting, SaaS subscriptions, etc.) — the
+// run_recurring cron action auto-logs one invoxa_expenses row per active
+// template each period, same guard-against-double-billing idea as recurring
+// invoices. A paid feature, same bucket as recurring billing automation.
+$mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_recurring_expenses (id INT AUTO_INCREMENT PRIMARY KEY, vendor VARCHAR(150) NOT NULL DEFAULT '', category VARCHAR(50) NOT NULL DEFAULT 'other', amount DECIMAL(10,2) NOT NULL DEFAULT 0.00, description TEXT, frequency ENUM('weekly','monthly','quarterly','annually') NOT NULL DEFAULT 'monthly', is_active TINYINT(1) NOT NULL DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+// Links an auto-logged expense back to the template that created it, so the
+// cron run can tell "already logged this period" apart per template instead
+// of guessing from vendor/amount text.
+$hasRecurringExpenseCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_expenses' AND COLUMN_NAME = 'recurring_expense_id'")->num_rows > 0;
+if (!$hasRecurringExpenseCol) {
+    $mysqli->query("ALTER TABLE invoxa_expenses ADD COLUMN recurring_expense_id INT DEFAULT NULL, ADD INDEX idx_recurring_expense_id (recurring_expense_id)");
+}
 // Invoice attachments (contracts, receipts) — one row per uploaded file, files
 // themselves live on disk under INVOICES_DIR/attachments/<invoice_id>/.
 $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_invoice_attachments (id INT AUTO_INCREMENT PRIMARY KEY, invoice_id INT NOT NULL, filename VARCHAR(255) NOT NULL, stored_path VARCHAR(500) NOT NULL, file_size INT NOT NULL DEFAULT 0, uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_invoice_id (invoice_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
@@ -195,6 +207,12 @@ if (!$hasPortalExpiryCol) {
 $statusColType = $mysqli->query("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_invoices' AND COLUMN_NAME = 'status'")->fetch_assoc()['COLUMN_TYPE'] ?? '';
 if ($statusColType && strpos($statusColType, "'void'") === false) {
     $mysqli->query("ALTER TABLE invoxa_invoices MODIFY status ENUM('sent','failed','pending','draft','paid','void') DEFAULT 'pending'");
+}
+// Quote expiry — NULL (no expiry) for every quote saved before this existed,
+// same as a quote with the field left blank going forward.
+$hasQuoteExpiryCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_invoices' AND COLUMN_NAME = 'quote_expires_at'")->num_rows > 0;
+if (!$hasQuoteExpiryCol) {
+    $mysqli->query("ALTER TABLE invoxa_invoices ADD COLUMN quote_expires_at DATE DEFAULT NULL");
 }
 
 $userCount = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users")->fetch_assoc()['c'] ?? 0;
@@ -432,8 +450,10 @@ $licenseValid = licenseIsValid($mysqli, $settings, $isCron, $licenseFailReason);
 // ── Client Portal (public, token-gated) ──────────────────────────────────────
 // Deliberately outside the $isAuth gate — the one page a client (not the
 // admin) sees. Token is a random 48-char string (see generate_portal_token
-// below), looked up via prepared statement. Read-only: this client's own
-// non-draft invoices and paid/outstanding status only.
+// below), looked up via prepared statement. Shows this client's own
+// non-draft invoices and paid/outstanding status (read-only), plus their own
+// open quotes with an Accept Quote action (see convertQuoteToInvoice()) —
+// everything scoped to this token's client_key, nothing else.
 if (isset($_GET['portal'])) {
     header('Content-Type: text/html; charset=utf-8');
     $portalToken = (string) $_GET['portal'];
@@ -446,7 +466,7 @@ if (isset($_GET['portal'])) {
     }
     $businessName = $settings['business_name'] ?? 'Invoxa';
     $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
-    $portalStyle = '*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:#0a0f1c;color:#f7f9fc;margin:0;padding:2rem 1.25rem;}.wrap{max-width:760px;margin:0 auto;}h1{font-size:1.4rem;margin:0 0 0.25rem;}.sub{color:#90a0bb;font-size:0.9rem;margin:0 0 2rem;}table{width:100%;border-collapse:collapse;background:#131b2e;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);}th,td{padding:0.85rem 1rem;text-align:left;font-size:0.9rem;}th{background:rgba(255,255,255,0.04);color:#90a0bb;font-weight:600;text-transform:uppercase;font-size:0.75rem;letter-spacing:0.04em;}td{border-top:1px solid rgba(255,255,255,0.06);}.status{display:inline-block;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.78rem;font-weight:600;}.status-paid{background:rgba(34,197,94,0.15);color:#4ade80;}.status-overdue{background:rgba(239,68,68,0.15);color:#f87171;}.status-outstanding{background:rgba(234,179,8,0.15);color:#facc15;}.status-void{background:rgba(148,163,184,0.15);color:#94a3b8;}.empty{color:#90a0bb;text-align:center;padding:3rem 1rem;}.pay-btn{display:inline-block;background:#4f7cff;color:#fff;text-decoration:none;padding:0.4rem 0.85rem;border-radius:6px;font-size:0.82rem;font-weight:600;white-space:nowrap;}.pay-btn:hover{background:#3d63e0;}';
+    $portalStyle = '*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:#0a0f1c;color:#f7f9fc;margin:0;padding:2rem 1.25rem;}.wrap{max-width:760px;margin:0 auto;}h1{font-size:1.4rem;margin:0 0 0.25rem;}h2{font-size:1.05rem;margin:2rem 0 0.75rem;}.sub{color:#90a0bb;font-size:0.9rem;margin:0 0 2rem;}table{width:100%;border-collapse:collapse;background:#131b2e;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);}th,td{padding:0.85rem 1rem;text-align:left;font-size:0.9rem;}th{background:rgba(255,255,255,0.04);color:#90a0bb;font-weight:600;text-transform:uppercase;font-size:0.75rem;letter-spacing:0.04em;}td{border-top:1px solid rgba(255,255,255,0.06);}.status{display:inline-block;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.78rem;font-weight:600;}.status-paid{background:rgba(34,197,94,0.15);color:#4ade80;}.status-overdue{background:rgba(239,68,68,0.15);color:#f87171;}.status-outstanding{background:rgba(234,179,8,0.15);color:#facc15;}.status-void{background:rgba(148,163,184,0.15);color:#94a3b8;}.status-quote{background:rgba(139,92,246,0.15);color:#a78bfa;}.empty{color:#90a0bb;text-align:center;padding:3rem 1rem;}.pay-btn,.accept-btn{display:inline-block;background:#4f7cff;color:#fff;text-decoration:none;padding:0.4rem 0.85rem;border-radius:6px;font-size:0.82rem;font-weight:600;white-space:nowrap;border:none;font-family:inherit;cursor:pointer;}.pay-btn:hover,.accept-btn:hover{background:#3d63e0;}.confirm-box{background:#131b2e;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:1.5rem;}.confirm-actions{display:flex;gap:0.75rem;margin-top:1.25rem;}.cancel-link{display:inline-flex;align-items:center;color:#90a0bb;text-decoration:none;font-size:0.9rem;padding:0.4rem 0.85rem;}';
     if (!$portalClient) {
         http_response_code(404);
         echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Link not found</h1><p class="sub">This portal link is invalid or has been revoked. Contact ' . htmlspecialchars($businessName) . ' for a new one.</p></div></body></html>';
@@ -459,6 +479,39 @@ if (isset($_GET['portal'])) {
     // a broken/revoked link, and the client viewing it didn't do anything wrong.
     if (!$licenseValid) {
         echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Portal temporarily unavailable</h1><p class="sub">Please contact ' . htmlspecialchars($businessName) . ' directly for your invoice status.</p></div></body></html>';
+        exit;
+    }
+    // Accepting is a POST-only, confirm-page-first flow (see the accept_quote branch
+    // below) specifically so a bare GET — an email/chat link preview crawler
+    // prefetching the URL, for example — can never trigger it by itself.
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_accept_quote'])) {
+        $quoteId = (int) $_POST['confirm_accept_quote'];
+        $quoteRow = $mysqli->query("SELECT client_key FROM invoxa_invoices WHERE id = $quoteId AND is_quote = 1")->fetch_assoc();
+        if (!$quoteRow || $quoteRow['client_key'] !== $portalClient['client_key']) {
+            echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Quote not found</h1><p class="sub">This quote is no longer available. <a href="?portal=' . htmlspecialchars($portalToken) . '" style="color:#4f7cff;">Back to your invoices</a></p></div></body></html>';
+            exit;
+        }
+        $acceptResult = convertQuoteToInvoice($mysqli, $settings, $quoteId, 'client');
+        if (!$acceptResult['success']) {
+            echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Couldn\'t accept this quote</h1><p class="sub">' . htmlspecialchars($acceptResult['error']) . ' <a href="?portal=' . htmlspecialchars($portalToken) . '" style="color:#4f7cff;">Back to your invoices</a></p></div></body></html>';
+            exit;
+        }
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Quote accepted!</h1><p class="sub">It\'s now invoice ' . htmlspecialchars($acceptResult['invoice_number']) . ' — ' . htmlspecialchars($businessName) . ' has been notified. <a href="?portal=' . htmlspecialchars($portalToken) . '" style="color:#4f7cff;">Back to your invoices</a></p></div></body></html>';
+        exit;
+    }
+    if (isset($_GET['accept_quote'])) {
+        $quoteId = (int) $_GET['accept_quote'];
+        $quoteRow = $mysqli->query("SELECT invoice_number, amount, quote_expires_at, client_key FROM invoxa_invoices WHERE id = $quoteId AND is_quote = 1")->fetch_assoc();
+        if (!$quoteRow || $quoteRow['client_key'] !== $portalClient['client_key']) {
+            echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Quote not found</h1><p class="sub">This quote is no longer available. <a href="?portal=' . htmlspecialchars($portalToken) . '" style="color:#4f7cff;">Back to your invoices</a></p></div></body></html>';
+            exit;
+        }
+        $expired = !empty($quoteRow['quote_expires_at']) && $quoteRow['quote_expires_at'] < date('Y-m-d');
+        if ($expired) {
+            echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>This quote has expired</h1><p class="sub">Contact ' . htmlspecialchars($businessName) . ' for a new one. <a href="?portal=' . htmlspecialchars($portalToken) . '" style="color:#4f7cff;">Back to your invoices</a></p></div></body></html>';
+            exit;
+        }
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Accept quote ' . htmlspecialchars($quoteRow['invoice_number']) . '?</h1><div class="confirm-box"><p style="margin:0; color:#90a0bb;">' . htmlspecialchars($currencyCode) . ' ' . number_format((float) $quoteRow['amount'], 2) . '. Accepting turns this into a real invoice — ' . htmlspecialchars($businessName) . ' will be notified right away.</p><form method="POST" class="confirm-actions"><input type="hidden" name="confirm_accept_quote" value="' . (int) $quoteId . '"><button type="submit" class="accept-btn">Accept Quote</button><a href="?portal=' . htmlspecialchars($portalToken) . '" class="cancel-link">Cancel</a></form></div></div></body></html>';
         exit;
     }
     $invRes = $mysqli->prepare("SELECT invoice_number, invoice_date, due_date, amount, paid_amount, status FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND status != 'draft' ORDER BY invoice_date DESC");
@@ -491,7 +544,25 @@ if (isset($_GET['portal'])) {
     $tableOrEmpty = $rowsHtml !== ''
         ? '<table><thead><tr><th>Invoice</th><th>Date</th><th>Due</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>' . $rowsHtml . '</tbody></table>'
         : '<div class="empty">No invoices yet.</div>';
-    echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . htmlspecialchars($businessName) . ' — Invoices</title><meta name="robots" content="noindex, nofollow"><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>' . htmlspecialchars($businessName) . '</h1><p class="sub">Invoices for ' . htmlspecialchars($portalClient['client_name']) . '</p>' . $tableOrEmpty . '</div></body></html>';
+
+    $quoteRes = $mysqli->prepare("SELECT id, invoice_number, invoice_date, amount, quote_expires_at FROM invoxa_invoices WHERE client_key = ? AND is_quote = 1 ORDER BY invoice_date DESC");
+    $quoteRes->bind_param("s", $portalClient['client_key']);
+    $quoteRes->execute();
+    $portalQuotes = $quoteRes->get_result();
+    $quoteRowsHtml = '';
+    while ($q = $portalQuotes->fetch_assoc()) {
+        $qExpired = !empty($q['quote_expires_at']) && $q['quote_expires_at'] < $today;
+        $actionCell = $qExpired
+            ? '<span class="status status-overdue">Expired</span>'
+            : '<a href="?portal=' . rawurlencode($portalToken) . '&accept_quote=' . (int) $q['id'] . '" class="accept-btn">Accept Quote</a>';
+        $expiresCell = !empty($q['quote_expires_at']) ? htmlspecialchars($q['quote_expires_at']) : '—';
+        $quoteRowsHtml .= '<tr><td>' . htmlspecialchars($q['invoice_number']) . '</td><td>' . htmlspecialchars(substr($q['invoice_date'], 0, 10)) . '</td><td>' . htmlspecialchars($currencyCode) . ' ' . number_format((float) $q['amount'], 2) . '</td><td>' . $expiresCell . '</td><td>' . $actionCell . '</td></tr>';
+    }
+    $quotesSectionHtml = $quoteRowsHtml !== ''
+        ? '<h2>Open Quotes</h2><table><thead><tr><th>Quote</th><th>Date</th><th>Amount</th><th>Valid Until</th><th></th></tr></thead><tbody>' . $quoteRowsHtml . '</tbody></table>'
+        : '';
+
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . htmlspecialchars($businessName) . ' — Invoices</title><meta name="robots" content="noindex, nofollow"><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>' . htmlspecialchars($businessName) . '</h1><p class="sub">Invoices for ' . htmlspecialchars($portalClient['client_name']) . '</p>' . $tableOrEmpty . $quotesSectionHtml . '</div></body></html>';
     exit;
 }
 
@@ -1530,9 +1601,13 @@ function notifyChannel($mysqli, array $settings, string $eventToggleKey, string 
         return;
     if (($settings[$eventToggleKey] ?? '1') !== '1')
         return;
-    $result = $channel === 'slack'
-        ? sendSlackNotification($settings['slack_webhook_url'] ?? '', $message)
-        : sendTelegramNotification($settings['telegram_bot_token'] ?? '', $settings['telegram_chat_id'] ?? '', $message);
+    if ($channel === 'slack') {
+        $result = sendSlackNotification($settings['slack_webhook_url'] ?? '', $message);
+    } elseif ($channel === 'webhook') {
+        $result = sendWebhookNotification($settings['webhook_url'] ?? '', $message, $settings['webhook_format'] ?? 'json_text');
+    } else {
+        $result = sendTelegramNotification($settings['telegram_bot_token'] ?? '', $settings['telegram_chat_id'] ?? '', $message);
+    }
     if (!$result['success']) {
         $notes = ucfirst($channel) . ' notification failed: ' . $result['error'];
         $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'notification_failed', ?)");
@@ -1674,6 +1749,68 @@ function recordInvoiceRefund($mysqli, array $settings, int $invoiceId, float $re
     notifyChannel($mysqli, $settings, 'notify_on_payment', "\xE2\x86\xA9\xEF\xB8\x8F Refund issued — {$invRow['invoice_number']} ({$invRow['client_name']}){$sourceLabel}: {$currencyCode} " . number_format($refundAmount, 2));
 
     return ['success' => true, 'duplicate' => false, 'total_paid' => $totalPaid, 'invoice_number' => $invRow['invoice_number']];
+}
+
+// Turns a saved quote into a real, billable invoice — assigns the next real
+// invoice number for that client, rewrites the stored HTML/file to match, and
+// flips is_quote off. Shared by the admin's Convert button (convert_quote)
+// and a client accepting their own quote from the Client Portal ($source
+// distinguishes the two for the audit log and notification).
+function convertQuoteToInvoice($mysqli, array $settings, int $quoteId, string $source = 'admin'): array
+{
+    $row = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = " . (int) $quoteId . " AND is_quote = 1")->fetch_assoc();
+    if (!$row) {
+        return ['success' => false, 'error' => 'Quote not found'];
+    }
+    if (!empty($row['quote_expires_at']) && $row['quote_expires_at'] < date('Y-m-d') && $source === 'client') {
+        return ['success' => false, 'error' => 'This quote has expired — contact ' . ($settings['business_name'] ?? 'us') . ' for a new one.'];
+    }
+    $clientKey = $row['client_key'];
+    $clientName = $row['client_name'];
+    $folderName = strtolower(str_replace(' ', '_', $clientName));
+    $invoiceDir = INVOICES_DIR . $folderName;
+    if (!is_dir($invoiceDir))
+        @mkdir($invoiceDir, 0777, true);
+    $prefix = strtoupper($clientKey);
+    $q2 = $mysqli->prepare("SELECT invoice_number FROM invoxa_invoices WHERE invoice_number LIKE CONCAT(?, '%') AND is_quote = 0");
+    $q2->bind_param("s", $prefix);
+    $q2->execute();
+    $res2 = $q2->get_result();
+    $highest = 0;
+    while ($r2 = $res2->fetch_assoc()) {
+        if (preg_match('/(\d+)$/', $r2['invoice_number'], $m))
+            $highest = max($highest, (int) $m[1]);
+    }
+    $newNum = $prefix . str_pad($highest + 1, 3, '0', STR_PAD_LEFT);
+    $htmlContent = str_replace($row['invoice_number'], $newNum, $row['html_content']);
+
+    if ($row['file_path']) {
+        $oldFullPath = INVOICES_DIR . preg_replace('#^invoices/#', '', $row['file_path']);
+        if (file_exists($oldFullPath)) {
+            @unlink($oldFullPath);
+        }
+    }
+
+    $htmlFile = "$invoiceDir/$newNum.html";
+    @file_put_contents($htmlFile, $htmlContent);
+    $relPath = "invoices/$folderName/$newNum.html";
+    $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET is_quote = 0, invoice_number = ?, file_path = ?, html_content = ?, status = 'sent' WHERE id = ?");
+    $stmt->bind_param("sssi", $newNum, $relPath, $htmlContent, $quoteId);
+    $stmt->execute();
+
+    $actionType = $source === 'client' ? 'quote_accepted' : 'quote_converted';
+    $actionNotes = $source === 'client'
+        ? "Quote {$row['invoice_number']} accepted by {$clientName} via the Client Portal, now invoice {$newNum}"
+        : "Quote {$row['invoice_number']} converted to invoice {$newNum}";
+    $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param("isss", $quoteId, $newNum, $actionType, $actionNotes);
+    $stmt->execute();
+
+    if ($source === 'client') {
+        notifyChannel($mysqli, $settings, 'notify_on_quote_accepted', "\xF0\x9F\x93\x9D Quote accepted — {$row['invoice_number']} ({$clientName}), now invoice {$newNum}");
+    }
+
+    return ['success' => true, 'invoice_number' => $newNum];
 }
 
 // Logs an audit-log entry when a webhook references an invoice Invoxa
@@ -1897,6 +2034,9 @@ function renderInvoiceRows(array $invoices): string
         $isOverdue = (!in_array($inv['status'], ['paid', 'void'], true) && strtotime($inv['due_date']) < time());
         ?>
         <tr>
+            <td><input type="checkbox" class="invoice-select-cb" value="<?= $inv['id'] ?>"
+                    data-amount="<?= number_format(max(0, $inv['amount'] - $inv['paid_amount']), 2, '.', '') ?>"
+                    data-status="<?= htmlspecialchars($inv['status']) ?>" onchange="updateInvoiceBulkBar()"></td>
             <td style="font-family: monospace;"><?= htmlspecialchars($inv['invoice_number']) ?></td>
             <td><?= htmlspecialchars(date('Y-m-d', strtotime($inv['invoice_date']))) ?></td>
             <td style="<?= $isOverdue ? 'color: var(--danger); font-weight: bold;' : '' ?>">
@@ -2051,12 +2191,23 @@ function renderQuoteRows($qRes): string
             <td>$<?= number_format($q['amount'], 2) ?></td>
             <td><span class="badge"
                     style="background:rgba(139,92,246,0.15); color:#a78bfa;">Quote</span></td>
+            <?php $__quoteExpired = !empty($q['quote_expires_at']) && $q['quote_expires_at'] < date('Y-m-d'); ?>
+            <td>
+                <?php if (empty($q['quote_expires_at'])): ?>
+                    <span style="color:var(--text-secondary);">—</span>
+                <?php elseif ($__quoteExpired): ?>
+                    <span class="badge" style="background:rgba(245,69,92,0.15); color:var(--danger);"
+                        title="Expired <?= htmlspecialchars($q['quote_expires_at']) ?>">Expired</span>
+                <?php else: ?>
+                    <?= htmlspecialchars($q['quote_expires_at']) ?>
+                <?php endif; ?>
+            </td>
             <td style="white-space:nowrap;">
                 <button class="btn small" title="Preview"
                     onclick="viewInvoice(<?= htmlspecialchars(json_encode($q)) ?>)"><i
                         class="fa-solid fa-eye"></i></button>
                 <button class="btn small success" title="Convert to Invoice"
-                    onclick="convertQuote(<?= $q['id'] ?>,'<?= htmlspecialchars($q['invoice_number']) ?>')"><i
+                    onclick="convertQuote(<?= $q['id'] ?>,'<?= htmlspecialchars($q['invoice_number']) ?>',<?= $__quoteExpired ? 'true' : 'false' ?>)"><i
                         class="fa-solid fa-file-invoice"></i> Convert</button>
                 <button class="btn small danger" onclick="deleteInvoice(<?= $q['id'] ?>)"><i
                         class="fa-solid fa-trash"></i></button>
@@ -2075,7 +2226,10 @@ function renderExpenseRows(array $expenses): string
         ?>
         <tr>
             <td><?= htmlspecialchars(substr($e['expense_date'], 0, 10)) ?></td>
-            <td><?= htmlspecialchars($e['vendor']) ?></td>
+            <td><?= htmlspecialchars($e['vendor']) ?><?php if (!empty($e['recurring_expense_id'])): ?>
+                    <i class="fa-solid fa-rotate" style="color:var(--text-secondary); font-size:0.75rem; margin-left:0.35rem;" title="Auto-logged from a recurring expense"></i>
+                <?php endif; ?>
+            </td>
             <td><?= htmlspecialchars($categories[$e['category']] ?? ucfirst($e['category'])) ?></td>
             <td>$<?= number_format($e['amount'], 2) ?></td>
             <td style="color:var(--text-secondary); max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
@@ -2093,6 +2247,40 @@ function renderExpenseRows(array $expenses): string
                 <button class="btn small" onclick="openExpenseModal(<?= htmlspecialchars(json_encode($e)) ?>)"><i
                         class="fa-solid fa-pen"></i></button>
                 <button class="btn small danger" onclick="deleteExpense(<?= $e['id'] ?>)"><i
+                        class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>
+    <?php endforeach;
+    return ob_get_clean();
+}
+
+// Recurring expense templates — the run_recurring cron action auto-logs one
+// invoxa_expenses row per active template each period (see run_recurring
+// above). Same idea as renderExpenseRows(), just for the template list.
+function renderRecurringExpenseRows(array $recurringExpenses, bool $licenseValid): string
+{
+    $categories = expenseCategories();
+    $freqLabels = ['weekly' => 'Weekly', 'monthly' => 'Monthly', 'quarterly' => 'Quarterly', 'annually' => 'Annually'];
+    ob_start();
+    foreach ($recurringExpenses as $re):
+        ?>
+        <tr style="<?= $re['is_active'] ? '' : 'opacity:0.55;' ?>">
+            <td><?= htmlspecialchars($re['vendor']) ?></td>
+            <td><?= htmlspecialchars($categories[$re['category']] ?? ucfirst($re['category'])) ?></td>
+            <td>$<?= number_format($re['amount'], 2) ?></td>
+            <td><?= htmlspecialchars($freqLabels[$re['frequency']] ?? ucfirst($re['frequency'])) ?></td>
+            <td>
+                <label style="display:inline-flex; align-items:center; gap:0.4rem; cursor:<?= $licenseValid ? 'pointer' : 'not-allowed' ?>;">
+                    <input type="checkbox" <?= $re['is_active'] ? 'checked' : '' ?> <?= $licenseValid ? '' : 'disabled' ?>
+                        onchange="toggleRecurringExpenseActive(<?= $re['id'] ?>, this.checked)">
+                    <span style="font-size:0.8rem; color:var(--text-secondary);"><?= $re['is_active'] ? 'Active' : 'Paused' ?></span>
+                </label>
+            </td>
+            <td style="white-space:nowrap;">
+                <button class="btn small" <?= $licenseValid ? '' : 'disabled title="Requires a license"' ?>
+                    onclick="openRecurringExpenseModal(<?= htmlspecialchars(json_encode($re)) ?>)"><i
+                        class="fa-solid fa-pen"></i></button>
+                <button class="btn small danger" onclick="deleteRecurringExpense(<?= $re['id'] ?>)"><i
                         class="fa-solid fa-trash"></i></button>
             </td>
         </tr>
@@ -2900,7 +3088,7 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
 // client-side state worth preserving across a refresh).
 function renderAuditSection(array $actions): string
 {
-    $icons = ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban'];
+    $icons = ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban', 'quote_accepted' => 'fa-file-circle-check', 'quote_converted' => 'fa-file-invoice'];
     ob_start();
     ?>
     <h2 class="page-title">Audit Log
@@ -3731,7 +3919,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // - The Client Portal (generate_portal_token; revoke stays free).
         // - The external API (create_api_token / renew_api_token; revoke/delete
         //   stay free).
-        $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token'];
+        // - Recurring expense templates (same bucket as recurring billing
+        //   automation; deleting a template stays free, same as the others above).
+        $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense'];
         if (!$licenseValid && in_array($_POST['action'], $__licensePaidActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This needs a license — add a key under Settings > License, or see Docs for what a license unlocks.']);
             exit;
@@ -3755,6 +3945,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'client_count' => (int) $navClients,
                 'expense_count' => (int) $navExpenses,
             ]);
+            exit;
+        }
+        if ($_POST['action'] === 'global_search') {
+            // A handful of results per category, not a full paginated search — this
+            // is a "jump to that one record" quick-search, not a replacement for each
+            // table's own search box.
+            $q = trim($_POST['q'] ?? '');
+            if (mb_strlen($q) < 2) {
+                echo json_encode(['success' => true, 'invoices' => [], 'clients' => [], 'expenses' => []]);
+                exit;
+            }
+            $like = '%' . $q . '%';
+            $invStmt = $mysqli->prepare("SELECT id, invoice_number, client_name, amount, status, is_quote FROM invoxa_invoices WHERE invoice_number LIKE ? OR client_name LIKE ? ORDER BY invoice_date DESC LIMIT 6");
+            $invStmt->bind_param("ss", $like, $like);
+            $invStmt->execute();
+            $invoices = $invStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $cliStmt = $mysqli->prepare("SELECT id, client_name, email FROM invoxa_clients WHERE client_name LIKE ? OR email LIKE ? ORDER BY client_name ASC LIMIT 6");
+            $cliStmt->bind_param("ss", $like, $like);
+            $cliStmt->execute();
+            $searchClients = $cliStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $expStmt = $mysqli->prepare("SELECT id, expense_date, vendor, category, amount FROM invoxa_expenses WHERE vendor LIKE ? OR description LIKE ? ORDER BY expense_date DESC LIMIT 6");
+            $expStmt->bind_param("ss", $like, $like);
+            $expStmt->execute();
+            $searchExpenses = $expStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            echo json_encode(['success' => true, 'invoices' => $invoices, 'clients' => $searchClients, 'expenses' => $searchExpenses]);
             exit;
         }
         if ($_POST['action'] === 'save_license_key') {
@@ -3924,6 +4139,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->bind_param("i", $id);
                 $stmt->execute();
             }
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'save_recurring_expense') {
+            $id = (int) ($_POST['id'] ?? 0);
+            $vendor = trim($_POST['vendor'] ?? '');
+            $category = array_key_exists($_POST['category'] ?? '', expenseCategories()) ? $_POST['category'] : 'other';
+            $amount = (float) ($_POST['amount'] ?? 0);
+            $description = trim($_POST['description'] ?? '');
+            $frequency = in_array($_POST['frequency'] ?? '', ['weekly', 'monthly', 'quarterly', 'annually'], true) ? $_POST['frequency'] : 'monthly';
+            if ($id > 0) {
+                $stmt = $mysqli->prepare("UPDATE invoxa_recurring_expenses SET vendor=?, category=?, amount=?, description=?, frequency=? WHERE id=?");
+                $stmt->bind_param("sssdsi", $vendor, $category, $amount, $description, $frequency, $id);
+            } else {
+                $stmt = $mysqli->prepare("INSERT INTO invoxa_recurring_expenses (vendor, category, amount, description, frequency) VALUES (?, ?, ?, ?, ?)");
+                $stmt->bind_param("sssds", $vendor, $category, $amount, $description, $frequency);
+            }
+            $stmt->execute();
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'toggle_recurring_expense') {
+            $id = (int) ($_POST['id'] ?? 0);
+            $active = ($_POST['is_active'] ?? '1') === '1' ? 1 : 0;
+            $stmt = $mysqli->prepare("UPDATE invoxa_recurring_expenses SET is_active = ? WHERE id = ?");
+            $stmt->bind_param("ii", $active, $id);
+            $stmt->execute();
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'delete_recurring_expense') {
+            $id = (int) ($_POST['id'] ?? 0);
+            $stmt = $mysqli->prepare("DELETE FROM invoxa_recurring_expenses WHERE id = ?");
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
             echo json_encode(['success' => true]);
             exit;
         }
@@ -4106,6 +4356,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $date = date('Y-m-d');
             $termsDays = (int) ($client['payment_terms_days'] ?? 21);
             $dueDate = validDateOverride($_POST['due_date'] ?? null) ?: date('Y-m-d', strtotime("+{$termsDays} days"));
+            $quoteExpiresAt = validDateOverride($_POST['quote_expires_at'] ?? null);
             // Generate quote number: QUO-{CLIENT_KEY}-{seq}
             $prefix = 'Q' . strtoupper($client['client_key']);
             $qNum = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE invoice_number LIKE '$prefix%' AND is_quote = 1")->fetch_assoc()['c'] ?? 0;
@@ -4138,7 +4389,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 recipientAddress: $client['address'] ?? '',
                 customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null,
                 businessName: $settings['business_name'] ?? '',
-                documentType: 'Quote'
+                documentType: 'Quote',
+                quoteExpiresAt: $quoteExpiresAt
             );
             $folderName = strtolower(str_replace(' ', '_', $client['client_name']));
             $invoiceDir = INVOICES_DIR . $folderName;
@@ -4147,8 +4399,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $htmlFile = "$invoiceDir/$quoteNum.html";
             @file_put_contents($htmlFile, $htmlContent);
             $relPath = "invoices/$folderName/$quoteNum.html";
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, html_content, file_path, is_quote) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 1)");
-            $stmt->bind_param("ssssssdss", $quoteNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $htmlContent, $relPath);
+            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, html_content, file_path, is_quote, quote_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 1, ?)");
+            $stmt->bind_param("ssssssdsss", $quoteNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $htmlContent, $relPath, $quoteExpiresAt);
             $stmt->execute();
             $memo = trim($_POST['memo'] ?? '');
             if ($memo !== '') {
@@ -4205,6 +4457,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 else
                     $errors++;
             }
+            $recurExpSent = 0;
+            $recurExpErrors = 0;
+            $recurExpSkipped = 0;
+            // Same guard-against-double-logging idea as the invoice loop above, keyed
+            // on recurring_expense_id rather than client_key.
+            $recurExpAlreadyStmts = [
+                'weekly' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_expenses WHERE recurring_expense_id = ? AND YEARWEEK(expense_date, 3) = YEARWEEK(CURDATE(), 3)"),
+                'monthly' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_expenses WHERE recurring_expense_id = ? AND MONTH(expense_date) = MONTH(CURDATE()) AND YEAR(expense_date) = YEAR(CURDATE())"),
+                'quarterly' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_expenses WHERE recurring_expense_id = ? AND QUARTER(expense_date) = QUARTER(CURDATE()) AND YEAR(expense_date) = YEAR(CURDATE())"),
+                'annually' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_expenses WHERE recurring_expense_id = ? AND YEAR(expense_date) = YEAR(CURDATE())"),
+            ];
+            $recurExpInsertStmt = $mysqli->prepare("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description, recurring_expense_id) VALUES (CURDATE(), ?, ?, ?, ?, ?)");
+            $recurExpenses = $mysqli->query("SELECT * FROM invoxa_recurring_expenses WHERE is_active = 1");
+            while ($re = $recurExpenses->fetch_assoc()) {
+                if (!$bypassGuard) {
+                    $alreadyStmt = $recurExpAlreadyStmts[$re['frequency'] ?? 'monthly'] ?? $recurExpAlreadyStmts['monthly'];
+                    $alreadyStmt->bind_param("i", $re['id']);
+                    $alreadyStmt->execute();
+                    $already = (int) $alreadyStmt->get_result()->fetch_assoc()['c'];
+                    if ($already > 0) {
+                        $recurExpSkipped++;
+                        continue;
+                    }
+                }
+                $reAmount = (float) $re['amount'];
+                $recurExpInsertStmt->bind_param("ssdsi", $re['vendor'], $re['category'], $reAmount, $re['description'], $re['id']);
+                if ($recurExpInsertStmt->execute())
+                    $recurExpSent++;
+                else
+                    $recurExpErrors++;
+            }
             $remindersSent = 0;
             $reminderErrors = 0;
             // Reminders ride this same cron trigger rather than needing their own
@@ -4233,11 +4516,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $runNotes = "Sent {$sent}, skipped {$skipped}, errors {$errors}"
                 . ($bypassGuard ? ' (double-billing guard bypassed)' : '')
                 . ". Reminders sent {$remindersSent}, errors {$reminderErrors}."
-                . " Late fees charged {$lateFeesCharged}, errors {$lateFeeErrors}.";
+                . " Late fees charged {$lateFeesCharged}, errors {$lateFeeErrors}."
+                . " Recurring expenses logged {$recurExpSent}, skipped {$recurExpSkipped}, errors {$recurExpErrors}.";
             $runStmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'recurring_run', ?)");
             $runStmt->bind_param("s", $runNotes);
             $runStmt->execute();
-            echo json_encode(['success' => true, 'sent' => $sent, 'errors' => $errors, 'skipped' => $skipped, 'reminders_sent' => $remindersSent, 'reminder_errors' => $reminderErrors, 'late_fees_charged' => $lateFeesCharged, 'late_fee_errors' => $lateFeeErrors, 'audit_log_pruned' => $auditPruned]);
+            echo json_encode(['success' => true, 'sent' => $sent, 'errors' => $errors, 'skipped' => $skipped, 'reminders_sent' => $remindersSent, 'reminder_errors' => $reminderErrors, 'late_fees_charged' => $lateFeesCharged, 'late_fee_errors' => $lateFeeErrors, 'audit_log_pruned' => $auditPruned, 'recurring_expenses_logged' => $recurExpSent, 'recurring_expenses_skipped' => $recurExpSkipped, 'recurring_expenses_errors' => $recurExpErrors]);
             exit;
         }
         if ($_POST['action'] === 'mark_paid') {
@@ -4568,21 +4852,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         }
         if ($_POST['action'] === 'save_notification_settings') {
-            $channel = in_array($_POST['notification_channel'] ?? 'none', ['none', 'telegram', 'slack'], true)
+            $channel = in_array($_POST['notification_channel'] ?? 'none', ['none', 'telegram', 'slack', 'webhook'], true)
                 ? $_POST['notification_channel'] : 'none';
             $botToken = trim($_POST['telegram_bot_token'] ?? '');
             $chatId = trim($_POST['telegram_chat_id'] ?? '');
             $webhookUrl = trim($_POST['slack_webhook_url'] ?? '');
+            $genericWebhookUrl = trim($_POST['webhook_url'] ?? '');
+            $webhookFormat = in_array($_POST['webhook_format'] ?? 'json_text', ['json_text', 'plain', 'discord'], true)
+                ? $_POST['webhook_format'] : 'json_text';
             $notifyPayment = ($_POST['notify_on_payment'] ?? '0') === '1' ? '1' : '0';
             $notifyOverdue = ($_POST['notify_on_overdue'] ?? '0') === '1' ? '1' : '0';
+            $notifyQuoteAccepted = ($_POST['notify_on_quote_accepted'] ?? '0') === '1' ? '1' : '0';
             $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
             foreach ([
                 'notification_channel' => $channel,
                 'telegram_bot_token' => $botToken,
                 'telegram_chat_id' => $chatId,
                 'slack_webhook_url' => $webhookUrl,
+                'webhook_url' => $genericWebhookUrl,
+                'webhook_format' => $webhookFormat,
                 'notify_on_payment' => $notifyPayment,
                 'notify_on_overdue' => $notifyOverdue,
+                'notify_on_quote_accepted' => $notifyQuoteAccepted,
             ] as $key => $value) {
                 $upsert->bind_param("ss", $key, $value);
                 $upsert->execute();
@@ -4593,7 +4884,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'test_notification') {
             // Tests against whatever channel/fields are currently typed in the form,
             // not the saved settings, so you don't have to Save blind first.
-            $channel = in_array($_POST['notification_channel'] ?? 'none', ['telegram', 'slack'], true)
+            $channel = in_array($_POST['notification_channel'] ?? 'none', ['telegram', 'slack', 'webhook'], true)
                 ? $_POST['notification_channel'] : null;
             $fromName = $settings['business_name'] ?? 'Invoxa';
             $message = "\xF0\x9F\x94\x94 Test notification from {$fromName}.";
@@ -4601,6 +4892,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $result = sendSlackNotification(trim($_POST['slack_webhook_url'] ?? ''), $message);
             } elseif ($channel === 'telegram') {
                 $result = sendTelegramNotification(trim($_POST['telegram_bot_token'] ?? ''), trim($_POST['telegram_chat_id'] ?? ''), $message);
+            } elseif ($channel === 'webhook') {
+                $webhookFormat = in_array($_POST['webhook_format'] ?? 'json_text', ['json_text', 'plain', 'discord'], true)
+                    ? $_POST['webhook_format'] : 'json_text';
+                $result = sendWebhookNotification(trim($_POST['webhook_url'] ?? ''), $message, $webhookFormat);
             } else {
                 $result = ['success' => false, 'error' => 'Choose a notification channel first'];
             }
@@ -5315,48 +5610,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'convert_quote') {
             $id = (int) ($_POST['id'] ?? 0);
-            $row = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $id AND is_quote = 1")->fetch_assoc();
-            if (!$row) {
-                echo json_encode(['success' => false, 'error' => 'Quote not found']);
-                exit;
-            }
-            // Assign a real invoice number by replacing Q prefix with actual number
-            $clientKey = $row['client_key'];
-            $clientName = $row['client_name'];
-            $folderName = strtolower(str_replace(' ', '_', $clientName));
-            $invoiceDir = "/usr/share/nginx/html/invoxa-invoices/" . $folderName;
-            if (!is_dir($invoiceDir))
-                @mkdir($invoiceDir, 0777, true);
-            // Get next number
-            $prefix = strtoupper($clientKey);
-            $q2 = $mysqli->prepare("SELECT invoice_number FROM invoxa_invoices WHERE invoice_number LIKE CONCAT(?, '%') AND is_quote = 0");
-            $q2->bind_param("s", $prefix);
-            $q2->execute();
-            $res2 = $q2->get_result();
-            $highest = 0;
-            while ($r2 = $res2->fetch_assoc()) {
-                if (preg_match('/(\d+)$/', $r2['invoice_number'], $m))
-                    $highest = max($highest, (int) $m[1]);
-            }
-            $newNum = $prefix . str_pad($highest + 1, 3, '0', STR_PAD_LEFT);
-            $htmlContent = $row['html_content'];
-            $htmlContent = str_replace($row['invoice_number'], $newNum, $htmlContent);
-
-            // Delete the old quote file
-            if ($row['file_path']) {
-                $oldFullPath = "/usr/share/nginx/html/invoxa-invoices/" . preg_replace('#^invoices/#', '', $row['file_path']);
-                if (file_exists($oldFullPath)) {
-                    @unlink($oldFullPath);
-                }
-            }
-
-            $htmlFile = "$invoiceDir/$newNum.html";
-            @file_put_contents($htmlFile, $htmlContent);
-            $relPath = "invoices/$folderName/$newNum.html";
-            $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET is_quote = 0, invoice_number = ?, file_path = ?, html_content = ?, status = 'sent' WHERE id = ?");
-            $stmt->bind_param("sssi", $newNum, $relPath, $htmlContent, $id);
-            $stmt->execute();
-            echo json_encode(['success' => true, 'invoice_number' => $newNum]);
+            $result = convertQuoteToInvoice($mysqli, $settings, $id, 'admin');
+            echo json_encode($result);
             exit;
         }
         if ($_POST['action'] === 'update_cron') {
@@ -6099,6 +6354,11 @@ while ($r = $res->fetch_assoc())
     $expenses[] = $r;
 $total_expenses = $mysqli->query("SELECT SUM(amount) as s FROM invoxa_expenses")->fetch_assoc()['s'] ?? 0;
 
+$recurringExpenses = [];
+$res = $mysqli->query("SELECT * FROM invoxa_recurring_expenses ORDER BY vendor ASC, id ASC");
+while ($r = $res->fetch_assoc())
+    $recurringExpenses[] = $r;
+
 $actions = [];
 $res = $mysqli->query("SELECT a.*, i.client_name FROM invoxa_actions a LEFT JOIN invoxa_invoices i ON a.invoice_number = i.invoice_number ORDER BY a.performed_at DESC LIMIT 200");
 while ($r = $res->fetch_assoc())
@@ -6551,6 +6811,98 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
 
         .sidebar-header i {
             color: var(--accent);
+        }
+
+        .global-search-wrap {
+            position: relative;
+            margin: 0 1.5rem 1rem;
+        }
+
+        .global-search-wrap>i.fa-magnifying-glass {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            pointer-events: none;
+        }
+
+        #globalSearchInput {
+            width: 100%;
+            padding: 0.55rem 3rem 0.55rem 2.1rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.85rem;
+        }
+
+        #globalSearchInput:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .global-search-wrap kbd {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.65rem;
+            font-family: inherit;
+            color: var(--text-secondary);
+            background: var(--surface-hover);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0.1rem 0.35rem;
+            pointer-events: none;
+        }
+
+        .global-search-results {
+            display: none;
+            position: fixed;
+            max-height: 60vh;
+            overflow-y: auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            z-index: 1300;
+        }
+
+        .global-search-results.active {
+            display: block;
+        }
+
+        .global-search-group-label {
+            padding: 0.5rem 0.85rem 0.25rem;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .global-search-result {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.55rem 0.85rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .global-search-result:hover {
+            background: var(--surface-hover);
+        }
+
+        .global-search-empty {
+            padding: 1rem 0.85rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-align: center;
         }
 
         .nav-section-label {
@@ -7657,6 +8009,44 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             display: block;
         }
 
+        .mobile-bottom-nav {
+            display: none;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1200;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding-bottom: env(safe-area-inset-bottom, 0);
+            box-shadow: var(--shadow-md);
+        }
+
+        .mobile-bottom-nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.2rem;
+            padding: 0.5rem 0.25rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.65rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .mobile-bottom-nav-item i {
+            font-size: 1.15rem;
+        }
+
+        .mobile-bottom-nav-item.active {
+            color: var(--accent);
+        }
+
         @media (max-width: 860px) {
             .mobile-menu-btn {
                 display: flex;
@@ -7682,6 +8072,11 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             .main {
                 padding: 1.25rem 1rem 0;
                 padding-top: 4.5rem;
+                padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0));
+            }
+
+            .mobile-bottom-nav {
+                display: flex;
             }
 
             .mobile-grid {
@@ -7695,6 +8090,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             h2.page-title {
                 flex-wrap: wrap;
                 row-gap: 0.5rem;
+            }
+
+            .global-search-wrap kbd {
+                display: none;
             }
 
             .nav-subnav-toggle {
@@ -7740,10 +8139,29 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             class="fa-solid fa-bars"></i></button>
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
 
+    <nav class="mobile-bottom-nav">
+        <button type="button" class="mobile-bottom-nav-item" data-target="dashboard" onclick="nav('dashboard', true)"><i
+                class="fa-solid fa-chart-pie"></i><span>Dashboard</span></button>
+        <button type="button" class="mobile-bottom-nav-item" data-target="invoices" onclick="nav('invoices', true)"><i
+                class="fa-solid fa-file-lines"></i><span>Invoices</span></button>
+        <button type="button" class="mobile-bottom-nav-item" onclick="openExpenseModal()"><i
+                class="fa-solid fa-circle-plus"></i><span>Add Expense</span></button>
+        <button type="button" class="mobile-bottom-nav-item" data-target="clients" onclick="nav('clients', true)"><i
+                class="fa-solid fa-users"></i><span>Clients</span></button>
+    </nav>
+
     <div class="sidebar">
         <div class="sidebar-header">
             <h1 id="sidebarBrandName"><img src="assets/img/invoxa-mark.svg" width="30" height="30" alt="">
                 <img src="assets/img/invoxa-wordmark.svg" height="24" alt="Invoxa" style="width:auto;"></h1>
+        </div>
+        <div class="global-search-wrap">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="globalSearchInput" placeholder="Search"
+                autocomplete="off" oninput="handleGlobalSearch()" onkeydown="handleGlobalSearchKeydown(event)"
+                onfocus="if (document.getElementById('globalSearchResults').innerHTML.trim() !== '') document.getElementById('globalSearchResults').classList.add('active')">
+            <kbd>Ctrl K</kbd>
+            <div id="globalSearchResults" class="global-search-results"></div>
         </div>
         <div class="nav-section-label">Main Menu</div>
 
@@ -7757,7 +8175,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 id="navUnpaidCountBadge" class="badge" title="Unpaid invoices"
                 style="margin-left:0.3rem; background:var(--warning); color:white; <?= $unpaid_count > 0 ? '' : 'display:none;' ?>"><?= $unpaid_count ?></span>
         </div>
-        <div class="nav-item" data-target="billing" onclick="nav('billing', true)"><i
+        <div class="nav-item" data-target="billing" onclick="nav('billing', true); resetAdhocMode();"><i
                 class="fa-solid fa-money-check-dollar"></i> Ad Hoc Invoice</div>
         <div class="nav-item" data-target="quotes" onclick="nav('quotes', true)"><i class="fa-solid fa-file-pen"></i>
             Quotes
@@ -7833,7 +8251,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             <div class="dashboard-hero">
                 <div class="dashboard-hero-text">
                     <h1><img src="assets/img/invoxa-mark.svg" alt="">Welcome back, <?= htmlspecialchars($_SESSION['invoxa_username'] ?? 'there') ?></h1>
-                    <p>Here's what's happening with your invoices today.</p>
+                    <p>Here's what's happening today.</p>
                 </div>
                 <div class="dashboard-hero-date"><?= date('l, j F Y') ?></div>
             </div>
@@ -7918,7 +8336,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; white-space: nowrap; padding-right: 0.75rem; border-right: 1px solid var(--border);"><i
                             class="fa-solid fa-file-export" style="margin-right:0.3rem;"></i>Export</span>
                     <select id="invoiceExportType"
-                        style="padding: 0.45rem 0.65rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.85rem; min-width: 190px;">
+                        style="padding: 0.45rem 0.65rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.85rem; min-width: 190px;">
                         <option value="invoices" title="Export all invoices as CSV">All Invoices (CSV)</option>
                         <option value="invoices_pdf" title="Download a PDF of every invoice, zipped into one file">All
                             Invoices (PDF)</option>
@@ -7946,7 +8364,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; white-space: nowrap; padding-right: 0.75rem; border-right: 1px solid var(--border);"><i
                             class="fa-solid fa-filter" style="margin-right:0.3rem;"></i>Filter</span>
                     <select id="invoiceStatusFilter" onchange="filterInvoicesByStatus(this.value)"
-                        style="padding: 0.45rem 0.65rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.85rem; min-width: 150px;">
+                        style="padding: 0.45rem 0.65rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.85rem; min-width: 150px;">
                         <option value="">All Statuses</option>
                         <option value="overdue">Overdue</option>
                         <option value="sent">Sent</option>
@@ -7965,13 +8383,22 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; white-space: nowrap; padding-right: 0.75rem; border-right: 1px solid var(--border);"><i
                             class="fa-solid fa-bookmark" style="margin-right:0.3rem;"></i>Views</span>
                     <select id="invoicesViewSelect" onchange="applyFilterView('invoices', this.value)"
-                        style="padding: 0.45rem 0.65rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.85rem; min-width: 150px;">
+                        style="padding: 0.45rem 0.65rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.85rem; min-width: 150px;">
                         <option value="">Saved Views…</option>
                     </select>
                     <button type="button" class="btn small" title="Save the current search/filter as a view"
                         onclick="saveFilterView('invoices')"><i class="fa-solid fa-plus"></i></button>
                     <button type="button" class="btn small" title="Delete the selected view"
                         onclick="deleteFilterView('invoices')"><i class="fa-solid fa-trash"></i></button>
+                </div>
+
+                <!-- Group 4: Bulk Actions — hidden until at least one row is checked -->
+                <div id="invoiceBulkBar" style="display:none; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 0.5rem 0.9rem;">
+                    <span id="invoiceBulkCount" style="font-size: 0.85rem; font-weight: 600; color: var(--accent); white-space: nowrap;"></span>
+                    <button type="button" class="btn small success" onclick="bulkMarkPaidInvoices()"><i class="fa-solid fa-check"></i> Mark Paid</button>
+                    <button type="button" class="btn small" onclick="bulkResendInvoiceEmails()"><i class="fa-solid fa-paper-plane"></i> Resend</button>
+                    <button type="button" class="btn small" onclick="bulkExportInvoicesCsv()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+                    <button type="button" class="btn small danger" onclick="bulkDeleteInvoices()"><i class="fa-solid fa-trash"></i> Delete</button>
                 </div>
 
             </div>
@@ -7981,6 +8408,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 <table id="invoicesTable">
                     <thead>
                         <tr>
+                            <th data-sortable="false" style="width:32px;"><input type="checkbox" id="invoicesSelectAll" onchange="toggleSelectAllInvoices(this)"></th>
                             <th style="width:110px;">Invoice #</th>
                             <th>Date</th>
                             <th>Due Date</th>
@@ -8084,6 +8512,11 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                             <input type="date" id="adhocDueDate" class="form-control">
                             <div id="adhocDueDateHint" style="margin-top:0.3rem; font-size:0.75rem; color:var(--text-secondary);"></div>
                         </div>
+                        <div class="form-group" id="adhocQuoteExpiryGroup" style="display:none; flex:1; min-width:180px;">
+                            <label class="form-label">Quote Expires <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
+                            <input type="date" id="adhocQuoteExpiry" class="form-control">
+                            <div style="margin-top:0.3rem; font-size:0.75rem; color:var(--text-secondary);">Shown to the client; leave blank for no expiry.</div>
+                        </div>
                         <div class="form-group" style="flex:2; min-width:240px;">
                             <label class="form-label">Internal Note <span style="font-weight:400; color:var(--text-secondary);">(optional, not shown to client)</span></label>
                             <textarea id="adhocMemo" class="form-control" rows="1" placeholder="e.g. Approved by Jane on the phone"></textarea>
@@ -8113,7 +8546,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         style="display: flex; flex-direction: row; align-items: center; gap: 0.5rem; background: var(--surface-hover); border-radius: 8px; padding: 0.4rem 0.7rem;">
                         <i class="fa-solid fa-bookmark" style="font-size:0.8rem; color:var(--text-secondary);"></i>
                         <select id="clientsViewSelect" onchange="applyFilterView('clients', this.value)"
-                            style="padding: 0.35rem 0.5rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.8rem; min-width: 130px;">
+                            style="padding: 0.35rem 0.5rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.8rem; min-width: 130px;">
                             <option value="">Saved Views…</option>
                         </select>
                         <button type="button" class="btn small" title="Save the current search as a view"
@@ -8180,6 +8613,38 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             </div>
             <div class="section-scroll">
             <div class="card">
+                <div class="card-header">
+                    <h3 style="margin:0; font-size:1rem;"><i class="fa-solid fa-rotate" style="color:var(--accent); margin-right:0.5rem;"></i>Recurring Expenses
+                        <?php if (!$licenseValid): ?><i class="fa-solid fa-lock" title="Requires a license" style="margin-left:0.5rem; color:var(--text-secondary); font-size:0.8rem;"></i><?php endif; ?>
+                    </h3>
+                    <button class="btn small primary" <?= $licenseValid ? '' : 'disabled title="Requires a license"' ?>
+                        onclick="openRecurringExpenseModal()"><i class="fa-solid fa-plus"></i> Add Recurring Expense</button>
+                </div>
+                <div class="card-body" style="padding:0;">
+                    <table id="recurringExpensesTable" class="datatable-table">
+                        <thead>
+                            <tr>
+                                <th>Vendor</th>
+                                <th>Category</th>
+                                <th>Amount</th>
+                                <th>Frequency</th>
+                                <th>Status</th>
+                                <th data-sortable="false">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recurringExpensesTbody">
+                            <?php if (empty($recurringExpenses)): ?>
+                                <tr>
+                                    <td colspan="6" style="text-align:center; color:var(--text-secondary);">No recurring expenses set up yet — add one for a bill that repeats on its own schedule (hosting, SaaS subscriptions, etc.) instead of re-entering it every period.</td>
+                                </tr>
+                            <?php else: ?>
+                                <?= renderRecurringExpenseRows($recurringExpenses, $licenseValid) ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
                 <table id="expensesTable">
                     <thead>
                         <tr>
@@ -8222,6 +8687,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 <th>Date</th>
                                 <th>Amount</th>
                                 <th>Status</th>
+                                <th>Expires</th>
                                 <th data-sortable="false">Actions</th>
                             </tr>
                         </thead>
@@ -8380,7 +8846,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     <li><strong>Payments</strong> — the payment ledger, Stripe/PayPal, refunds, Pay
                                         Now links.</li>
                                     <li><strong>Clients &amp; Portal</strong> — client records, CRM notes, the
-                                        read-only Client Portal.</li>
+                                        Client Portal (quote acceptance included).</li>
                                     <li><strong>Security</strong> — 2FA, backup codes, login lockout.</li>
                                     <li><strong>External API</strong> — token-authenticated read/write API for other
                                         tools.</li>
@@ -8577,14 +9043,19 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 <p><strong>Requires a license</strong> to generate or regenerate a link; revoking one
                                     is always free.</p>
                                 <p>From the Client Portal section of the same Add/Edit Client form, generate a
-                                    read-only, token-gated link for that client — no login involved — that shows
-                                    their own invoice list and paid/outstanding/overdue status. Pick an
-                                    <strong>Expires</strong> value (30 days, 90 days — the default, 1 year, or
-                                    Never) before generating. Nothing is emailed automatically when a link is
-                                    created; you copy and share it yourself however you'd normally reach that
-                                    client. Regenerating or revoking a link immediately invalidates the old token, so
-                                    a link you've shared can be cut off at any time without affecting the client's
-                                    other data.</p>
+                                    token-gated link for that client — no login involved — that shows their own
+                                    invoice list and paid/outstanding/overdue status. Pick an <strong>Expires</strong>
+                                    value (30 days, 90 days — the default, 1 year, or Never) before generating.
+                                    Nothing is emailed automatically when a link is created; you copy and share it
+                                    yourself however you'd normally reach that client. Regenerating or revoking a
+                                    link immediately invalidates the old token, so a link you've shared can be cut
+                                    off at any time without affecting the client's other data.</p>
+                                <p>Invoice status is still read-only, but any of that client's open quotes now show
+                                    there too with an <strong>Accept Quote</strong> button — a confirmation step
+                                    first, then it converts straight to a real invoice the same way your own Convert
+                                    button does, and you get notified (see Settings &gt; Notifications) instead of
+                                    having to check back. An expired quote (see quote expiry under Invoicing &amp;
+                                    Quotes) shows as Expired instead and can't be accepted.</p>
                             </div>
                         </div>
                     </div>
@@ -8785,11 +9256,11 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         <div class="card">
                             <div class="card-body doc-content">
                                 <h1>Notifications</h1>
-                                <p>Settings &gt; Notifications sends short alerts to Telegram or Slack — pick one
-                                    channel; it isn't both at once. This path is deliberately independent of email
-                                    delivery, so it keeps working even if SMTP is misconfigured or down, and is
-                                    useful precisely because it's a second, separate way to notice something went
-                                    wrong.</p>
+                                <p>Settings &gt; Notifications sends short alerts to Telegram, Slack, or a generic
+                                    webhook — pick one channel; it isn't more than one at once. This path is
+                                    deliberately independent of email delivery, so it keeps working even if SMTP is
+                                    misconfigured or down, and is useful precisely because it's a second, separate
+                                    way to notice something went wrong.</p>
                                 <h2>Telegram</h2>
                                 <p>Needs a <strong>Bot Token</strong> (create a bot via BotFather in Telegram to get
                                     one) and a <strong>Chat ID</strong> — the settings page includes a pointer to
@@ -8798,6 +9269,15 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 <h2>Slack</h2>
                                 <p>Needs only a <strong>Webhook URL</strong> — create an Incoming Webhook for a
                                     channel in your Slack workspace and paste its URL in.</p>
+                                <h2>Generic Webhook</h2>
+                                <p>For anything that isn't Slack or Telegram specifically — <a href="https://ntfy.sh"
+                                        target="_blank" rel="noopener">ntfy</a>, a Discord webhook, or your own
+                                    receiver. Needs a <strong>Webhook URL</strong> and a <strong>Payload Format</strong>
+                                    matching what that receiver expects: plain text (ntfy and most shell-script
+                                    receivers), <code>{"text": "..."}</code> (Slack-compatible, e.g. Mattermost), or
+                                    <code>{"content": "..."}</code> (Discord). Unlike Telegram/Slack, success here just
+                                    means the URL was reachable and didn't return an HTTP error — there's no single
+                                    expected response body across every possible receiver.</p>
                                 <h2>Events</h2>
                                 <p>Two independently toggleable checkboxes control what triggers a message: notify
                                     when a payment is received (fires for both full and partial payments, and for
@@ -9290,6 +9770,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                             <option value="none" <?= $notifChannel === 'none' ? 'selected' : '' ?>>None</option>
                                             <option value="telegram" <?= $notifChannel === 'telegram' ? 'selected' : '' ?>>Telegram</option>
                                             <option value="slack" <?= $notifChannel === 'slack' ? 'selected' : '' ?>>Slack</option>
+                                            <option value="webhook" <?= $notifChannel === 'webhook' ? 'selected' : '' ?>>Generic Webhook</option>
                                         </select>
                                     </div>
                                     <div id="telegramFields">
@@ -9322,6 +9803,26 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                                 value="<?= htmlspecialchars($settings['slack_webhook_url'] ?? '') ?>">
                                         </div>
                                     </div>
+                                    <div id="webhookFields">
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0; margin-bottom:0.75rem;">
+                                            Any URL that accepts a POST — <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a>,
+                                            a Discord webhook, or your own shell script/receiver. Pick the format it expects below.</p>
+                                        <div class="form-group">
+                                            <label class="form-label" for="webhookUrl">Webhook URL</label>
+                                            <input type="password" id="webhookUrl" name="webhook_url" class="form-control"
+                                                autocomplete="off" placeholder="https://ntfy.sh/your-topic"
+                                                value="<?= htmlspecialchars($settings['webhook_url'] ?? '') ?>">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label" for="webhookFormat">Payload Format</label>
+                                            <?php $webhookFormat = $settings['webhook_format'] ?? 'json_text'; ?>
+                                            <select id="webhookFormat" name="webhook_format" class="form-control">
+                                                <option value="json_text" <?= $webhookFormat === 'json_text' ? 'selected' : '' ?>>JSON — {"text": "..."} (Slack-style, e.g. Mattermost)</option>
+                                                <option value="plain" <?= $webhookFormat === 'plain' ? 'selected' : '' ?>>Plain text body (ntfy, shell scripts)</option>
+                                                <option value="discord" <?= $webhookFormat === 'discord' ? 'selected' : '' ?>>JSON — {"content": "..."} (Discord)</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <div class="form-group" style="margin-top:0.5rem; padding-top:0.75rem; border-top:1px solid var(--border);">
                                         <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
                                             <input type="checkbox" id="notifyOnPayment" name="notify_on_payment" value="1"
@@ -9334,6 +9835,13 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                             <input type="checkbox" id="notifyOnOverdue" name="notify_on_overdue" value="1"
                                                 <?= ($settings['notify_on_overdue'] ?? '1') === '1' ? 'checked' : '' ?>>
                                             Notify when an invoice becomes overdue (same trigger as the reminder email)
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                            <input type="checkbox" id="notifyOnQuoteAccepted" name="notify_on_quote_accepted" value="1"
+                                                <?= ($settings['notify_on_quote_accepted'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                            Notify when a client accepts a quote from their Client Portal
                                         </label>
                                     </div>
                                     <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
@@ -9647,10 +10155,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                             to use "Invoxa".</p>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label" for="vatNumber">VAT / Tax ID Number</label>
+                                        <label class="form-label" for="vatNumber">GST / VAT Number</label>
                                         <input type="text" id="vatNumber" name="vat_number" class="form-control"
                                             value="<?= htmlspecialchars($settings['vat_number'] ?? '') ?>"
-                                            placeholder="e.g. GB123456789">
+                                            placeholder="e.g. 123-456-789">
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Shown
                                             on invoices and quotes when set. Leave blank to omit it.</p>
                                     </div>
@@ -9749,7 +10257,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                                     <code>document_type</code> ("Invoice" or "Quote"),
                                                     <code>vat_number</code>, <code>recipient</code>,
                                                     <code>recipient_phone</code>, <code>recipient_address</code>,
-                                                    <code>date</code>, <code>due_date</code>, <code>invoice_number</code>,
+                                                    <code>date</code>, <code>due_date</code>, <code>quote_expires_at</code> (quotes only), <code>invoice_number</code>,
                                                     <code>amount</code>, <code>currency_code</code>,
                                                     <code>account_name</code>, <code>account_number</code>,
                                                     <code>sender_email</code>, <code>brand_color</code>,
@@ -10493,6 +11001,48 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             </div>
         </div>
 
+        <div id="recurringExpenseModal" class="modal-overlay">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 id="recurringExpenseModalTitle">Add Recurring Expense</h2><button class="btn"
+                        style="background:transparent; border:none; color:var(--text-primary);" onclick="closeModal('recurringExpenseModal')"><i
+                            class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="recurringExpenseId">
+                    <div class="form-group"><label class="form-label">Vendor</label><input type="text"
+                            id="recurringExpenseVendor" class="form-control" placeholder=""></div>
+                    <div class="form-group"><label class="form-label">Category</label>
+                        <select id="recurringExpenseCategory" class="form-control">
+                            <?php foreach (expenseCategories() as $__catKey => $__catLabel): ?>
+                                <option value="<?= htmlspecialchars($__catKey) ?>"><?= htmlspecialchars($__catLabel) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div style="display:flex; gap:1rem;">
+                        <div class="form-group" style="flex:1;"><label class="form-label">Amount (<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>)</label>
+                            <input type="number" id="recurringExpenseAmount" class="form-control" step="0.01" min="0"></div>
+                        <div class="form-group" style="flex:1;"><label class="form-label">Frequency</label>
+                            <select id="recurringExpenseFrequency" class="form-control">
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly" selected>Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                                <option value="annually">Annually</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group"><label class="form-label">Description <span
+                                style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
+                        <textarea id="recurringExpenseDescription" class="form-control" rows="2"></textarea>
+                    </div>
+                    <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Logged automatically as a new expense the next time recurring billing runs (Settings &gt; Billing, or the monthly cron), once per period on today's date — same guard against double-logging as recurring invoices.</p>
+                </div>
+                <div class="modal-footer"><button class="btn" onclick="closeModal('recurringExpenseModal')">Cancel</button><button
+                        class="btn primary" id="saveRecurringExpenseBtn" onclick="saveRecurringExpense()"><i class="fa-solid fa-save"></i>
+                        Save</button></div>
+            </div>
+        </div>
+
         <div id="viewModal" class="modal-overlay">
             <div class="modal large">
                 <div class="modal-header">
@@ -10844,6 +11394,133 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 document.getElementById('sidebarBackdrop').classList.toggle('active');
             }
 
+            // ── Global quick search ───────────────────────────────────────
+            // Jumps to a record by re-using the target tab's own DataTable search
+            // box (see filterTableSearch) rather than fetching/rendering the full
+            // row itself, so it stays in sync with whatever that tab already shows.
+            let __globalSearchDebounce = null;
+            function handleGlobalSearch() {
+                clearTimeout(__globalSearchDebounce);
+                const q = document.getElementById('globalSearchInput').value.trim();
+                const resultsEl = document.getElementById('globalSearchResults');
+                if (q.length < 2) {
+                    resultsEl.classList.remove('active');
+                    resultsEl.innerHTML = '';
+                    return;
+                }
+                __globalSearchDebounce = setTimeout(async () => {
+                    const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'global_search', q }) });
+                    const json = await res.json();
+                    if (json.success) renderGlobalSearchResults(json);
+                }, 250);
+            }
+            function positionGlobalSearchResults() {
+                const input = document.getElementById('globalSearchInput');
+                const resultsEl = document.getElementById('globalSearchResults');
+                const rect = input.getBoundingClientRect();
+                resultsEl.style.left = rect.left + 'px';
+                resultsEl.style.top = (rect.bottom + 6) + 'px';
+                resultsEl.style.width = rect.width + 'px';
+            }
+            function _escHtml(s) {
+                return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            }
+            function renderGlobalSearchResults(json) {
+                const resultsEl = document.getElementById('globalSearchResults');
+                const groups = [];
+                if (json.invoices.length) {
+                    groups.push('<div class="global-search-group-label">Invoices &amp; Quotes</div>' + json.invoices.map(inv => `
+                        <div class="global-search-result" data-jump="invoice" data-value="${_escHtml(inv.invoice_number)}" data-quote="${inv.is_quote}">
+                            <span><strong>${_escHtml(inv.invoice_number)}</strong> — ${_escHtml(inv.client_name)}</span>
+                            <span style="color:var(--text-secondary); font-size:0.8rem;">$${parseFloat(inv.amount).toFixed(2)}</span>
+                        </div>
+                    `).join(''));
+                }
+                if (json.clients.length) {
+                    groups.push('<div class="global-search-group-label">Clients</div>' + json.clients.map(c => `
+                        <div class="global-search-result" data-jump="client" data-value="${_escHtml(c.client_name)}">
+                            <span><strong>${_escHtml(c.client_name)}</strong></span>
+                            <span style="color:var(--text-secondary); font-size:0.8rem;">${_escHtml(c.email)}</span>
+                        </div>
+                    `).join(''));
+                }
+                if (json.expenses.length) {
+                    groups.push('<div class="global-search-group-label">Expenses</div>' + json.expenses.map(e => `
+                        <div class="global-search-result" data-jump="expense" data-value="${_escHtml(e.vendor)}">
+                            <span><strong>${_escHtml(e.vendor)}</strong> — ${_escHtml((e.expense_date || '').substring(0, 10))}</span>
+                            <span style="color:var(--text-secondary); font-size:0.8rem;">$${parseFloat(e.amount).toFixed(2)}</span>
+                        </div>
+                    `).join(''));
+                }
+                resultsEl.innerHTML = groups.length ? groups.join('') : '<div class="global-search-empty">No matches</div>';
+                positionGlobalSearchResults();
+                resultsEl.classList.add('active');
+            }
+            function closeGlobalSearch() {
+                document.getElementById('globalSearchResults').classList.remove('active');
+            }
+            function filterTableSearch(which, value) {
+                const wrapper = document.querySelector('#sec-' + which + ' .datatable-wrapper');
+                const input = wrapper && wrapper.querySelector('input.datatable-input');
+                if (!input) return;
+                input.value = value;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            // nav(which, true) kicks off an async refreshTable() in the background
+            // (destroys and recreates the DataTable, wiping any search box value set
+            // before it lands) — waits for that tbody swap to actually happen before
+            // filtering, instead of guessing at a fixed delay that could land either
+            // side of it.
+            const __tbodyIdsByTab = { invoices: 'invoicesTbody', clients: 'clientsTbody', quotes: 'quotesTbody', expenses: 'expensesTbody' };
+            function waitForTableRefresh(which, maxWaitMs = 1500) {
+                return new Promise(resolve => {
+                    const tbody = document.getElementById(__tbodyIdsByTab[which]);
+                    if (!tbody) return resolve();
+                    let done = false;
+                    const finish = () => { if (!done) { done = true; observer.disconnect(); resolve(); } };
+                    const observer = new MutationObserver(finish);
+                    observer.observe(tbody, { childList: true });
+                    setTimeout(finish, maxWaitMs);
+                });
+            }
+            document.getElementById('globalSearchResults').addEventListener('click', (e) => {
+                const item = e.target.closest('.global-search-result');
+                if (!item) return;
+                const type = item.dataset.jump;
+                const value = item.dataset.value;
+                closeGlobalSearch();
+                document.getElementById('globalSearchInput').value = '';
+                if (type === 'invoice') {
+                    const which = item.dataset.quote === '1' ? 'quotes' : 'invoices';
+                    nav(which, true);
+                    waitForTableRefresh(which).then(() => filterTableSearch(which, value));
+                } else if (type === 'client') {
+                    nav('clients', true);
+                    waitForTableRefresh('clients').then(() => filterTableSearch('clients', value));
+                } else if (type === 'expense') {
+                    nav('expenses', true);
+                    waitForTableRefresh('expenses').then(() => filterTableSearch('expenses', value));
+                }
+            });
+            function handleGlobalSearchKeydown(event) {
+                if (event.key === 'Escape') { closeGlobalSearch(); event.target.blur(); }
+            }
+            document.addEventListener('click', (e) => {
+                const wrap = document.querySelector('.global-search-wrap');
+                if (wrap && !wrap.contains(e.target)) closeGlobalSearch();
+            });
+            window.addEventListener('resize', () => {
+                if (document.getElementById('globalSearchResults').classList.contains('active')) positionGlobalSearchResults();
+            });
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    const input = document.getElementById('globalSearchInput');
+                    input.focus();
+                    input.select();
+                }
+            });
+
             function nav(section, fromClick = false) {
                 if (fromClick) {
                     document.querySelector('.sidebar').classList.remove('open');
@@ -10851,6 +11528,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 }
                 document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
                 document.querySelector('.nav-item[data-target="' + section + '"]').classList.add('active');
+                document.querySelectorAll('.mobile-bottom-nav-item').forEach(el => el.classList.toggle('active', el.dataset.target === section));
                 document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
                 document.getElementById('sec-' + section).classList.add('active');
                 localStorage.setItem('activeTab', section);
@@ -11310,6 +11988,44 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                 if (json.success) { showToast('Expense deleted!'); setTimeout(() => window.location.reload(), 1000); } else showToast(json.error, true);
             }
+
+            // ── Recurring expense templates ───────────────────────────────
+            function openRecurringExpenseModal(re = null) {
+                document.getElementById('recurringExpenseModalTitle').textContent = re ? 'Edit Recurring Expense' : 'Add Recurring Expense';
+                document.getElementById('recurringExpenseId').value = re ? re.id : '';
+                document.getElementById('recurringExpenseVendor').value = re ? re.vendor : '';
+                document.getElementById('recurringExpenseCategory').value = re ? re.category : 'other';
+                document.getElementById('recurringExpenseAmount').value = re ? re.amount : '0.00';
+                document.getElementById('recurringExpenseFrequency').value = re ? re.frequency : 'monthly';
+                document.getElementById('recurringExpenseDescription').value = re ? (re.description || '') : '';
+                document.getElementById('recurringExpenseModal').classList.add('active');
+            }
+            async function saveRecurringExpense() {
+                const btn = document.getElementById('saveRecurringExpenseBtn'); btn.disabled = true;
+                const data = new URLSearchParams({
+                    action: 'save_recurring_expense',
+                    id: document.getElementById('recurringExpenseId').value,
+                    vendor: document.getElementById('recurringExpenseVendor').value,
+                    category: document.getElementById('recurringExpenseCategory').value,
+                    amount: document.getElementById('recurringExpenseAmount').value,
+                    frequency: document.getElementById('recurringExpenseFrequency').value,
+                    description: document.getElementById('recurringExpenseDescription').value,
+                });
+                const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
+                if (json.success) { showToast('Recurring expense saved!'); setTimeout(() => window.location.reload(), 1000); } else { showToast(json.error || 'Failed to save', true); btn.disabled = false; }
+            }
+            async function toggleRecurringExpenseActive(id, active) {
+                const data = new URLSearchParams({ action: 'toggle_recurring_expense', id: id, is_active: active ? '1' : '0' });
+                const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
+                if (json.success) showToast(active ? 'Resumed!' : 'Paused!');
+                else { showToast(json.error || 'Failed to update', true); setTimeout(() => window.location.reload(), 1000); }
+            }
+            async function deleteRecurringExpense(id) {
+                if (!confirm('Delete this recurring expense? Past expenses it already logged are not affected.')) return;
+                const data = new URLSearchParams({ action: 'delete_recurring_expense', id: id });
+                const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
+                if (json.success) { showToast('Recurring expense deleted!'); setTimeout(() => window.location.reload(), 1000); } else showToast(json.error, true);
+            }
             async function importClientsCsv(file) {
                 if (!file) return;
                 const input = document.getElementById('importClientsFile');
@@ -11453,7 +12169,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const memo = document.getElementById('adhocMemo').value;
                 if (isQuote) {
                     const btn = document.getElementById('saveQuoteBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; btn.disabled = true;
-                    const data = new URLSearchParams({ action: 'save_quote', client_id: cid, line_items: JSON.stringify(items), due_date: dueDate, memo: memo, ...getInvoiceAdjustments() });
+                    const quoteExpiresAt = document.getElementById('adhocQuoteExpiry').value;
+                    const data = new URLSearchParams({ action: 'save_quote', client_id: cid, line_items: JSON.stringify(items), due_date: dueDate, quote_expires_at: quoteExpiresAt, memo: memo, ...getInvoiceAdjustments() });
                     const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                     if (json.success) { showToast(`Quote ${json.quoteNum} saved!`); setTimeout(() => window.location.reload(), 2000); }
                     else { showToast(json.error || 'Failed to save quote', true); btn.innerHTML = '<i class="fa-solid fa-file-pen"></i> Save as Quote'; btn.disabled = false; }
@@ -11470,7 +12187,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const btn = document.getElementById('runRecurringBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...'; btn.disabled = true;
                 const data = new URLSearchParams({ action: 'run_recurring' });
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
-                if (json.success) { showToast(`Sent ${json.sent} invoices. Errors: ${json.errors}. Reminders sent: ${json.reminders_sent}. Late fees charged: ${json.late_fees_charged}.`); setTimeout(() => window.location.reload(), 2000); }
+                if (json.success) { showToast(`Sent ${json.sent} invoices. Errors: ${json.errors}. Reminders sent: ${json.reminders_sent}. Late fees charged: ${json.late_fees_charged}. Recurring expenses logged: ${json.recurring_expenses_logged}.`); setTimeout(() => window.location.reload(), 2000); }
                 else { showToast(json.error, true); btn.innerHTML = '<i class="fa-solid fa-bolt"></i> Run Monthly Billing'; btn.disabled = false; }
             }
 
@@ -11485,11 +12202,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 window.location.href = '?export=' + type;
             }
             function filterInvoicesByStatus(value) {
-                const wrapper = document.querySelector('#sec-invoices .datatable-wrapper');
-                const input = wrapper && wrapper.querySelector('input.datatable-input');
-                if (!input) return;
-                input.value = value;
-                input.dispatchEvent(new Event('input', { bubbles: true }));
+                filterTableSearch('invoices', value);
             }
 
             // Saved Filtered Views — a named preset is just the current contents of a
@@ -11798,6 +12511,67 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                 if (json.success) { showToast('Invoice deleted!'); setTimeout(() => window.location.reload(), 1000); } else { showToast(json.error, true); }
             }
+
+            // ── Invoice bulk actions ──────────────────────────────────────
+            function toggleSelectAllInvoices(masterCb) {
+                document.querySelectorAll('.invoice-select-cb').forEach(cb => { cb.checked = masterCb.checked; });
+                updateInvoiceBulkBar();
+            }
+            function getSelectedInvoiceCbs() {
+                return Array.from(document.querySelectorAll('.invoice-select-cb:checked'));
+            }
+            function updateInvoiceBulkBar() {
+                const count = getSelectedInvoiceCbs().length;
+                const bar = document.getElementById('invoiceBulkBar');
+                bar.style.display = count > 0 ? 'flex' : 'none';
+                document.getElementById('invoiceBulkCount').textContent = count + ' selected';
+                const allCbs = document.querySelectorAll('.invoice-select-cb');
+                document.getElementById('invoicesSelectAll').checked = count > 0 && count === allCbs.length;
+            }
+            async function bulkMarkPaidInvoices() {
+                const cbs = getSelectedInvoiceCbs().filter(cb => cb.dataset.status !== 'paid' && cb.dataset.status !== 'void');
+                if (!cbs.length) return showToast('No eligible invoices selected (already paid or void)', true);
+                if (!confirm(`Mark ${cbs.length} invoice(s) as fully paid?`)) return;
+                for (const cb of cbs) {
+                    await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'mark_paid', id: cb.value, amount: cb.dataset.amount, note: 'Bulk mark paid' }) });
+                }
+                showToast(`Marked ${cbs.length} invoice(s) as paid!`);
+                setTimeout(() => window.location.reload(), 1000);
+            }
+            async function bulkResendInvoiceEmails() {
+                const cbs = getSelectedInvoiceCbs().filter(cb => cb.dataset.status !== 'void' && cb.dataset.status !== 'draft');
+                if (!cbs.length) return showToast('No eligible invoices selected (void/draft can\'t be resent)', true);
+                if (!confirm(`Resend ${cbs.length} invoice email(s)?`)) return;
+                for (const cb of cbs) {
+                    await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'resend_invoice_email', id: cb.value }) });
+                }
+                showToast(`Resent ${cbs.length} invoice email(s)!`);
+            }
+            async function bulkDeleteInvoices() {
+                const cbs = getSelectedInvoiceCbs();
+                if (!cbs.length) return;
+                if (!confirm(`Delete ${cbs.length} invoice(s)? This removes them from the database and deletes their HTML files. This cannot be undone.`)) return;
+                for (const cb of cbs) {
+                    await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'delete_invoice', id: cb.value }) });
+                }
+                showToast(`Deleted ${cbs.length} invoice(s)!`);
+                setTimeout(() => window.location.reload(), 1000);
+            }
+            function bulkExportInvoicesCsv() {
+                const cbs = getSelectedInvoiceCbs();
+                if (!cbs.length) return;
+                const rows = [['Invoice #', 'Date', 'Due Date', 'Client', 'Amount', 'Status']];
+                cbs.forEach(cb => {
+                    const cells = cb.closest('tr').querySelectorAll('td');
+                    rows.push([1, 2, 3, 4, 5, 6].map(i => (cells[i].innerText || '').trim()));
+                });
+                const csv = rows.map(r => r.map(v => '"' + v.replace(/"/g, '""') + '"').join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'invoices_selected.csv'; a.click();
+                URL.revokeObjectURL(url);
+            }
             async function toggleTestClients(hide) {
                 const data = new URLSearchParams({ action: 'toggle_test_clients', hide: hide ? '1' : '0' });
                 try {
@@ -11992,6 +12766,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const channel = document.getElementById('notificationChannel').value;
                 document.getElementById('telegramFields').style.display = channel === 'telegram' ? '' : 'none';
                 document.getElementById('slackFields').style.display = channel === 'slack' ? '' : 'none';
+                document.getElementById('webhookFields').style.display = channel === 'webhook' ? '' : 'none';
             }
             updateNotificationChannelUI();
             async function saveNotificationSettings() {
@@ -12012,6 +12787,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                     telegram_bot_token: document.getElementById('telegramBotToken').value,
                     telegram_chat_id: document.getElementById('telegramChatId').value,
                     slack_webhook_url: document.getElementById('slackWebhookUrl').value,
+                    webhook_url: document.getElementById('webhookUrl').value,
+                    webhook_format: document.getElementById('webhookFormat').value,
                 });
                 const res = await fetch('', { method: 'POST', body: data });
                 const json = await res.json();
@@ -12552,12 +13329,25 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 nav('billing');
                 document.getElementById('adhocClient').value = '';
                 resetLineItems();
+                document.getElementById('isQuoteFlag').value = '1';
                 document.getElementById('billingPageTitle').textContent = 'New Quote';
                 document.getElementById('billingCardTitle').textContent = 'Create a Quote / Estimate';
+                document.getElementById('adhocQuoteExpiryGroup').style.display = '';
+                const defaultExpiry = new Date();
+                defaultExpiry.setDate(defaultExpiry.getDate() + 30);
+                document.getElementById('adhocQuoteExpiry').value = defaultExpiry.toISOString().substring(0, 10);
                 showToast('Fill in the form and click "Save as Quote" to create it.');
             }
-            async function convertQuote(id, num) {
-                if (!confirm('Convert quote ' + num + ' to a final invoice? This cannot be undone.')) return;
+            function resetAdhocMode() {
+                document.getElementById('isQuoteFlag').value = '0';
+                document.getElementById('billingPageTitle').textContent = 'Ad Hoc Invoice';
+                document.getElementById('billingCardTitle').textContent = 'Create Adhoc Invoice (One-Off)';
+                document.getElementById('adhocQuoteExpiryGroup').style.display = 'none';
+                document.getElementById('adhocQuoteExpiry').value = '';
+            }
+            async function convertQuote(id, num, expired = false) {
+                const warning = expired ? 'This quote has expired. Convert quote ' + num + ' to a final invoice anyway? This cannot be undone.' : 'Convert quote ' + num + ' to a final invoice? This cannot be undone.';
+                if (!confirm(warning)) return;
                 const data = new URLSearchParams({ action: 'convert_quote', id: id });
                 const res = await fetch('', { method: 'POST', body: data });
                 const json = await res.json();

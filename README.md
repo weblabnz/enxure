@@ -9,13 +9,13 @@ Self-hosted invoicing & recurring billing for agencies and freelancers — manag
 
 ![Dashboard](docs/screenshots/invoxa-dashboard.webp)
 
-One admin account, unlimited clients, fully brandable documents (logo, color, VAT number, footer/payment instructions — or write your own HTML template), CSV/tax-year reporting, database backup & restore, and a monthly billing cron — all in one `docker compose up`. No accounts to create on a third-party SaaS, no per-client pricing, no subscription just to send an invoice.
+One admin account, unlimited clients, fully brandable documents (logo, color, GST/VAT number, footer/payment instructions — or write your own HTML template), CSV/tax-year reporting, database backup & restore, and a monthly billing cron — all in one `docker compose up`. No accounts to create on a third-party SaaS, no per-client pricing, no subscription just to send an invoice.
 
 ## Why Invoxa
 
 - **You own the data.** Everything lives in your own MySQL database and your own Docker volumes. Export it, back it up, move it to another server whenever you want — there's a guided path for all three.
 - **It doesn't get in your way for free.** Every core workflow — invoices, quotes, clients, manual payments, PDF export, backups, two-factor auth — works fully with no license key. A license only unlocks six specific extras (see [Licensing](#licensing)), not the app itself.
-- **It looks like your business, not like Invoxa.** Logo, brand color, VAT number, footer/payment instructions, and — if the built-in Detailed/Compact layouts aren't quite right — a small template language to write your own invoice HTML from scratch, with a live preview before you commit to it.
+- **It looks like your business, not like Invoxa.** Logo, brand color, GST/VAT number, footer/payment instructions, and — if the built-in Detailed/Compact layouts aren't quite right — a small template language to write your own invoice HTML from scratch, with a live preview before you commit to it.
 - **It's one container stack, not a platform.** PHP + MySQL + nginx, no Node build step, no external services required to get a first invoice out the door.
 
 ## Feature tour
@@ -26,7 +26,7 @@ One admin account, unlimited clients, fully brandable documents (logo, color, VA
 - Configurable invoice numbering (your own prefix/sequence template and zero-padding).
 - Clean PDF export for every invoice and quote — download from the browser or attach automatically to the outgoing email.
 - Three ways to lay it out: **Detailed** (spacious default), **Compact** (fits more line items per page), or **Custom** — Invoxa ships a small nunjucks-style template engine (variables, `{% if %}` conditionals, `{% for %}` loops over line items) so you can restyle the HTML that becomes your PDF from the ground up, with a one-click sample preview to check it before saving.
-- Full client contact details on file and on the document — name, email, phone, address, plus your own VAT/Tax ID number on every invoice and quote.
+- Full client contact details on file and on the document — name, email, phone, address, plus your own GST/VAT number on every invoice and quote.
 
 ### Recurring billing & payments
 - Per-client billing frequency (weekly / monthly / quarterly / annually), payment terms, and default discount/tax.
@@ -37,10 +37,10 @@ One admin account, unlimited clients, fully brandable documents (logo, color, VA
 ### Clients & client portal
 - Unlimited clients, with CSV export and import for bulk onboarding or migrating off a spreadsheet.
 - Per-client rate, billing frequency, payment terms, discount/tax, bank details, phone, and address, plus a running total of billed / paid / outstanding right in the client list.
-- An optional read-only **Client Portal** link — a token-gated page where a client sees their own invoices and payment status with no login of their own required. You control when the link is generated, and it can be set to expire. *(license required to generate/regenerate; revoking a link is always free)*
+- An optional **Client Portal** link — a token-gated page where a client sees their own invoices and payment status, and can accept an open quote in one click (which converts it to a real invoice and notifies you), with no login of their own required. You control when the link is generated, and it can be set to expire. *(license required to generate/regenerate; revoking a link is always free)*
 
 ### Branding, made to look like you
-- Logo, primary brand color, business name, VAT number, and footer/payment instructions all show up consistently across invoices, quotes, and outgoing email.
+- Logo, primary brand color, business name, GST/VAT number, and footer/payment instructions all show up consistently across invoices, quotes, and outgoing email.
 - Remove the "Powered by Invoxa" credit line entirely if you want a fully white-labelled document. *(license required)*
 
 ### Security & account recovery

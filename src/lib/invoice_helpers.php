@@ -111,7 +111,7 @@ function expenseCategories(): array
 // a terser layout for invoices with many line items; 'detailed' is the
 // default; 'custom' renders $customTemplate through invoxaRenderTemplate()
 // instead of the built-in markup below.
-function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amount, $accountName, $accountNumber, $senderEmail, $lineItems = [], $brandColor = '#4a90e2', $footerText = '', $currencyCode = 'USD', $licenseFingerprint = '', $discountPct = 0.0, $taxRate = 0.0, $template = 'detailed', ?string $payUrl = null, bool $showPoweredBy = true, string $vatNumber = '', string $recipientPhone = '', string $recipientAddress = '', ?string $customTemplate = null, string $businessName = '', string $documentType = 'Invoice')
+function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amount, $accountName, $accountNumber, $senderEmail, $lineItems = [], $brandColor = '#4a90e2', $footerText = '', $currencyCode = 'USD', $licenseFingerprint = '', $discountPct = 0.0, $taxRate = 0.0, $template = 'detailed', ?string $payUrl = null, bool $showPoweredBy = true, string $vatNumber = '', string $recipientPhone = '', string $recipientAddress = '', ?string $customTemplate = null, string $businessName = '', string $documentType = 'Invoice', ?string $quoteExpiresAt = null)
 {
     $watermarkComment = $licenseFingerprint !== '' ? "<!-- lic:{$licenseFingerprint} -->" : '';
     $watermarkSpan = $licenseFingerprint !== '' ? "<span style=\"font-size:1px;color:#f9f9f8;user-select:none;\">{$licenseFingerprint}</span>" : '';
@@ -129,6 +129,7 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
             'recipient_address' => $recipientAddress,
             'date' => $date,
             'due_date' => $dueDate,
+            'quote_expires_at' => $quoteExpiresAt ?? '',
             'invoice_number' => $invoiceNumber,
             'amount' => $amount,
             'currency_code' => $currencyCode,
@@ -194,7 +195,8 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     if ($recipientPhone !== '') {
         $recipientDetailsHtml .= "<p>" . htmlspecialchars($recipientPhone) . "</p>";
     }
-    $vatHtml = $vatNumber !== '' ? "<p><strong>VAT Number:</strong> " . htmlspecialchars($vatNumber) . "</p>" : '';
+    $vatHtml = $vatNumber !== '' ? "<p><strong>GST / VAT Number:</strong> " . htmlspecialchars($vatNumber) . "</p>" : '';
+    $quoteExpiryHtml = ($documentType === 'Quote' && $quoteExpiresAt) ? "<p><strong>Valid Until:</strong> " . htmlspecialchars($quoteExpiresAt) . "</p>" : '';
 
     // $payUrl is null when no gateway is enabled, or no Public URL is
     // configured to build one from (see invoxaPublicBaseUrl()) — omitted
@@ -218,7 +220,7 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     return <<<HTML
 {$watermarkComment}<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>{$documentType}</title>
 <style>{$style}</style></head>
-<body><div class="header"><h2>{$documentType}</h2><img src="cid:logo_cid" alt="Logo" /></div><div class="invoice-meta"><p><strong>Invoice To:</strong> {$recipient}</p>{$recipientDetailsHtml}<p><strong>Invoice Date:</strong> {$date}</p><p><strong>Invoice Due:</strong> {$dueDate}</p><p><strong>Invoice Number:</strong> {$invoiceNumber}</p><p><strong>Amount Due:</strong> {$currencyCode} \${$amount}</p>{$payButtonHtml}</div><h3>Invoice Details</h3><table><thead><tr><th>Code</th><th>Description</th><th>Amount</th></tr></thead><tbody>{$linesHtml}{$summaryRowsHtml}<tr class="total-row"><td colspan="2">Total</td><td>{$currencyCode} \${$amount}</td></tr></tbody></table><div class="footer"><h3>Payment Instructions</h3>{$footerHtml}<h3>For Any Inquiries</h3><p>Email: {$senderEmail}</p>{$vatHtml}{$poweredByHtml}</div>{$watermarkSpan}</body></html>
+<body><div class="header"><h2>{$documentType}</h2><img src="cid:logo_cid" alt="Logo" /></div><div class="invoice-meta"><p><strong>Invoice To:</strong> {$recipient}</p>{$recipientDetailsHtml}<p><strong>Invoice Date:</strong> {$date}</p><p><strong>Invoice Due:</strong> {$dueDate}</p><p><strong>Invoice Number:</strong> {$invoiceNumber}</p><p><strong>Amount Due:</strong> {$currencyCode} \${$amount}</p>{$quoteExpiryHtml}{$payButtonHtml}</div><h3>Invoice Details</h3><table><thead><tr><th>Code</th><th>Description</th><th>Amount</th></tr></thead><tbody>{$linesHtml}{$summaryRowsHtml}<tr class="total-row"><td colspan="2">Total</td><td>{$currencyCode} \${$amount}</td></tr></tbody></table><div class="footer"><h3>Payment Instructions</h3>{$footerHtml}<h3>For Any Inquiries</h3><p>Email: {$senderEmail}</p>{$vatHtml}{$poweredByHtml}</div>{$watermarkSpan}</body></html>
 HTML;
 }
 
@@ -417,9 +419,10 @@ th { background: {{ brand_color }}; color: #fff; }
 </head>
 <body>
 <div class="header"><h2>{{ document_type }}</h2>{{ logo_tag|raw }}</div>
-<p><strong>{{ business_name }}</strong>{% if vat_number %}<br>VAT: {{ vat_number }}{% endif %}</p>
+<p><strong>{{ business_name }}</strong>{% if vat_number %}<br>GST / VAT: {{ vat_number }}{% endif %}</p>
 <p><strong>Invoice To:</strong> {{ recipient }}{% if recipient_address %}<br>{{ recipient_address }}{% endif %}{% if recipient_phone %}<br>{{ recipient_phone }}{% endif %}</p>
 <p><strong>Invoice Date:</strong> {{ date }} &nbsp; <strong>Due:</strong> {{ due_date }} &nbsp; <strong>Invoice #:</strong> {{ invoice_number }}</p>
+{% if quote_expires_at %}<p><strong>Valid Until:</strong> {{ quote_expires_at }}</p>{% endif %}
 {% if has_pay_url %}<p><a href="{{ pay_url }}" style="display:inline-block;background:{{ brand_color }};color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;">Pay Now</a></p>{% endif %}
 <h3>Invoice Details</h3>
 <table>
@@ -559,6 +562,50 @@ function sendSlackNotification(string $webhookUrl, string $message): array
     }
     if (trim($result) !== 'ok') {
         return ['success' => false, 'error' => trim($result) ?: 'Slack rejected the message'];
+    }
+    return ['success' => true, 'error' => ''];
+}
+
+// Posts to any plain webhook URL — ntfy, Discord, a homelab shell script,
+// anything that isn't Slack or Telegram specifically. $format picks the body
+// shape: 'plain' (raw text, what ntfy expects), 'discord' ({"content": ...}),
+// or the default 'json_text' ({"text": ...}, the same shape Slack/Mattermost
+// use). Unlike Slack/Telegram there's no single expected response body across
+// receivers, so success is just "reachable and not an HTTP error status".
+function sendWebhookNotification(string $webhookUrl, string $message, string $format = 'json_text'): array
+{
+    if ($webhookUrl === '') {
+        return ['success' => false, 'error' => 'Webhook URL not configured'];
+    }
+    if (!preg_match('#^https?://#i', $webhookUrl)) {
+        return ['success' => false, 'error' => 'Webhook URL must start with http:// or https://'];
+    }
+    if ($format === 'plain') {
+        $contentType = 'text/plain';
+        $body = $message;
+    } elseif ($format === 'discord') {
+        $contentType = 'application/json';
+        $body = json_encode(['content' => $message]);
+    } else {
+        $contentType = 'application/json';
+        $body = json_encode(['text' => $message]);
+    }
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Content-Type: {$contentType}\r\n",
+            'content' => $body,
+            'timeout' => 10,
+            'ignore_errors' => true,
+        ],
+    ]);
+    $result = @file_get_contents($webhookUrl, false, $context);
+    if ($result === false) {
+        return ['success' => false, 'error' => 'Could not reach the webhook URL'];
+    }
+    $statusLine = $http_response_header[0] ?? '';
+    if (preg_match('#HTTP/\S+\s+(\d{3})#', $statusLine, $m) && ((int) $m[1]) >= 300) {
+        return ['success' => false, 'error' => "Webhook returned HTTP {$m[1]}"];
     }
     return ['success' => true, 'error' => ''];
 }

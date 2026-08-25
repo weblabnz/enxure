@@ -2,6 +2,25 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.8.0] - 2026-08-25
+
+### Added
+- Client Portal: open quotes now show in the portal (previously invoice-only) with an Accept Quote button — a confirmation step first, then it converts to a real invoice the same way the admin's own Convert button does, notifying you (new "notify when a client accepts a quote" toggle under Settings > Notifications) instead of you having to check back. An expired quote can't be accepted. The admin-side Convert action and the portal's client-side accept now share one `convertQuoteToInvoice()` implementation instead of two copies of the same logic, and quote conversions are logged to the Audit Log for the first time.
+
+## [2.7.0] - 2026-08-25
+
+### Added
+- Generic webhook notifications: Settings > Notifications now offers a "Generic Webhook" channel alongside Telegram/Slack, for anything that isn't either specifically — ntfy, a Discord webhook, or your own receiver — with a Payload Format choice (plain text, Slack-style JSON, or Discord-style JSON) since there's no one shape every receiver expects.
+- Global quick search: a search box in the sidebar (Ctrl/Cmd+K to focus) that looks across invoices, quotes, clients, and expenses at once and jumps straight to a match's own tab, instead of only being able to search within whichever table is already open.
+
+## [2.6.0] - 2026-08-25
+
+### Added
+- Recurring expenses: Expenses now has a Recurring Expenses card where a template (vendor, category, amount, frequency) auto-logs a new expense on its own schedule the next time recurring billing runs (Settings > Billing, or the cron), with the same per-period double-logging guard recurring invoices already use. Same license bucket as recurring billing automation; deleting a template stays free.
+- Quote expiry: quotes can now have a "Quote Expires" date, separate from the due date they carry over once converted to an invoice. Shown on the quote itself and in the Quotes table, with an "Expired" badge once past — converting an expired quote to an invoice now warns first.
+- Bulk actions on Invoices: a checkbox column plus a bulk action bar (Mark Paid, Resend, Export CSV, Delete) for handling several invoices at once instead of one at a time.
+- A 4-icon bottom navigation bar (Dashboard, Invoices, Add Expense, Clients) on mobile, for the handful of things worth reaching without opening the hamburger menu.
+
 ## [2.5.0] - 2026-08-25
 
 ### Added
@@ -16,6 +35,7 @@ All notable changes to Invoxa are documented here. Dates are when a release was 
 ### Changed
 - The mobile hamburger menu now opens from the right edge of the screen instead of the left.
 - The Expense date field shows an explicit `YYYY-MM-DD` readout beside it, since the native date picker's displayed day/month order follows the browser's own language setting rather than the OS region and can't be forced from the page.
+- The Business Identity tax field (Settings > Branding) and its label on invoices/quotes now lead with "GST", with "VAT" kept alongside it for anyone on VAT terminology instead — was VAT-first, which doesn't match the primary GST audience.
 
 ## [2.4.0] - 2026-08-23
 

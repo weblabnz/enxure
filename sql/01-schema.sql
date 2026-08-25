@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS `invoxa_invoices` (
   `file_path`       VARCHAR(500) COMMENT 'Relative path on the app filesystem',
   `notes`           TEXT,
   `is_quote`        TINYINT(1) NOT NULL DEFAULT 0,
+  `quote_expires_at` DATE NULL DEFAULT NULL COMMENT 'Only meaningful when is_quote=1 — how long the quote is valid for, separate from due_date (which becomes the eventual invoice''s payment due date once converted)',
   `created_at`      DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_client_key`   (`client_key`),
@@ -114,10 +115,24 @@ CREATE TABLE IF NOT EXISTS `invoxa_expenses` (
   `amount`         DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `description`    TEXT,
   `receipt_path`   VARCHAR(500) DEFAULT NULL COMMENT 'Legacy single-receipt path, superseded by invoxa_expense_receipts — kept for old rows, migrated into that table on boot',
+  `recurring_expense_id` INT DEFAULT NULL COMMENT 'FK to invoxa_recurring_expenses.id when auto-logged by the recurring cron run, NULL for a manually-entered expense',
   `created_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_expense_date` (`expense_date`),
-  INDEX `idx_category`     (`category`)
+  INDEX `idx_category`     (`category`),
+  INDEX `idx_recurring_expense_id` (`recurring_expense_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `invoxa_recurring_expenses` (
+  `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `vendor`         VARCHAR(150) NOT NULL DEFAULT '',
+  `category`       VARCHAR(50)  NOT NULL DEFAULT 'other' COMMENT 'See expenseCategories() in invoxa.php for the whitelist',
+  `amount`         DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `description`    TEXT,
+  `frequency`      ENUM('weekly','monthly','quarterly','annually') NOT NULL DEFAULT 'monthly',
+  `is_active`      TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `invoxa_expense_receipts` (
