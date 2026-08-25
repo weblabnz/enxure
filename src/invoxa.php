@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.8.0');
+define('APP_VERSION', '2.8.1');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -2129,6 +2129,26 @@ function renderInvoiceRows(array $invoices): string
     return ob_get_clean();
 }
 
+// Deterministic per-client avatar color so the same client always gets the
+// same badge color across page loads, rather than a random one each render.
+function clientAvatarColor(int $id): string
+{
+    $palette = ['#f43f5e', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
+    return $palette[$id % count($palette)];
+}
+
+function clientInitials(string $name): string
+{
+    $parts = array_filter(preg_split('/\s+/', trim($name)));
+    if (count($parts) === 0) {
+        return '?';
+    }
+    if (count($parts) === 1) {
+        return strtoupper(substr(reset($parts), 0, 2));
+    }
+    return strtoupper(substr(reset($parts), 0, 1) . substr(end($parts), 0, 1));
+}
+
 // Same idea for the Clients table.
 function renderClientRows(array $clients): string
 {
@@ -2137,7 +2157,10 @@ function renderClientRows(array $clients): string
         ?>
         <tr style="cursor:pointer;"
             onclick="openCrm(<?= htmlspecialchars(json_encode(['id' => $c['id'], 'client_name' => $c['client_name'], 'crm_notes' => $c['crm_notes'] ?? ''])) ?>)">
-            <td><strong><?= htmlspecialchars($c['client_name']) ?></strong></td>
+            <td style="display:flex; align-items:center; gap:0.6rem;">
+                <span class="client-avatar" style="background:<?= clientAvatarColor((int) $c['id']) ?>;"><?= htmlspecialchars(clientInitials($c['client_name'])) ?></span>
+                <strong><?= htmlspecialchars($c['client_name']) ?></strong>
+            </td>
             <td><?= htmlspecialchars($c['email']) ?></td>
             <td>$<?= number_format($c['monthly_rate'], 2) ?>
                 <div style="color:var(--text-secondary); font-size:0.75rem; text-transform:capitalize;">
@@ -2317,21 +2340,33 @@ function renderDashboardStats(array $settings, array $failedInvoices, array $ove
     <?php endif; ?>
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-title">Total Invoiced (All Time)</div>
+            <div class="stat-card-top">
+                <div class="stat-title">Total Invoiced (All Time)</div>
+                <div class="stat-icon"><i class="fa-solid fa-sack-dollar"></i></div>
+            </div>
             <div class="stat-value"><?= htmlspecialchars($settings['currency'] ?? 'USD') ?> $<?= number_format($total_invoiced, 2) ?></div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">This Month</div>
+            <div class="stat-card-top">
+                <div class="stat-title">This Month</div>
+                <div class="stat-icon success"><i class="fa-solid fa-calendar-check"></i></div>
+            </div>
             <div class="stat-value" style="color: var(--success)"><?= htmlspecialchars($settings['currency'] ?? 'USD') ?> $<?= number_format($total_monthly, 2) ?>
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">Total Outstanding</div>
+            <div class="stat-card-top">
+                <div class="stat-title">Total Outstanding</div>
+                <div class="stat-icon warning"><i class="fa-solid fa-hourglass-half"></i></div>
+            </div>
             <div class="stat-value" style="color: var(--warning)"><?= htmlspecialchars($settings['currency'] ?? 'USD') ?>
                 $<?= number_format($total_invoiced - $total_paid, 2) ?></div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">Active Clients</div>
+            <div class="stat-card-top">
+                <div class="stat-title">Active Clients</div>
+                <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
+            </div>
             <div class="stat-value"><?= $client_count ?></div>
         </div>
     </div>
@@ -3001,8 +3036,7 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
                 <tbody>
                     <?php if (count($missingFiles) === 0): ?>
                         <tr>
-                            <td colspan="3" style="text-align:center; color:var(--text-secondary);">Everything is
-                                synced!</td>
+                            <td colspan="3" class="empty-state"><i class="fa-solid fa-circle-check" style="color:var(--success);"></i>Everything is synced!</td>
                         </tr>
                     <?php else:
                         foreach ($missingFiles as $mf):
@@ -3050,8 +3084,7 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
                 <tbody>
                     <?php if (count($missingDiskData) === 0): ?>
                         <tr>
-                            <td colspan="4" style="text-align:center; color:var(--text-secondary);">Everything is
-                                synced!</td>
+                            <td colspan="4" class="empty-state"><i class="fa-solid fa-circle-check" style="color:var(--success);"></i>Everything is synced!</td>
                         </tr>
                     <?php else:
                         foreach ($missingDiskData as $md): ?>
@@ -6917,6 +6950,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
         }
 
         .nav-item {
+            position: relative;
             margin: 0.1rem 0.75rem;
             padding: 0.65rem 0.85rem;
             border-radius: var(--radius-sm);
@@ -6939,6 +6973,18 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             background: var(--accent-soft);
             color: var(--accent);
             font-weight: 600;
+        }
+
+        .nav-item.active::before,
+        .nav-item.tool-item.active::before {
+            content: "";
+            position: absolute;
+            left: -0.75rem;
+            top: 0.2rem;
+            bottom: 0.2rem;
+            width: 3px;
+            border-radius: 0 3px 3px 0;
+            background: var(--accent);
         }
 
         .nav-item.tool-item {
@@ -7233,13 +7279,115 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             text-transform: uppercase;
             letter-spacing: 0.04em;
             font-weight: 600;
+        }
+
+        .stat-card-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
             margin-bottom: 0.6rem;
+        }
+
+        .stat-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .stat-icon.success {
+            background: color-mix(in srgb, var(--success) 15%, transparent);
+            color: var(--success);
+        }
+
+        .stat-icon.warning {
+            background: color-mix(in srgb, var(--warning) 15%, transparent);
+            color: var(--warning);
         }
 
         .stat-value {
             font-size: 1.9rem;
             font-weight: 700;
             letter-spacing: -0.02em;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 2.5rem 1rem;
+        }
+
+        .empty-state i {
+            display: block;
+            font-size: 1.6rem;
+            margin-bottom: 0.6rem;
+            opacity: 0.5;
+        }
+
+        td.datatable-empty {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 2.5rem 1rem !important;
+        }
+
+        td.datatable-empty::before {
+            content: "\f01c";
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            display: block;
+            font-size: 1.6rem;
+            margin-bottom: 0.6rem;
+            opacity: 0.5;
+        }
+
+        .table-refreshing {
+            position: relative;
+        }
+
+        .table-refreshing tbody {
+            opacity: 0.35;
+            transition: opacity 0.15s ease;
+            pointer-events: none;
+        }
+
+        .table-refreshing::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 28px;
+            height: 28px;
+            margin: -14px 0 0 -14px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: table-refresh-spin 0.7s linear infinite;
+            z-index: 2;
+        }
+
+        @keyframes table-refresh-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .client-avatar {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            flex-shrink: 0;
         }
 
         .charts-grid {
@@ -8152,8 +8300,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
 
     <div class="sidebar">
         <div class="sidebar-header">
-            <h1 id="sidebarBrandName"><img src="assets/img/invoxa-mark.svg" width="30" height="30" alt="">
-                <img src="assets/img/invoxa-wordmark.svg" height="24" alt="Invoxa" style="width:auto;"></h1>
+            <h1 id="sidebarBrandName"><img src="assets/img/invoxa-mark.svg" width="36" height="36" alt="">
+                <img src="assets/img/invoxa-wordmark.svg" height="30" alt="Invoxa" style="width:auto;"></h1>
         </div>
         <div class="global-search-wrap">
             <i class="fa-solid fa-magnifying-glass"></i>
@@ -8635,7 +8783,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         <tbody id="recurringExpensesTbody">
                             <?php if (empty($recurringExpenses)): ?>
                                 <tr>
-                                    <td colspan="6" style="text-align:center; color:var(--text-secondary);">No recurring expenses set up yet — add one for a bill that repeats on its own schedule (hosting, SaaS subscriptions, etc.) instead of re-entering it every period.</td>
+                                    <td colspan="6" class="empty-state"><i class="fa-solid fa-rotate"></i>No recurring expenses set up yet — add one for a bill that repeats on its own schedule (hosting, SaaS subscriptions, etc.) instead of re-entering it every period.</td>
                                 </tr>
                             <?php else: ?>
                                 <?= renderRecurringExpenseRows($recurringExpenses, $licenseValid) ?>
@@ -11719,15 +11867,21 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             // A function, not a cached value — re-reads localStorage on every table
             // (re)build so a changed Default Page Size setting applies on the next
             // tab visit instead of requiring a hard refresh.
-            function getTblOpts() {
+            const tblEmptyMessages = {
+                invoices: 'No invoices yet — create one to get started.',
+                clients: 'No clients yet — add your first client to get started.',
+                quotes: 'No quotes yet — save one as a quote instead of sending it.',
+                expenses: 'No expenses logged yet.',
+            };
+            function getTblOpts(which) {
                 const preferredPageSize = parseInt(localStorage.getItem('invoxa_table_page_size'), 10) || 12;
-                return { searchable: true, fixedHeight: false, perPage: preferredPageSize, perPageSelect: [12, 30, 50, 99999] };
+                return { searchable: true, fixedHeight: false, perPage: preferredPageSize, perPageSelect: [12, 30, 50, 99999], labels: { noRows: tblEmptyMessages[which] || 'No entries found' } };
             }
             const dataTables = {};
-            if (document.getElementById("invoicesTable")) dataTables.invoices = new simpleDatatables.DataTable("#invoicesTable", getTblOpts());
-            if (document.getElementById("clientsTable")) dataTables.clients = new simpleDatatables.DataTable("#clientsTable", getTblOpts());
-            if (document.getElementById("quotesTable")) dataTables.quotes = new simpleDatatables.DataTable("#quotesTable", getTblOpts());
-            if (document.getElementById("expensesTable")) dataTables.expenses = new simpleDatatables.DataTable("#expensesTable", getTblOpts());
+            if (document.getElementById("invoicesTable")) dataTables.invoices = new simpleDatatables.DataTable("#invoicesTable", getTblOpts('invoices'));
+            if (document.getElementById("clientsTable")) dataTables.clients = new simpleDatatables.DataTable("#clientsTable", getTblOpts('clients'));
+            if (document.getElementById("quotesTable")) dataTables.quotes = new simpleDatatables.DataTable("#quotesTable", getTblOpts('quotes'));
+            if (document.getElementById("expensesTable")) dataTables.expenses = new simpleDatatables.DataTable("#expensesTable", getTblOpts('expenses'));
             setTimeout(() => { document.querySelectorAll('.datatable-selector option').forEach(opt => { if (opt.value == "99999") opt.textContent = "All"; }); }, 100);
 
             // Background refresh for the Invoices/Clients/Quotes tabs (see nav() above) —
@@ -11737,17 +11891,21 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             async function refreshTable(which) {
                 const tbodyId = tbodyIds[which];
                 if (!tbodyId) return;
+                const cardEl = document.getElementById(tbodyId).closest('.card');
+                if (cardEl) cardEl.classList.add('table-refreshing');
                 try {
                     const res = await fetch('?api=table_html&which=' + which);
                     const html = await res.text();
                     if (dataTables[which]) dataTables[which].destroy();
                     document.getElementById(tbodyId).innerHTML = html;
-                    dataTables[which] = new simpleDatatables.DataTable('#' + which + 'Table', getTblOpts());
+                    dataTables[which] = new simpleDatatables.DataTable('#' + which + 'Table', getTblOpts(which));
                     document.querySelectorAll('#sec-' + which + ' .datatable-selector option').forEach(opt => { if (opt.value == "99999") opt.textContent = "All"; });
                 } catch (e) {
                     // Silent by design — a failed background refresh leaves the existing,
                     // still-valid (if slightly stale) table in place rather than surfacing
                     // an error for a refresh the user didn't explicitly wait on.
+                } finally {
+                    if (cardEl) cardEl.classList.remove('table-refreshing');
                 }
             }
 

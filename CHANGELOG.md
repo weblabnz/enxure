@@ -2,6 +2,15 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.8.1] - 2026-08-25
+
+### Changed
+- Dashboard stat cards now lead with a small colored icon, matching the rest of the app's cards.
+- Empty states are consistent everywhere instead of a mix of plain library text and grey one-liners: Invoices, Clients, Quotes, and Expenses now show an icon and a friendlier message when there's nothing to list yet, matching the treatment Recurring Expenses and the Sync tab already had.
+- The active sidebar nav item now gets a left accent bar in addition to its background tint.
+- The Clients table shows a colored initials avatar next to each client name instead of plain text, for faster scanning.
+- Switching to Invoices/Clients/Quotes/Expenses now dims the table and shows a brief spinner while its background refresh is in flight, instead of the data silently swapping in.
+
 ## [2.8.0] - 2026-08-25
 
 ### Added
