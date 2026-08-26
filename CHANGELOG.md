@@ -2,6 +2,19 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.9.1] - 2026-08-27
+
+### Changed
+- Test Suite expanded with 11 additional checks — invoice-total edge cases (100% discount, negative/credit line items, out-of-range percentage clamping), tax-year rollover across the calendar boundary, invoice numbering (default and custom template/padding), TOTP clock-drift tolerance, quote-to-invoice conversion, the Clients bulk flag update, and the accounting journal's double-entry balance — filling in coverage that was noticeably thinner than the rest of the app's.
+- Dashboard stat cards no longer lift on hover, just a subtle shadow change.
+- A bit more breathing room between Logout and the version/changelog line in the sidebar footer.
+
+### Removed
+- "Bulk Mark Paid" under Data Management > Bulk Actions — the Invoices tab's own bulk action bar (checkbox select + Mark Paid) covers the same job now, so this had become a second way to do the same thing. Docs updated to match.
+
+### Fixed
+- The Test Suite table's column widths jumped around when switching between the group pill filters, since the table sized columns off whatever rows happened to be visible; now fixed-width so filtering doesn't reflow the table. Also fixed the checkbox column overlapping into Category once that width was pinned down, and loosened up padding across the table generally.
+
 ## [2.9.0] - 2026-08-27
 
 ### Added

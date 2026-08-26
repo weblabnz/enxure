@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.9.0');
+define('APP_VERSION', '2.9.1');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -1613,8 +1613,8 @@ function notifyChannel($mysqli, array $settings, string $eventToggleKey, string 
 }
 
 // Single source of truth for crediting a payment against an invoice — used by
-// Mark Paid / Bulk Mark Paid and by the Stripe/PayPal return-URL handlers and
-// webhooks below.
+// Mark Paid (including the Invoices tab's bulk-select action) and by the
+// Stripe/PayPal return-URL handlers and webhooks below.
 //
 // $providerRef, when given, is the gateway's id for this charge (Stripe
 // Checkout Session id, PayPal capture id) and combines with $provider as the
@@ -3555,6 +3555,60 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         invoxaAssertEquals("WHERE is_test = 1", invoxaTestViewClientFilter(false, true, 'WHERE'), 'test-only, direct column');
         invoxaAssertEquals("", invoxaTestViewClientFilter(false, false, 'WHERE'), 'everything, direct column');
     });
+    $run('Core Logic', 'computeInvoiceTotals', '100% discount zeroes the total', 'A $100 item with a 100% discount nets to $0 before tax, so a 20% tax rate on top still totals exactly $0 — tax never applies to a discount, only to what\'s left after it.', function () {
+        $items = [['amount' => 100]];
+        $t = computeInvoiceTotals($items, 100, 20);
+        invoxaAssertEquals(100.0, $t['discount']);
+        invoxaAssertEquals(0.0, $t['total']);
+    });
+    $run('Core Logic', 'computeInvoiceTotals', 'negative line item nets correctly', 'A $100 charge alongside a -$30 credit line (e.g. a partial refund folded into the same invoice) subtotals to $70, and a 10% tax applies to that net $70, not the $100 gross.', function () {
+        $items = [['amount' => 100], ['amount' => -30]];
+        $t = computeInvoiceTotals($items, 0, 10);
+        invoxaAssertEquals(70.0, $t['subtotal']);
+        invoxaAssertEquals(7.0, $t['tax']);
+        invoxaAssertEquals(77.0, $t['total']);
+    });
+    $run('Core Logic', 'computeInvoiceTotals', 'clamps out-of-range percentages', 'A discount/tax pair outside 0-100 (150% discount, -10% tax) is clamped to the valid range before it\'s applied, the same clamp save_client\'s and the Ad Hoc form\'s own inputs go through — an over-100 discount can\'t make the total negative, and a negative tax can\'t reduce it.', function () {
+        $items = [['amount' => 100]];
+        $t = computeInvoiceTotals($items, 150, -10);
+        invoxaAssertEquals(100.0, $t['discount_pct'], 'discount_pct clamped to 100');
+        invoxaAssertEquals(0.0, $t['tax_rate'], 'tax_rate clamped to 0');
+        invoxaAssertEquals(0.0, $t['total']);
+    });
+    $run('Core Logic', 'getTaxYearStart', 'resolves the correct calendar year on both sides of the start month', 'With an April 1st tax year start, a "now" of mid-February resolves to the previous year\'s April 1st (the tax year still in progress), while a "now" of mid-June resolves to this year\'s April 1st (a new tax year has already begun).', function () {
+        $before = getTaxYearStart(4, new DateTime('2026-02-15'));
+        invoxaAssertEquals('2025-04-01', $before->format('Y-m-d'), 'before the start month falls back to last year');
+        $after = getTaxYearStart(4, new DateTime('2026-06-10'));
+        invoxaAssertEquals('2026-04-01', $after->format('Y-m-d'), 'at/after the start month uses this year');
+    });
+    $run('Core Logic', 'generateInvoiceNumber', 'default template numbers a fresh client from 001', 'With no invoice_number_template configured, a brand-new client\'s first invoice number is exactly their client_key (uppercased) followed by "001" — the {key}{seq} default template with 3-digit padding.', function () use ($mysqli) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $num = generateInvoiceNumber($mysqli, $clientKey, 'Test Suite Fixture', []);
+            invoxaAssertEquals(strtoupper($clientKey) . '001', $num);
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            @rmdir(INVOICES_DIR . 'test_suite_fixture');
+        }
+    });
+    $run('Core Logic', 'generateInvoiceNumber', 'custom template and padding are honored', 'Settings > Branding\'s invoice_number_template ("INV-{year}-{key}-{seq}") and a 5-digit padding produce exactly that shape for a fresh client\'s first invoice, substituting {year} and {key} correctly.', function () use ($mysqli) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $num = generateInvoiceNumber($mysqli, $clientKey, 'Test Suite Fixture', ['invoice_number_template' => 'INV-{year}-{key}-{seq}', 'invoice_number_padding' => 5]);
+            invoxaAssertEquals('INV-' . date('Y') . '-' . strtoupper($clientKey) . '-00001', $num);
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            @rmdir(INVOICES_DIR . 'test_suite_fixture');
+        }
+    });
+    $run('Core Logic', 'TOTP', 'tolerates one step of clock drift', 'verifyTotpCode()\'s default ±1 step window accepts a code from 30 seconds ago (a slightly slow phone clock), but not one from 60 seconds ago — two steps out is still rejected.', function () {
+        $secret = generateTotpSecret();
+        $currentStep = (int) floor(time() / 30);
+        $oneStepBack = totpCodeAt($secret, $currentStep - 1);
+        $twoStepsBack = totpCodeAt($secret, $currentStep - 2);
+        invoxaAssertTrue(verifyTotpCode($secret, $oneStepBack), 'a code from one step ago should still verify');
+        invoxaAssertTrue(!verifyTotpCode($secret, $twoStepsBack), 'a code from two steps ago should be rejected');
+    });
 
     // ── Clients & Invoices ── the "add a client" / "add an invoice" paths,
     // exercised against disposable fixtures rather than the real AJAX actions.
@@ -3709,6 +3763,59 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             }
         }
     });
+    $run('Clients & Invoices', 'Client', 'bulk flag update toggles independently', 'The Clients tab\'s bulk action bar updates one flag at a time (update_client_flags) — flipping is_active to 0 leaves is_test untouched, and flipping is_test to 1 afterward leaves is_active untouched, exactly as if each button were its own single-column UPDATE.', function () use ($mysqli) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $stmt = $mysqli->prepare("UPDATE invoxa_clients SET is_active = ? WHERE id = ?");
+            $inactive = 0;
+            $stmt->bind_param("ii", $inactive, $clientId);
+            $stmt->execute();
+            $row = $mysqli->query("SELECT is_active, is_test FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+            invoxaAssertEquals(0, (int) $row['is_active'], 'is_active should now be 0');
+            invoxaAssertEquals(1, (int) $row['is_test'], 'is_test should be untouched by the is_active update');
+            $stmt = $mysqli->prepare("UPDATE invoxa_clients SET is_test = ? WHERE id = ?");
+            $stillTest = 1;
+            $stmt->bind_param("ii", $stillTest, $clientId);
+            $stmt->execute();
+            $after = $mysqli->query("SELECT is_active, is_test FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+            invoxaAssertEquals(0, (int) $after['is_active'], 'is_active should still be untouched by the is_test update');
+            invoxaAssertEquals(1, (int) $after['is_test']);
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
+    $run('Clients & Invoices', 'Quote', 'converts to a real invoice', 'convertQuoteToInvoice() flips is_quote to 0, keeps the same amount, renumbers away from the Q-prefixed quote number, and logs a quote_converted audit entry — the same path the admin\'s Convert button and the Client Portal\'s Accept button both call.', function () use ($mysqli, $settings) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        $quoteId = null;
+        try {
+            $quoteNum = 'Q' . strtoupper($clientKey) . '001';
+            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, is_quote, html_content) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), 250.00, 'sent', 1, ?)");
+            $html = "<html>{$quoteNum}</html>";
+            $stmt->bind_param("sss", $quoteNum, $clientKey, $html);
+            $stmt->execute();
+            $quoteId = $mysqli->insert_id;
+            $result = convertQuoteToInvoice($mysqli, $settings, $quoteId, 'admin');
+            invoxaAssertTrue($result['success'], 'conversion should succeed for a real quote');
+            $row = $mysqli->query("SELECT is_quote, amount, invoice_number FROM invoxa_invoices WHERE id = $quoteId")->fetch_assoc();
+            invoxaAssertEquals(0, (int) $row['is_quote'], 'should no longer be flagged as a quote');
+            invoxaAssertEquals(250.00, (float) $row['amount'], 'amount should carry over unchanged');
+            invoxaAssertTrue($row['invoice_number'] !== $quoteNum, 'should be renumbered away from the quote number');
+            $action = $mysqli->query("SELECT action_type FROM invoxa_actions WHERE invoice_id = $quoteId AND action_type = 'quote_converted'")->fetch_assoc();
+            invoxaAssertTrue((bool) $action, 'expected a quote_converted audit entry');
+            $missing = convertQuoteToInvoice($mysqli, $settings, 999999999, 'admin');
+            invoxaAssertTrue(!$missing['success'], 'converting a non-existent quote id should fail cleanly');
+        } finally {
+            if ($quoteId) {
+                $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id = " . (int) $quoteId);
+                $mysqli->query("DELETE FROM invoxa_invoices WHERE id = " . (int) $quoteId);
+            }
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            foreach (glob(INVOICES_DIR . 'test_suite_fixture/*.html') ?: [] as $__f) {
+                @unlink($__f);
+            }
+            @rmdir(INVOICES_DIR . 'test_suite_fixture');
+        }
+    });
 
     // ── Payments & Refunds ── the ledger's actual crediting/reversing logic.
     $run('Payments & Refunds', 'Payment ledger', 'partial then full payment', 'A $100 invoice paid $40 then $60 stays open (status "sent") after the first payment and flips to "paid" after the second, with paid_amount tracked correctly at each step.', function () use ($mysqli, $settings) {
@@ -3770,6 +3877,34 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
+    $run('Payments & Refunds', 'Accounting journal', 'every entry balances', 'buildAccountingJournal() emits an invoice as one debit + one credit row of the same reference, and a payment against it the same way — for a fixture invoice paid in full, the rows sharing that invoice\'s reference always sum to equal debit and credit totals, which is what makes the export genuinely importable into a bookkeeping tool.', function () use ($mysqli, $settings) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 60.00);
+            $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $invId")->fetch_assoc()['invoice_number'];
+            recordInvoicePayment($mysqli, $settings, $invId, 60.00, 'test', 'manual');
+            $journal = buildAccountingJournal($mysqli, date('Y-m-d', strtotime('-1 day')), '');
+            $ours = array_values(array_filter($journal, fn($r) => $r['ref'] === $invNum));
+            invoxaAssertEquals(4, count($ours), 'expected 2 rows for the invoice and 2 for its payment');
+            $debitTotal = array_sum(array_column($ours, 'debit'));
+            $creditTotal = array_sum(array_column($ours, 'credit'));
+            invoxaAssertEquals(round($debitTotal, 2), round($creditTotal, 2), 'debits and credits should balance');
+            invoxaAssertEquals(120.0, round($debitTotal, 2), 'two $60 debit legs (invoice + payment)');
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
+    $run('Payments & Refunds', 'Webhook', 'unmatched reference logs an audit entry', 'invoxaLogUnmatchedWebhook() — called when a Stripe/PayPal event references an invoice Invoxa no longer recognizes — writes a webhook_unmatched action naming the provider and the dangling reference, so the Audit Log still shows something happened even though nothing was credited.', function () use ($mysqli) {
+        $reference = 'ztest_ref_' . bin2hex(random_bytes(6));
+        try {
+            invoxaLogUnmatchedWebhook($mysqli, 'stripe', 'checkout.session.completed', $reference);
+            $row = $mysqli->query("SELECT notes FROM invoxa_actions WHERE action_type = 'webhook_unmatched' AND notes LIKE '%" . $mysqli->real_escape_string($reference) . "%'")->fetch_assoc();
+            invoxaAssertTrue((bool) $row, 'expected a webhook_unmatched entry mentioning the reference');
+            invoxaAssertTrue(str_contains($row['notes'], 'Stripe'), 'provider name should be capitalized in the note');
+        } finally {
+            $mysqli->query("DELETE FROM invoxa_actions WHERE action_type = 'webhook_unmatched' AND notes LIKE '%" . $mysqli->real_escape_string($reference) . "%'");
+        }
+    });
 
     // ── External API ── the token lifecycle (create, authenticate, renew,
     // revoke), exercised via invoxaCreateApiToken() and the same token_hash
@@ -3814,7 +3949,6 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $mysqli->query("DELETE FROM invoxa_api_tokens WHERE id = " . (int) $created['id']);
         }
     });
-
     // ── Recurring Billing / Cron ── the double-billing guard's query, checked
     // directly rather than via run_recurring(), which would bill real clients.
     $run('Recurring Billing / Cron', 'Double-billing guard', 'detects an invoice already billed this month', 'The same "already billed this period" query run_recurring() uses for monthly clients correctly finds an invoice dated today, and correctly finds none for a client with no invoices at all.', function () use ($mysqli) {
@@ -4713,31 +4847,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $mysqli->query("UPDATE invoxa_invoices SET status = 'sent' WHERE id = $id");
             }
             echo json_encode(['success' => $emailSent, 'error' => $errorMsg]);
-            exit;
-        }
-        if ($_POST['action'] === 'bulk_mark_paid') {
-            $clientKey = $mysqli->real_escape_string($_POST['client_key'] ?? '');
-            if (!$clientKey) {
-                echo json_encode(['success' => false, 'error' => 'No client selected']);
-                exit;
-            }
-            $res = $mysqli->query("SELECT id, amount, paid_amount FROM invoxa_invoices WHERE client_key = '$clientKey' AND status IN ('sent', 'pending')");
-            $updated = 0;
-            // Credits the remaining balance (not the full amount) through the same
-            // recordInvoicePayment() every other payment path uses, so a partial
-            // payment already recorded isn't double-counted.
-            while ($row = $res->fetch_assoc()) {
-                $remaining = (float) $row['amount'] - (float) ($row['paid_amount'] ?? 0);
-                if ($remaining > 0) {
-                    recordInvoicePayment($mysqli, $settings, (int) $row['id'], $remaining, 'Bulk marked as paid', 'manual');
-                } else {
-                    // Nothing left to credit (paid_amount already >= amount but status
-                    // somehow wasn't flipped) — just fix the status directly.
-                    $mysqli->query("UPDATE invoxa_invoices SET status = 'paid', paid_at = NOW() WHERE id = " . (int) $row['id']);
-                }
-                $updated++;
-            }
-            echo json_encode(['success' => true, 'updated' => $updated]);
             exit;
         }
         if ($_POST['action'] === 'fix_paid_dates') {
@@ -7139,11 +7248,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             border-radius: var(--radius-lg);
             padding: 1.4rem 1.5rem;
             box-shadow: var(--shadow-sm);
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            transition: box-shadow 0.15s ease;
         }
 
         .stat-card:hover {
-            transform: translateY(-2px);
             box-shadow: var(--shadow-md);
         }
 
@@ -8257,7 +8365,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
         <div class="user-panel">
             <form method="POST"><input type="hidden" name="auth_action" value="logout"><button type="submit"
                     class="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button></form>
-            <div style="display:flex; align-items:center; justify-content:center; gap:0.6rem; margin-top:0.5rem; font-size:0.75rem; color:var(--text-secondary);">
+            <div style="display:flex; align-items:center; justify-content:center; gap:0.6rem; margin-top:1rem; font-size:0.75rem; color:var(--text-secondary);">
                 <span style="cursor:pointer;" title="View changelog" onclick="nav('docs', true); navDocs('changelog');">
                     <span class="brand-wordmark">Invoxa</span> v<?= htmlspecialchars(APP_VERSION) ?></span>
                 <a href="https://gitlab.com/weblabnz/invoxa" target="_blank" title="Source on GitLab"
@@ -9075,9 +9183,9 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     online — is its own ledger row rather than a single paid/unpaid flag, an invoice
                                     can be paid off across several installments over time with a full, honest
                                     history, while the invoice's own cached paid amount and status stay correct
-                                    automatically as each row is added. <strong>Bulk Mark Paid</strong>, for clearing
-                                    several invoices at once, lives under Data Management &gt; Bulk Actions rather
-                                    than the Invoices toolbar.</p>
+                                    automatically as each row is added. To clear several invoices at once, select
+                                    them with the checkbox column on the Invoices tab and use <strong>Mark
+                                        Paid</strong> in the bulk action bar that appears.</p>
                                 <h2>Stripe &amp; PayPal</h2>
                                 <p>Both are configured under Settings &gt; Payments, and both are off until you add
                                     credentials there: Stripe needs a <strong>Secret Key</strong> and a
@@ -9295,10 +9403,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     new one, and an optional Offsite Push panel can send new backups to a remote
                                     destination via rclone, with credentials kept out of the app itself and living on
                                     the cron container instead.</p>
-                                <h2>Bulk Actions</h2>
-                                <p>Bulk Mark Paid lives here rather than on the Invoices toolbar, alongside the
-                                    other administrative, multi-record operations — deliberately separated from the
-                                    single-invoice actions so a bulk action is never one accidental click away.</p>
                                 <h2>Demo Data</h2>
                                 <p>Seeds a handful of sample clients, invoices, and quotes spread across recent
                                     months, every one of them flagged with the client-level <strong>Is Test
@@ -10537,8 +10641,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         onclick="navBackup('backup')"><i class="fa-solid fa-database"></i> Backup &amp; Restore</button>
                     <button type="button" class="subnav-item" data-backup-target="offsite"
                         onclick="navBackup('offsite')"><i class="fa-solid fa-cloud-arrow-up"></i> Offsite Push</button>
-                    <button type="button" class="subnav-item" data-backup-target="bulk"
-                        onclick="navBackup('bulk')"><i class="fa-solid fa-check-double"></i> Bulk Actions</button>
                     <button type="button" class="subnav-item" data-backup-target="demo"
                         onclick="navBackup('demo')"><i class="fa-solid fa-wand-magic-sparkles"></i> Demo Data</button>
                     <button type="button" class="subnav-item" data-backup-target="audit"
@@ -10713,20 +10815,20 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     <?php endforeach; ?>
                                 </div>
                                 <div style="overflow-x:auto;">
-                                    <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                                    <table style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:0.85rem;">
                                         <thead>
                                             <tr style="text-align:left; color:var(--text-secondary); border-bottom:1px solid var(--border);">
-                                                <th style="padding:0.4rem 0.5rem; width:1%;"></th>
-                                                <th style="padding:0.4rem 0.5rem;">Category</th>
-                                                <th style="padding:0.4rem 0.5rem;">Case <span style="font-weight:400; text-transform:none;">(hover for detail)</span></th>
-                                                <th style="padding:0.4rem 0.5rem; text-align:right;">Status</th>
+                                                <th style="padding:0.55rem 0.5rem; width:48px;"></th>
+                                                <th style="padding:0.55rem 0.75rem; width:200px;">Category</th>
+                                                <th style="padding:0.55rem 0.75rem;">Case <span style="font-weight:400; text-transform:none;">(hover for detail)</span></th>
+                                                <th style="padding:0.55rem 0.75rem; text-align:right; width:100px;">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody id="testSuiteList">
                                             <?php $__lastGroup = null; $__firstGroup = true; foreach ($__testDefs as $__testName => $__test): ?>
                                                 <?php if ($__test['group'] !== $__lastGroup): $__lastGroup = $__test['group']; ?>
                                                     <tr class="test-suite-group-row">
-                                                        <td colspan="4" style="padding:0.6rem 0.5rem 0.35rem; <?= $__firstGroup ? '' : 'border-top:2px solid var(--border);' ?>">
+                                                        <td colspan="4" style="padding:0.75rem 0.75rem 0.5rem; <?= $__firstGroup ? '' : 'border-top:2px solid var(--border);' ?>">
                                                             <label style="cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-weight:600; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--accent);">
                                                                 <input type="checkbox" class="test-suite-group-checkbox" data-group="<?= htmlspecialchars($__lastGroup) ?>" checked onclick="toggleTestGroup(this)">
                                                                 <?= htmlspecialchars($__lastGroup) ?>
@@ -10736,10 +10838,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                                     <?php $__firstGroup = false; ?>
                                                 <?php endif; ?>
                                                 <tr class="test-suite-row" data-test-name="<?= htmlspecialchars($__testName) ?>" data-group="<?= htmlspecialchars($__test['group']) ?>" style="border-bottom:1px solid var(--border);">
-                                                    <td style="padding:0.4rem 0.5rem 0.4rem 1.75rem;"><input type="checkbox" class="test-suite-checkbox" checked></td>
-                                                    <td style="padding:0.4rem 0.5rem; color:var(--text-secondary); white-space:nowrap;"><?= htmlspecialchars($__test['category']) ?></td>
-                                                    <td style="padding:0.4rem 0.5rem; cursor:help;" title="<?= htmlspecialchars($__test['description']) ?>"><?= htmlspecialchars($__test['label']) ?></td>
-                                                    <td class="test-suite-status" style="padding:0.4rem 0.5rem; text-align:right; color:var(--text-secondary); white-space:nowrap;">Not run</td>
+                                                    <td style="padding:0.55rem 0.5rem 0.55rem 1.25rem;"><input type="checkbox" class="test-suite-checkbox" checked></td>
+                                                    <td style="padding:0.55rem 0.75rem; color:var(--text-secondary); overflow-wrap:break-word;"><?= htmlspecialchars($__test['category']) ?></td>
+                                                    <td style="padding:0.55rem 0.75rem; cursor:help;" title="<?= htmlspecialchars($__test['description']) ?>"><?= htmlspecialchars($__test['label']) ?></td>
+                                                    <td class="test-suite-status" style="padding:0.55rem 0.75rem; text-align:right; color:var(--text-secondary); white-space:nowrap;">Not run</td>
                                                 </tr>
                                             <?php endforeach; ?>
                                         </tbody>
@@ -10772,36 +10874,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 </div>
                                 <button class="btn primary" id="saveAuditRetentionBtn" onclick="saveAuditRetention()"><i
                                         class="fa-solid fa-save"></i> Save</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Bulk Actions -->
-                    <div class="subnav-pane" id="backup-pane-bulk">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-check-double"
-                                        style="color:var(--accent); margin-right:0.5rem;"></i>Bulk Mark Paid</h3>
-                            </div>
-                            <div class="card-body">
-                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                                    Marks every unpaid invoice for one client as paid in one go, each using its own
-                                    invoice amount. Useful for catching up a client's history in bulk rather than
-                                    marking invoices paid one at a time. <strong>This cannot be undone.</strong>
-                                </p>
-                                <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-                                    <select id="bulkClientSelect" class="form-control" style="max-width:280px;">
-                                        <option value="">— select client —</option>
-                                        <?php foreach ($clients as $c): ?>
-                                            <option value="<?= htmlspecialchars($c['client_key']) ?>">
-                                                <?= htmlspecialchars($c['client_name']) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <button id="bulkMarkPaidBtn" class="btn success" onclick="bulkMarkPaid()">
-                                        <i class="fa-solid fa-check-double"></i> Mark All Paid
-                                    </button>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -12598,18 +12670,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-calendar-xmark"></i> Reset paid_at to End-of-Month';
                 if (json.success) { showToast('Fixed ' + json.fixed + ' invoices. Reload to see updated Payment Velocity.'); }
                 else { showToast('Error: ' + (json.error || 'Unknown'), true); }
-            }
-            async function bulkMarkPaid() {
-                const clientKey = document.getElementById('bulkClientSelect').value;
-                if (!clientKey) return showToast('Please select a client first', true);
-                const clientName = document.getElementById('bulkClientSelect').selectedOptions[0].textContent;
-                if (!confirm(`Mark ALL unpaid invoices for "${clientName}" as paid using each invoice's own amount?\n\nThis cannot be undone.`)) return;
-                const btn = document.getElementById('bulkMarkPaidBtn'); btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
-                const data = new URLSearchParams({ action: 'bulk_mark_paid', client_key: clientKey });
-                const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
-                if (json.success) { showToast(`✓ ${json.updated} invoice(s) marked as paid!`); setTimeout(() => window.location.reload(), 1500); }
-                else { showToast(json.error || 'Failed', true); btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check-double"></i> Mark All Unpaid → Paid'; }
             }
             async function addNote() { const btn = document.getElementById('addNoteBtn'); btn.disabled = true; const data = new URLSearchParams({ action: 'add_note', id: document.getElementById('noteInvoiceId').value, note: document.getElementById('noteText').value }); const res = await fetch('', { method: 'POST', body: data }); const json = await res.json(); if (json.success) { showToast('Note added!'); setTimeout(() => window.location.reload(), 1000); } else { showToast(json.error, true); btn.disabled = false; } }
             async function deleteInvoice(id) {
