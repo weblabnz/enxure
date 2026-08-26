@@ -2,6 +2,20 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.9.0] - 2026-08-27
+
+### Added
+- Bulk actions on Clients, Expenses, and Quotes: a checkbox column plus a bulk action bar, matching what Invoices already had — Clients (Active/Inactive/Test/Unmark Test/Delete), Expenses (Export CSV/Delete), Quotes (Convert to Invoice/Export CSV/Delete).
+- Quotes now has a whole-table CSV export (an Export group in the toolbar), alongside the existing per-row bulk export.
+
+### Changed
+- Invoices/Clients/Expenses/Quotes toolbars now share one consistent layout: page controls live in their own row below the heading instead of some being inline with the title, and each table's bulk-action bar always appears as its own row (sized to its buttons, not stretched full-width) instead of varying by page.
+- Invoice emails attach the invoice as HTML again instead of a rendered PDF.
+- Removed the "Welcome back" dashboard banner — it didn't add anything the page title didn't already say.
+
+### Fixed
+- The Clients table's Client Name cell had `display:flex` set directly on the `<td>`, which broke its table-cell box model and threw off row-height/border alignment against sibling columns (most visible once the new checkbox column was added). Moved the flex layout to an inner wrapper `<div>` instead.
+
 ## [2.8.1] - 2026-08-25
 
 ### Changed

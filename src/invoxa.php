@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.8.1');
+define('APP_VERSION', '2.9.0');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -1554,11 +1554,7 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
         if (file_exists($logoPath)) {
             $mail->addEmbeddedImage($logoPath, 'logo_cid');
         }
-        // PDF attachment is best-effort — a rendering failure shouldn't block the email.
-        try {
-            $mail->addStringAttachment(generateInvoicePdf($htmlContent), "Invoice-{$invNum}.pdf", 'base64', 'application/pdf');
-        } catch (Throwable $e) {
-        }
+        $mail->addStringAttachment($htmlContent, "Invoice-{$invNum}.html", 'base64', 'text/html');
         $mail->send();
         $emailSent = true;
     } catch (Exception $e) {
@@ -2157,9 +2153,12 @@ function renderClientRows(array $clients): string
         ?>
         <tr style="cursor:pointer;"
             onclick="openCrm(<?= htmlspecialchars(json_encode(['id' => $c['id'], 'client_name' => $c['client_name'], 'crm_notes' => $c['crm_notes'] ?? ''])) ?>)">
-            <td style="display:flex; align-items:center; gap:0.6rem;">
-                <span class="client-avatar" style="background:<?= clientAvatarColor((int) $c['id']) ?>;"><?= htmlspecialchars(clientInitials($c['client_name'])) ?></span>
-                <strong><?= htmlspecialchars($c['client_name']) ?></strong>
+            <td onclick="event.stopPropagation()"><input type="checkbox" class="client-select-cb" value="<?= $c['id'] ?>" onchange="updateClientBulkBar()"></td>
+            <td>
+                <div style="display:flex; align-items:center; gap:0.6rem;">
+                    <span class="client-avatar" style="background:<?= clientAvatarColor((int) $c['id']) ?>;"><?= htmlspecialchars(clientInitials($c['client_name'])) ?></span>
+                    <strong><?= htmlspecialchars($c['client_name']) ?></strong>
+                </div>
             </td>
             <td><?= htmlspecialchars($c['email']) ?></td>
             <td>$<?= number_format($c['monthly_rate'], 2) ?>
@@ -2206,15 +2205,16 @@ function renderQuoteRows($qRes): string
 {
     ob_start();
     while ($q = $qRes->fetch_assoc()):
+        $__quoteExpired = !empty($q['quote_expires_at']) && $q['quote_expires_at'] < date('Y-m-d');
         ?>
         <tr>
+            <td><input type="checkbox" class="quote-select-cb" value="<?= $q['id'] ?>" data-expired="<?= $__quoteExpired ? '1' : '0' ?>" onchange="updateQuoteBulkBar()"></td>
             <td><strong><?= htmlspecialchars($q['invoice_number']) ?></strong></td>
             <td><?= htmlspecialchars($q['client_name']) ?></td>
             <td><?= htmlspecialchars(substr($q['invoice_date'], 0, 10)) ?></td>
             <td>$<?= number_format($q['amount'], 2) ?></td>
             <td><span class="badge"
                     style="background:rgba(139,92,246,0.15); color:#a78bfa;">Quote</span></td>
-            <?php $__quoteExpired = !empty($q['quote_expires_at']) && $q['quote_expires_at'] < date('Y-m-d'); ?>
             <td>
                 <?php if (empty($q['quote_expires_at'])): ?>
                     <span style="color:var(--text-secondary);">—</span>
@@ -2248,6 +2248,7 @@ function renderExpenseRows(array $expenses): string
     foreach ($expenses as $e):
         ?>
         <tr>
+            <td><input type="checkbox" class="expense-select-cb" value="<?= $e['id'] ?>" onchange="updateExpenseBulkBar()"></td>
             <td><?= htmlspecialchars(substr($e['expense_date'], 0, 10)) ?></td>
             <td><?= htmlspecialchars($e['vendor']) ?><?php if (!empty($e['recurring_expense_id'])): ?>
                     <i class="fa-solid fa-rotate" style="color:var(--text-secondary); font-size:0.75rem; margin-left:0.35rem;" title="Auto-logged from a recurring expense"></i>
@@ -4055,6 +4056,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true]);
             exit;
         }
+        if ($_POST['action'] === 'update_client_flags') {
+            $id = (int) ($_POST['id'] ?? 0);
+            $field = $_POST['field'] ?? '';
+            if (!in_array($field, ['is_active', 'is_test'], true)) {
+                echo json_encode(['success' => false, 'error' => 'Invalid field']);
+                exit;
+            }
+            $value = (int) ($_POST['value'] ?? 0);
+            $stmt = $mysqli->prepare("UPDATE invoxa_clients SET $field = ? WHERE id = ?");
+            $stmt->bind_param("ii", $value, $id);
+            $stmt->execute();
+            echo json_encode(['success' => true]);
+            exit;
+        }
         if ($_POST['action'] === 'generate_portal_token') {
             // Regenerating invalidates the old link (one-token-per-client column,
             // just overwritten); the old URL then shows "Link not found".
@@ -4681,10 +4696,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if (file_exists($logoPath)) {
                     $mail->addEmbeddedImage($logoPath, 'logo_cid');
                 }
-                try {
-                    $mail->addStringAttachment(generateInvoicePdf($inv['html_content']), "Invoice-{$inv['invoice_number']}.pdf", 'base64', 'application/pdf');
-                } catch (Throwable $e) {
-                }
+                $mail->addStringAttachment($inv['html_content'], "Invoice-{$inv['invoice_number']}.html", 'base64', 'text/html');
                 $mail->send();
                 $emailSent = true;
             } catch (Exception $e) {
@@ -6275,6 +6287,17 @@ if (isset($_GET['export'])) {
         fclose($out);
         exit;
     }
+    if ($_GET['export'] === 'quotes') {
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="quotes_export_' . date('Ymd') . '.csv"');
+        $out = fopen('php://output', 'w');
+        fputcsv($out, ['Quote Number', 'Client Name', 'Email', 'Quote Date', 'Amount', 'Expires'], ',', '"', "\\");
+        $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, amount, quote_expires_at FROM invoxa_invoices WHERE is_quote = 1 $testFilter ORDER BY invoice_date DESC");
+        while ($r = $res->fetch_assoc())
+            fputcsv($out, $r, ',', '"', "\\");
+        fclose($out);
+        exit;
+    }
     if ($_GET['export'] === 'accounting_journal') {
         $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1));
         $journal = buildAccountingJournal($mysqli, $taxYearStart->format('Y-m-d'), $testFilter);
@@ -7089,155 +7112,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             align-items: center;
             justify-content: space-between;
             flex-shrink: 0;
-        }
-
-        .dashboard-hero {
-            background: linear-gradient(120deg, var(--accent), var(--accent-hover), var(--accent));
-            background-size: 200% 200%;
-            border-radius: var(--radius-lg);
-            padding: 1.75rem 2rem;
-            margin-bottom: 1.5rem;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1.5rem;
-            position: relative;
-            overflow: hidden;
-            box-shadow: var(--shadow-md);
-            animation: heroIn 0.5s ease both, heroGradientShift 8s ease-in-out infinite;
-        }
-
-        .dashboard-hero::before,
-        .dashboard-hero::after {
-            content: "";
-            position: absolute;
-            border-radius: 50%;
-            pointer-events: none;
-        }
-
-        .dashboard-hero::before {
-            top: -70px;
-            right: -70px;
-            width: 240px;
-            height: 240px;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.28), transparent 70%);
-            animation: heroDriftA 16s ease-in-out infinite alternate;
-        }
-
-        .dashboard-hero::after {
-            bottom: -70px;
-            left: -50px;
-            width: 200px;
-            height: 200px;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 70%);
-            animation: heroDriftB 20s ease-in-out infinite alternate;
-        }
-
-        .dashboard-hero-text h1 {
-            font-size: 1.4rem;
-            font-weight: 700;
-            letter-spacing: -0.01em;
-            margin-bottom: 0.35rem;
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-        }
-
-        .dashboard-hero-text h1 img {
-            width: 28px;
-            height: 28px;
-            border-radius: 8px;
-            animation: heroLogoFloat 2.6s ease-in-out infinite;
-        }
-
-        .dashboard-hero-text p {
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.85);
-            margin: 0;
-        }
-
-        .dashboard-hero-date {
-            font-size: 0.85rem;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.15);
-            padding: 0.5rem 0.9rem;
-            border-radius: var(--radius-sm);
-            white-space: nowrap;
-            position: relative;
-        }
-
-        @keyframes heroIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes heroGradientShift {
-
-            0%,
-            100% {
-                background-position: 0% 50%;
-            }
-
-            50% {
-                background-position: 100% 50%;
-            }
-        }
-
-        @keyframes heroDriftA {
-            0% {
-                transform: translate(0, 0);
-            }
-
-            100% {
-                transform: translate(-20px, 15px);
-            }
-        }
-
-        @keyframes heroDriftB {
-            0% {
-                transform: translate(0, 0);
-            }
-
-            100% {
-                transform: translate(15px, -12px);
-            }
-        }
-
-        @keyframes heroLogoFloat {
-
-            0%,
-            100% {
-                transform: translateY(0);
-            }
-
-            50% {
-                transform: translateY(-4px);
-            }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-
-            .dashboard-hero,
-            .dashboard-hero::before,
-            .dashboard-hero::after,
-            .dashboard-hero-text h1 img {
-                animation: none !important;
-            }
-        }
-
-        @media (max-width: 640px) {
-            .dashboard-hero {
-                flex-direction: column;
-                align-items: flex-start;
-            }
         }
 
         .alert-strip {
@@ -8396,13 +8270,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
 
         <!-- DASHBOARD -->
         <div id="sec-dashboard" class="section">
-            <div class="dashboard-hero">
-                <div class="dashboard-hero-text">
-                    <h1><img src="assets/img/invoxa-mark.svg" alt="">Welcome back, <?= htmlspecialchars($_SESSION['invoxa_username'] ?? 'there') ?></h1>
-                    <p>Here's what's happening today.</p>
-                </div>
-                <div class="dashboard-hero-date"><?= date('l, j F Y') ?></div>
-            </div>
             <h2 class="page-title">Dashboard
                 <div style="color:var(--text-secondary); font-size:0.9rem; font-weight:400;">
                     <i class="fa-solid fa-clock-rotate-left" style="margin-right:0.25rem;"></i>Next Auto-Run: <span
@@ -8540,15 +8407,18 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         onclick="deleteFilterView('invoices')"><i class="fa-solid fa-trash"></i></button>
                 </div>
 
-                <!-- Group 4: Bulk Actions — hidden until at least one row is checked -->
-                <div id="invoiceBulkBar" style="display:none; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 0.5rem 0.9rem;">
-                    <span id="invoiceBulkCount" style="font-size: 0.85rem; font-weight: 600; color: var(--accent); white-space: nowrap;"></span>
-                    <button type="button" class="btn small success" onclick="bulkMarkPaidInvoices()"><i class="fa-solid fa-check"></i> Mark Paid</button>
-                    <button type="button" class="btn small" onclick="bulkResendInvoiceEmails()"><i class="fa-solid fa-paper-plane"></i> Resend</button>
-                    <button type="button" class="btn small" onclick="bulkExportInvoicesCsv()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
-                    <button type="button" class="btn small danger" onclick="bulkDeleteInvoices()"><i class="fa-solid fa-trash"></i> Delete</button>
-                </div>
+            </div>
 
+            <!-- Bulk Actions — hidden until at least one row is checked; a sibling
+                 of the toolbar above (not one of its flex items) so it always
+                 falls on its own row, sized to its content rather than the full
+                 row width. -->
+            <div id="invoiceBulkBar" style="display:none; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 0.5rem 0.9rem; width: fit-content; margin-bottom: 1.5rem;">
+                <span id="invoiceBulkCount" style="font-size: 0.85rem; font-weight: 600; color: var(--accent); white-space: nowrap;"></span>
+                <button type="button" class="btn small success" onclick="bulkMarkPaidInvoices()"><i class="fa-solid fa-check"></i> Mark Paid</button>
+                <button type="button" class="btn small" onclick="bulkResendInvoiceEmails()"><i class="fa-solid fa-paper-plane"></i> Resend</button>
+                <button type="button" class="btn small" onclick="bulkExportInvoicesCsv()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+                <button type="button" class="btn small danger" onclick="bulkDeleteInvoices()"><i class="fa-solid fa-trash"></i> Delete</button>
             </div>
 
             <div class="section-scroll">
@@ -8688,37 +8558,67 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
 
         <!-- CLIENTS -->
         <div id="sec-clients" class="section">
-            <h2 class="page-title">Clients
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                    <div
-                        style="display: flex; flex-direction: row; align-items: center; gap: 0.5rem; background: var(--surface-hover); border-radius: 8px; padding: 0.4rem 0.7rem;">
-                        <i class="fa-solid fa-bookmark" style="font-size:0.8rem; color:var(--text-secondary);"></i>
-                        <select id="clientsViewSelect" onchange="applyFilterView('clients', this.value)"
-                            style="padding: 0.35rem 0.5rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.8rem; min-width: 130px;">
-                            <option value="">Saved Views…</option>
-                        </select>
-                        <button type="button" class="btn small" title="Save the current search as a view"
-                            onclick="saveFilterView('clients')"><i class="fa-solid fa-plus"></i></button>
-                        <button type="button" class="btn small" title="Delete the selected view"
-                            onclick="deleteFilterView('clients')"><i class="fa-solid fa-trash"></i></button>
-                    </div>
-                    <button class="btn" style="background:var(--surface-hover);"
-                        onclick="window.location.href='?export=clients'"><i class="fa-solid fa-file-csv"></i> Export
-                        CSV</button>
-                    <label class="btn" style="background:var(--surface-hover); cursor:pointer; margin:0;"
+            <h2 class="page-title">Clients</h2>
+            <!-- Client toolbar: same group layout as the Invoices toolbar (a
+                 sibling of .section-scroll, not a child inside it — stays fixed
+                 while the table below scrolls). -->
+            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: stretch; margin-bottom: 1.5rem;">
+
+                <!-- Group 1: Export / Import -->
+                <div
+                    style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
+                    <span
+                        style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; white-space: nowrap; padding-right: 0.75rem; border-right: 1px solid var(--border);"><i
+                            class="fa-solid fa-file-export" style="margin-right:0.3rem;"></i>Export</span>
+                    <button class="btn" style="background: var(--surface-hover); white-space: nowrap;"
+                        onclick="window.location.href='?export=clients'"><i class="fa-solid fa-file-csv"></i> CSV</button>
+                    <label class="btn" style="background: var(--surface-hover); cursor:pointer; margin:0; white-space: nowrap;"
                         title="CSV with a header row: Client Name, Email, Rate, Billing Frequency, Account Name, Account Number, Payment Terms Days, Phone, Address (Phone/Address are optional)">
-                        <i class="fa-solid fa-file-import"></i> Import CSV
+                        <i class="fa-solid fa-file-import"></i> Import
                         <input type="file" id="importClientsFile" accept=".csv" style="display:none;"
                             onchange="importClientsCsv(this.files[0])"></label>
-                    <button class="btn primary" onclick="openClientModal()"><i class="fa-solid fa-plus"></i> Add
-                        Client</button>
                 </div>
-            </h2>
+
+                <!-- Group 2: Saved Views -->
+                <div
+                    style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
+                    <span
+                        style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; white-space: nowrap; padding-right: 0.75rem; border-right: 1px solid var(--border);"><i
+                            class="fa-solid fa-bookmark" style="margin-right:0.3rem;"></i>Views</span>
+                    <select id="clientsViewSelect" onchange="applyFilterView('clients', this.value)"
+                        style="padding: 0.45rem 0.65rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.85rem; min-width: 150px;">
+                        <option value="">Saved Views…</option>
+                    </select>
+                    <button type="button" class="btn small" title="Save the current search as a view"
+                        onclick="saveFilterView('clients')"><i class="fa-solid fa-plus"></i></button>
+                    <button type="button" class="btn small" title="Delete the selected view"
+                        onclick="deleteFilterView('clients')"><i class="fa-solid fa-trash"></i></button>
+                </div>
+
+                <button class="btn primary" onclick="openClientModal()"><i class="fa-solid fa-plus"></i> Add
+                    Client</button>
+
+            </div>
+
+            <!-- Bulk Actions — hidden until at least one row is checked; a sibling
+                 of the toolbar above (not one of its flex items) so it always
+                 falls on its own row, sized to its content rather than the full
+                 row width. -->
+            <div id="clientBulkBar" style="display:none; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 0.5rem 0.9rem; width: fit-content; margin-bottom: 1.5rem;">
+                <span id="clientBulkCount" style="font-size: 0.85rem; font-weight: 600; color: var(--accent); white-space: nowrap;"></span>
+                <button type="button" class="btn small success" onclick="bulkSetClientFlag('is_active', 1, 'Marked active')"><i class="fa-solid fa-circle-check"></i> Active</button>
+                <button type="button" class="btn small" onclick="bulkSetClientFlag('is_active', 0, 'Marked inactive')"><i class="fa-solid fa-circle-xmark"></i> Inactive</button>
+                <button type="button" class="btn small" onclick="bulkSetClientFlag('is_test', 1, 'Marked as test')"><i class="fa-solid fa-flask"></i> Test</button>
+                <button type="button" class="btn small" onclick="bulkSetClientFlag('is_test', 0, 'Unmarked as test')"><i class="fa-solid fa-flask-vial"></i> Unmark Test</button>
+                <button type="button" class="btn small danger" onclick="bulkDeleteClients()"><i class="fa-solid fa-trash"></i> Delete</button>
+            </div>
+
             <div class="section-scroll">
             <div class="card">
                 <table id="clientsTable">
                     <thead>
                         <tr>
+                            <th data-sortable="false" style="width:32px;"><input type="checkbox" id="clientsSelectAll" onchange="toggleSelectAllClients(this)"></th>
                             <th>Client Name</th>
                             <th>Email</th>
                             <th>Rate</th>
@@ -8740,25 +8640,46 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
 
         <!-- EXPENSES -->
         <div id="sec-expenses" class="section">
-            <h2 class="page-title">Expenses
-                <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn" style="background:var(--surface-hover);"
-                        onclick="window.location.href='?export=expenses'"><i class="fa-solid fa-file-csv"></i> Export
-                        CSV</button>
-                    <button class="btn primary" onclick="openExpenseModal()"><i class="fa-solid fa-plus"></i> Add
-                        Expense</button>
-                </div>
-            </h2>
-            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem;">
+            <h2 class="page-title">Expenses</h2>
+            <!-- Expense toolbar: same group layout as the Invoices/Clients toolbar. -->
+            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: stretch; margin-bottom: 1.5rem;">
+
+                <!-- Group 1: Export -->
                 <div
-                    style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 1rem;">
-                    <span style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-secondary); font-weight:600;">Total
-                        Expenses</span>
-                    <div style="font-size:1.1rem; font-weight:700; color:var(--danger);">
-                        <?= htmlspecialchars($settings['currency'] ?? 'USD') ?> $<?= number_format($total_expenses, 2) ?>
-                    </div>
+                    style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
+                    <span
+                        style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; white-space: nowrap; padding-right: 0.75rem; border-right: 1px solid var(--border);"><i
+                            class="fa-solid fa-file-export" style="margin-right:0.3rem;"></i>Export</span>
+                    <button class="btn" style="background: var(--surface-hover); white-space: nowrap;"
+                        onclick="window.location.href='?export=expenses'"><i class="fa-solid fa-file-csv"></i> CSV</button>
                 </div>
+
+                <!-- Total Expenses stat -->
+                <div
+                    style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
+                    <span
+                        style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; white-space: nowrap; padding-right: 0.75rem; border-right: 1px solid var(--border);">Total
+                        Expenses</span>
+                    <span style="font-size:1.1rem; font-weight:700; color:var(--danger); white-space: nowrap;">
+                        <?= htmlspecialchars($settings['currency'] ?? 'USD') ?> $<?= number_format($total_expenses, 2) ?>
+                    </span>
+                </div>
+
+                <button class="btn primary" onclick="openExpenseModal()"><i class="fa-solid fa-plus"></i> Add
+                    Expense</button>
+
             </div>
+
+            <!-- Bulk Actions — hidden until at least one row is checked; a sibling
+                 of the toolbar above (not one of its flex items) so it always
+                 falls on its own row, sized to its content rather than the full
+                 row width. -->
+            <div id="expenseBulkBar" style="display:none; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 0.5rem 0.9rem; width: fit-content; margin-bottom: 1.5rem;">
+                <span id="expenseBulkCount" style="font-size: 0.85rem; font-weight: 600; color: var(--accent); white-space: nowrap;"></span>
+                <button type="button" class="btn small" onclick="bulkExportExpensesCsv()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+                <button type="button" class="btn small danger" onclick="bulkDeleteExpenses()"><i class="fa-solid fa-trash"></i> Delete</button>
+            </div>
+
             <div class="section-scroll">
             <div class="card">
                 <div class="card-header">
@@ -8796,6 +8717,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 <table id="expensesTable">
                     <thead>
                         <tr>
+                            <th data-sortable="false" style="width:32px;"><input type="checkbox" id="expensesSelectAll" onchange="toggleSelectAllExpenses(this)"></th>
                             <th>Date</th>
                             <th>Vendor</th>
                             <th>Category</th>
@@ -8818,18 +8740,45 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             <!-- The icon+label are wrapped in one span so they're a single flex
                  item — h2.page-title's justify-content: space-between would
                  otherwise treat the icon and the text as two separate items and
-                 push them apart from each other, not just away from the button. -->
+                 push them apart from each other. -->
             <h2 class="page-title"><span><i class="fa-solid fa-file-pen"
-                        style="color:var(--accent); margin-right:0.5rem;"></i>Quotes &amp; Estimates</span>
+                        style="color:var(--accent); margin-right:0.5rem;"></i>Quotes &amp; Estimates</span></h2>
+            <!-- Quote toolbar: same group layout as the Invoices/Clients/Expenses toolbar. -->
+            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: stretch; margin-bottom: 1.5rem;">
+
+                <!-- Group 1: Export -->
+                <div
+                    style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
+                    <span
+                        style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; white-space: nowrap; padding-right: 0.75rem; border-right: 1px solid var(--border);"><i
+                            class="fa-solid fa-file-export" style="margin-right:0.3rem;"></i>Export</span>
+                    <button class="btn" style="background: var(--surface-hover); white-space: nowrap;"
+                        onclick="window.location.href='?export=quotes'"><i class="fa-solid fa-file-csv"></i> CSV</button>
+                </div>
+
                 <button class="btn primary" onclick="openQuoteModal()"><i class="fa-solid fa-plus"></i> New
                     Quote</button>
-            </h2>
+
+            </div>
+
+            <!-- Bulk Actions — hidden until at least one row is checked; a sibling
+                 of the toolbar above (not one of its flex items) so it always
+                 falls on its own row, sized to its content rather than the full
+                 row width. -->
+            <div id="quoteBulkBar" style="display:none; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 0.5rem 0.9rem; width: fit-content; margin-bottom: 1.5rem;">
+                <span id="quoteBulkCount" style="font-size: 0.85rem; font-weight: 600; color: var(--accent); white-space: nowrap;"></span>
+                <button type="button" class="btn small success" onclick="bulkConvertQuotes()"><i class="fa-solid fa-file-invoice"></i> Convert to Invoice</button>
+                <button type="button" class="btn small" onclick="bulkExportQuotesCsv()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+                <button type="button" class="btn small danger" onclick="bulkDeleteQuotes()"><i class="fa-solid fa-trash"></i> Delete</button>
+            </div>
+
             <div class="section-scroll">
             <div class="card">
                 <div class="card-body" style="padding:0;">
                     <table id="quotesTable">
                         <thead>
                             <tr>
+                                <th data-sortable="false" style="width:32px;"><input type="checkbox" id="quotesSelectAll" onchange="toggleSelectAllQuotes(this)"></th>
                                 <th>Quote #</th>
                                 <th>Client</th>
                                 <th>Date</th>
@@ -12728,6 +12677,144 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url; a.download = 'invoices_selected.csv'; a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            // ── Client bulk actions ───────────────────────────────────────
+            function toggleSelectAllClients(masterCb) {
+                document.querySelectorAll('.client-select-cb').forEach(cb => { cb.checked = masterCb.checked; });
+                updateClientBulkBar();
+            }
+            function getSelectedClientCbs() {
+                return Array.from(document.querySelectorAll('.client-select-cb:checked'));
+            }
+            function updateClientBulkBar() {
+                const count = getSelectedClientCbs().length;
+                const bar = document.getElementById('clientBulkBar');
+                bar.style.display = count > 0 ? 'flex' : 'none';
+                document.getElementById('clientBulkCount').textContent = count + ' selected';
+                const allCbs = document.querySelectorAll('.client-select-cb');
+                document.getElementById('clientsSelectAll').checked = count > 0 && count === allCbs.length;
+            }
+            async function bulkSetClientFlag(field, value, label) {
+                const cbs = getSelectedClientCbs();
+                if (!cbs.length) return;
+                if (!confirm(`${label}: ${cbs.length} client(s)?`)) return;
+                for (const cb of cbs) {
+                    await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'update_client_flags', id: cb.value, field: field, value: value }) });
+                }
+                showToast(`${label} for ${cbs.length} client(s)!`);
+                setTimeout(() => window.location.reload(), 1000);
+            }
+            async function bulkDeleteClients() {
+                const cbs = getSelectedClientCbs();
+                if (!cbs.length) return;
+                if (!confirm(`Delete ${cbs.length} client(s)? This cannot be undone.`)) return;
+                for (const cb of cbs) {
+                    await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'delete_client', id: cb.value }) });
+                }
+                showToast(`Deleted ${cbs.length} client(s)!`);
+                setTimeout(() => window.location.reload(), 1000);
+            }
+
+            // ── Expense bulk actions ──────────────────────────────────────
+            function toggleSelectAllExpenses(masterCb) {
+                document.querySelectorAll('.expense-select-cb').forEach(cb => { cb.checked = masterCb.checked; });
+                updateExpenseBulkBar();
+            }
+            function getSelectedExpenseCbs() {
+                return Array.from(document.querySelectorAll('.expense-select-cb:checked'));
+            }
+            function updateExpenseBulkBar() {
+                const count = getSelectedExpenseCbs().length;
+                const bar = document.getElementById('expenseBulkBar');
+                bar.style.display = count > 0 ? 'flex' : 'none';
+                document.getElementById('expenseBulkCount').textContent = count + ' selected';
+                const allCbs = document.querySelectorAll('.expense-select-cb');
+                document.getElementById('expensesSelectAll').checked = count > 0 && count === allCbs.length;
+            }
+            async function bulkDeleteExpenses() {
+                const cbs = getSelectedExpenseCbs();
+                if (!cbs.length) return;
+                if (!confirm(`Delete ${cbs.length} expense(s)? This cannot be undone.`)) return;
+                for (const cb of cbs) {
+                    await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'delete_expense', id: cb.value }) });
+                }
+                showToast(`Deleted ${cbs.length} expense(s)!`);
+                setTimeout(() => window.location.reload(), 1000);
+            }
+            function bulkExportExpensesCsv() {
+                const cbs = getSelectedExpenseCbs();
+                if (!cbs.length) return;
+                const rows = [['Date', 'Vendor', 'Category', 'Amount', 'Description']];
+                cbs.forEach(cb => {
+                    const cells = cb.closest('tr').querySelectorAll('td');
+                    rows.push([1, 2, 3, 4, 5].map(i => (cells[i].innerText || '').trim()));
+                });
+                const csv = rows.map(r => r.map(v => '"' + v.replace(/"/g, '""') + '"').join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'expenses_selected.csv'; a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            // ── Quote bulk actions ────────────────────────────────────────
+            function toggleSelectAllQuotes(masterCb) {
+                document.querySelectorAll('.quote-select-cb').forEach(cb => { cb.checked = masterCb.checked; });
+                updateQuoteBulkBar();
+            }
+            function getSelectedQuoteCbs() {
+                return Array.from(document.querySelectorAll('.quote-select-cb:checked'));
+            }
+            function updateQuoteBulkBar() {
+                const count = getSelectedQuoteCbs().length;
+                const bar = document.getElementById('quoteBulkBar');
+                bar.style.display = count > 0 ? 'flex' : 'none';
+                document.getElementById('quoteBulkCount').textContent = count + ' selected';
+                const allCbs = document.querySelectorAll('.quote-select-cb');
+                document.getElementById('quotesSelectAll').checked = count > 0 && count === allCbs.length;
+            }
+            async function bulkConvertQuotes() {
+                const cbs = getSelectedQuoteCbs();
+                if (!cbs.length) return;
+                const expiredCount = cbs.filter(cb => cb.dataset.expired === '1').length;
+                const warning = expiredCount
+                    ? `Convert ${cbs.length} quote(s) to invoices? ${expiredCount} of them have expired. This cannot be undone.`
+                    : `Convert ${cbs.length} quote(s) to invoices? This cannot be undone.`;
+                if (!confirm(warning)) return;
+                let failed = 0;
+                for (const cb of cbs) {
+                    const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'convert_quote', id: cb.value }) });
+                    const json = await res.json();
+                    if (!json.success) failed++;
+                }
+                showToast(failed ? `Converted ${cbs.length - failed} quote(s), ${failed} failed` : `Converted ${cbs.length} quote(s)!`, failed > 0);
+                setTimeout(() => window.location.reload(), 1000);
+            }
+            async function bulkDeleteQuotes() {
+                const cbs = getSelectedQuoteCbs();
+                if (!cbs.length) return;
+                if (!confirm(`Delete ${cbs.length} quote(s)? This cannot be undone.`)) return;
+                for (const cb of cbs) {
+                    await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'delete_invoice', id: cb.value }) });
+                }
+                showToast(`Deleted ${cbs.length} quote(s)!`);
+                setTimeout(() => window.location.reload(), 1000);
+            }
+            function bulkExportQuotesCsv() {
+                const cbs = getSelectedQuoteCbs();
+                if (!cbs.length) return;
+                const rows = [['Quote #', 'Client', 'Date', 'Amount', 'Status', 'Expires']];
+                cbs.forEach(cb => {
+                    const cells = cb.closest('tr').querySelectorAll('td');
+                    rows.push([1, 2, 3, 4, 5, 6].map(i => (cells[i].innerText || '').trim()));
+                });
+                const csv = rows.map(r => r.map(v => '"' + v.replace(/"/g, '""') + '"').join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'quotes_selected.csv'; a.click();
                 URL.revokeObjectURL(url);
             }
             async function toggleTestClients(hide) {
