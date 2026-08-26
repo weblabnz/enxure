@@ -2,6 +2,14 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.9.3] - 2026-08-27
+
+### Added
+- Docs > Reference > Roadmap: a short list of ideas being considered for future releases (multi-currency per client/invoice, two-way Xero/QuickBooks sync, receipt OCR) — not commitments, just the current shortlist.
+
+### Changed
+- Tightened the sidebar nav's vertical spacing (item padding/margin and the gap around section labels) — there are enough main-menu items now that the previous spacing pushed Settings/Logout further down than it needed to.
+
 ## [2.9.2] - 2026-08-27
 
 ### Changed

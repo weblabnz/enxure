@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.9.2');
+define('APP_VERSION', '2.9.3');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -7078,13 +7078,13 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             text-transform: uppercase;
             color: var(--text-secondary);
             opacity: 0.6;
-            margin: 1.25rem 0 0.5rem;
+            margin: 0.85rem 0 0.35rem;
         }
 
         .nav-item {
             position: relative;
-            margin: 0.1rem 0.75rem;
-            padding: 0.65rem 0.85rem;
+            margin: 0.05rem 0.75rem;
+            padding: 0.5rem 0.85rem;
             border-radius: var(--radius-sm);
             color: var(--text-secondary);
             cursor: pointer;
@@ -8949,7 +8949,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         'feat-data' => 'Data Management',
                         'feat-notifications' => 'Notifications',
                     ],
-                    'Reference' => ['changelog' => 'Changelog', 'license' => 'License (AGPL-3.0)', 'source' => 'Source Code'],
+                    'Reference' => ['roadmap' => 'Roadmap', 'changelog' => 'Changelog', 'license' => 'License (AGPL-3.0)', 'source' => 'Source Code'],
                 ];
                 ?>
                 <nav class="subnav" id="docsNav" style="min-width:220px;">
@@ -8993,6 +8993,21 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                             </div>
                         </div>
                     </div>
+                    <div class="subnav-pane" id="docs-pane-roadmap">
+                        <div class="card">
+                            <div class="card-body doc-content">
+                                <h1>Roadmap</h1>
+                                <p>Ideas being considered for future releases — not commitments, and not on any particular schedule, just the current shortlist.</p>
+                                <ul>
+                                    <li><strong>Multi-currency per client/invoice</strong> — currency is currently one setting for the whole instance (Settings &gt; General); each client or invoice would carry its own instead, for anyone billing across more than one currency.</li>
+                                    <li><strong>Two-way accounting sync (Xero/QuickBooks API)</strong> — Data Management's exports (CSV, IIF) are a one-way handoff today; a live API sync would push and pull instead of a manual file import.</li>
+                                    <li><strong>Receipt OCR</strong> — prefill an expense's vendor and amount straight from the receipt photo you just uploaded, instead of typing them in by hand.</li>
+                                </ul>
+                                <p>None of these are scheduled yet. If one of them would help you, or you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="subnav-pane" id="docs-pane-changelog">
                         <div class="card">
                             <div class="card-body doc-content">
