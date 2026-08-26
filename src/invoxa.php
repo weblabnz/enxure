@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.9.1');
+define('APP_VERSION', '2.9.2');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -8285,14 +8285,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             <h1 id="sidebarBrandName"><img src="assets/img/invoxa-mark.svg" width="36" height="36" alt="">
                 <img src="assets/img/invoxa-wordmark.svg" height="30" alt="Invoxa" style="width:auto;"></h1>
         </div>
-        <div class="global-search-wrap">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" id="globalSearchInput" placeholder="Search"
-                autocomplete="off" oninput="handleGlobalSearch()" onkeydown="handleGlobalSearchKeydown(event)"
-                onfocus="if (document.getElementById('globalSearchResults').innerHTML.trim() !== '') document.getElementById('globalSearchResults').classList.add('active')">
-            <kbd>Ctrl K</kbd>
-            <div id="globalSearchResults" class="global-search-results"></div>
-        </div>
         <div class="nav-section-label">Main Menu</div>
 
         <div class="nav-item" data-target="dashboard" onclick="nav('dashboard', true)"><i
@@ -8362,6 +8354,16 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 aria-label="Expand Settings menu"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
         <div class="nav-subnav-slot" data-for="settings"></div>
+        <div style="margin-top:0.5rem; padding-top:1rem; border-top:1px solid var(--border);">
+            <div class="global-search-wrap">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="globalSearchInput" placeholder="Search"
+                    autocomplete="off" oninput="handleGlobalSearch()" onkeydown="handleGlobalSearchKeydown(event)"
+                    onfocus="if (document.getElementById('globalSearchResults').innerHTML.trim() !== '') document.getElementById('globalSearchResults').classList.add('active')">
+                <kbd>Ctrl K</kbd>
+                <div id="globalSearchResults" class="global-search-results"></div>
+            </div>
+        </div>
         <div class="user-panel">
             <form method="POST"><input type="hidden" name="auth_action" value="logout"><button type="submit"
                     class="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button></form>

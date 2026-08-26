@@ -2,6 +2,14 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.9.2] - 2026-08-27
+
+### Changed
+- The sidebar's global search box moved from directly under the logo down to just above Logout, so it no longer competes with the nav for top billing — still reachable the same way (Ctrl/Cmd+K), just lower-priority placement.
+
+### Fixed
+- Moving the search box introduced a top border/spacer directly on its own wrapper, which threw off the vertical centering of its icon and "Ctrl K" hint against the input (both are positioned relative to that wrapper's middle). The spacing now lives on a separate outer element instead.
+
 ## [2.9.1] - 2026-08-27
 
 ### Changed
