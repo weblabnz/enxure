@@ -2,10 +2,15 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.9.5] - 2026-08-27
+
+### Changed
+- The Settings > Email mail-status badge/dot (added in 2.9.4) no longer requires `INVOXA_INSTANCE_LABEL` to be set — it now shows on every instance, including production, and gained a third state: "Not Configured" (red) when `SMTP_HOST` is empty, alongside the existing "Real SMTP" (green) and "Mail Sink" (amber).
+
 ## [2.9.4] - 2026-08-27
 
 ### Added
-- Settings > Email: when `INVOXA_INSTANCE_LABEL` is set, a "Real SMTP" / "Mail Sink" badge appears on the Test Email Server card, plus a matching status dot next to Email in the sidebar — makes it obvious at a glance, on a non-production instance, whether outgoing mail is really being sent or just caught locally for safe testing.
+- Settings > Email: a "Real SMTP" / "Mail Sink" badge appears on the Test Email Server card, plus a matching status dot next to Email in the sidebar — makes it obvious at a glance whether outgoing mail is really being sent or just caught locally for safe testing.
 
 ## [2.9.3] - 2026-08-27
 

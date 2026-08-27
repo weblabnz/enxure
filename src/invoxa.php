@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.9.4');
+define('APP_VERSION', '2.9.5');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -9526,13 +9526,11 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         onclick="navSettings('branding')"><i class="fa-solid fa-paint-roller"></i> Branding</button>
                     <button type="button" class="subnav-item" data-settings-target="email"
                         onclick="navSettings('email')"><i class="fa-solid fa-envelope"></i> Email
-                        <?php if (INSTANCE_LABEL): ?>
-                            <?php $__mailSink = getenv('SMTP_HOST') === 'mailpit'; ?>
-                            <span style="margin-left:auto; display:inline-flex; align-items:center;">
-                                <span class="subnav-dot <?= $__mailSink ? 'off' : 'on' ?>" style="margin-left:0;"
-                                    title="<?= $__mailSink ? 'Mail sink active — outgoing mail is caught, not really sent' : 'Real SMTP active' ?>"></span>
-                            </span>
-                        <?php endif; ?>
+                        <?php $__mailSink = getenv('SMTP_HOST') === 'mailpit'; $__smtpConfigured = trim((string) getenv('SMTP_HOST')) !== ''; ?>
+                        <span style="margin-left:auto; display:inline-flex; align-items:center;">
+                            <span class="subnav-dot <?= ($__smtpConfigured && !$__mailSink) ? 'on' : 'off' ?>" style="margin-left:0;"
+                                title="<?= $__mailSink ? 'Mail sink active — outgoing mail is caught, not really sent' : ($__smtpConfigured ? 'Real SMTP active' : 'SMTP not configured — invoice emails will not send') ?>"></span>
+                        </span>
                     </button>
                     <button type="button" class="subnav-item" data-settings-target="billing"
                         onclick="navSettings('billing')"><i class="fa-solid fa-clock"></i> Billing
@@ -9927,12 +9925,12 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                             <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
                                 <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-envelope"
                                         style="color:var(--accent); margin-right:0.5rem;"></i>Test Email Server</h3>
-                                <?php if (INSTANCE_LABEL): ?>
-                                    <?php if (getenv('SMTP_HOST') === 'mailpit'): ?>
-                                        <span class="badge" style="background:rgba(255,193,7,0.12); color:var(--warning); border:1px solid rgba(255,193,7,0.25);">Mail Sink</span>
-                                    <?php else: ?>
-                                        <span class="badge" style="background:rgba(40,167,69,0.12); color:var(--success); border:1px solid rgba(40,167,69,0.25);">Real SMTP</span>
-                                    <?php endif; ?>
+                                <?php if (getenv('SMTP_HOST') === 'mailpit'): ?>
+                                    <span class="badge" style="background:rgba(255,193,7,0.12); color:var(--warning); border:1px solid rgba(255,193,7,0.25);">Mail Sink</span>
+                                <?php elseif (trim((string) getenv('SMTP_HOST')) !== ''): ?>
+                                    <span class="badge" style="background:rgba(40,167,69,0.12); color:var(--success); border:1px solid rgba(40,167,69,0.25);">Real SMTP</span>
+                                <?php else: ?>
+                                    <span class="badge" style="background:rgba(245,69,92,0.12); color:var(--danger); border:1px solid rgba(245,69,92,0.25);">Not Configured</span>
                                 <?php endif; ?>
                             </div>
                             <div class="card-body">
