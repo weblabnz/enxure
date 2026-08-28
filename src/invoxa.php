@@ -9811,6 +9811,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 <p>What's coming next.</p>
                                 <ul>
                                     <li><strong>Currency-grouped Stats &amp; accounting exports</strong> — Statistics and the Accounting Journal/QuickBooks (IIF) exports currently report on the instance default currency only, excluding other-currency invoices instead of grouping them in.</li>
+                                    <li><strong>Code organization</strong> — a brief interlude to split invoxa.php's larger procedural sections into functions/files by domain (clients, stats, exports, payments), leaning on the internal Test Suite to catch regressions.</li>
                                 </ul>
                                 <p>No fixed release dates yet, but work is underway. If that would help you, or you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
                             </div>
