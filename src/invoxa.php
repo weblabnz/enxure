@@ -4304,7 +4304,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         $small = imagecreatetruecolor($w, $h);
         imagefill($small, 0, 0, imagecolorallocate($small, 255, 255, 255));
         $fg = imagecolorallocate($small, 0, 0, 0);
-        imagestring($small, 5, 10, 10, 'ZTEST HARDWARE CO', $fg);
+        imagestring($small, 5, 10, 10, 'TEST HARDWARE CO', $fg);
         imagestring($small, 5, 10, 55, 'WIDGET   12.00', $fg);
         imagestring($small, 5, 10, 90, 'TOTAL    45.67', $fg);
         $scale = 4;
@@ -4317,7 +4317,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         try {
             $text = (string) shell_exec('tesseract ' . escapeshellarg($path) . ' stdout 2>/dev/null');
             $parsed = parseReceiptOcrText($text);
-            invoxaAssertTrue(str_contains(strtoupper((string) $parsed['vendor']), 'ZTEST'), 'vendor should contain the rendered store name, got: ' . var_export($parsed['vendor'], true));
+            invoxaAssertTrue(str_contains(strtoupper((string) $parsed['vendor']), 'TEST HARDWARE CO'), 'vendor should contain the rendered store name, got: ' . var_export($parsed['vendor'], true));
             invoxaAssertEquals(45.67, $parsed['amount']);
         } finally {
             @unlink($path);

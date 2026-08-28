@@ -850,7 +850,7 @@ function parseReceiptOcrText(string $text): array
     $vendor = '';
     foreach ($lines as $line) {
         if (strlen(preg_replace('/[^A-Za-z]/', '', $line)) >= 3) {
-            $vendor = mb_substr($line, 0, 100);
+            $vendor = mb_substr(preg_replace('/^[^A-Za-z0-9]+/', '', $line), 0, 100);
             break;
         }
     }

@@ -11,6 +11,9 @@ All notable changes to Invoxa are documented here. Dates are when a release was 
 ### Changed
 - Data Management &gt; System &gt; "Tables in Database" list no longer needs to scroll for a normal-sized instance (200px &rarr; 480px).
 
+### Fixed
+- Test Suite caught a real Receipt OCR bug: `parseReceiptOcrText()` didn't strip leading OCR noise (a stray symbol Tesseract sometimes reads at the start of a line) off the vendor line before returning it, so a receipt whose store name got a garbled leading character would carry that garbling straight into the prefilled Vendor field.
+
 ## [2.10.1] - 2026-08-28
 
 ### Added
