@@ -2,6 +2,17 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.10.3] - 2026-08-29
+
+### Fixed
+- Mobile sidebar: a subnav (Statistics/Data Management/Docs/Settings) now collapses back down after picking one of its items, instead of staying expanded and the chevron staying rotated the next time the menu is reopened.
+- Settings &gt; Users table no longer overflows off-screen on mobile — it scrolls horizontally within its own card, matching the pattern already used for the Data Management &gt; Test Suite table.
+- Mobile menu (and its backdrop) now renders above the bottom icon bar instead of underneath it when opened.
+- Invoices/Quotes/Expenses/Clients: the toolbar row (Export/Filter/Saved Views) is now collapsed behind a single "Filters &amp; Export" toggle on mobile, instead of each group wrapping onto its own row and eating vertical space; the expanded panel renders as one bordered card with divider rows instead of separate floating boxes, and the Export group no longer overflows past the screen edge.
+
+### Added
+- A fixed Invoxa mark icon now shows at the top of the mobile view while the sidebar is closed, so the brand is visible outside of just the open menu.
+
 ## [2.10.2] - 2026-08-28
 
 ### Added

@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.10.2');
+define('APP_VERSION', '2.10.3');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -8157,6 +8157,35 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             display: none;
         }
 
+        .toolbar-toggle {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.6rem 0.9rem;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .toolbar-toggle i.toolbar-toggle-chevron {
+            transition: transform 0.15s ease;
+        }
+
+        .toolbar-toggle.expanded i.toolbar-toggle-chevron {
+            transform: rotate(180deg);
+        }
+
+        .toolbar-collapsible {
+            display: contents;
+        }
+
         .badge {
             display: inline-flex;
             align-items: center;
@@ -8736,12 +8765,37 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             box-shadow: var(--shadow-md);
         }
 
+        .mobile-brand-icon {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1200;
+            width: 42px;
+            height: 42px;
+            align-items: center;
+            justify-content: center;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md);
+        }
+
+        .mobile-brand-icon img {
+            width: 26px;
+            height: 26px;
+        }
+
+        body.sidebar-open .mobile-brand-icon {
+            display: none !important;
+        }
+
         .sidebar-backdrop {
             display: none;
             position: fixed;
             inset: 0;
             background: rgba(5, 8, 16, 0.6);
-            z-index: 1090;
+            z-index: 1290;
         }
 
         .sidebar-backdrop.active {
@@ -8791,12 +8845,16 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 display: flex;
             }
 
+            .mobile-brand-icon {
+                display: flex;
+            }
+
             .sidebar {
                 position: fixed;
                 top: 0;
                 right: -300px;
                 height: 100vh;
-                z-index: 1100;
+                z-index: 1300;
                 transition: right 0.25s ease;
                 box-shadow: none;
                 border-right: none;
@@ -8868,12 +8926,50 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 font-size: 0.85rem;
                 padding: 0.55rem 0.75rem;
             }
+
+            .toolbar-toggle {
+                display: flex;
+            }
+
+            .toolbar-collapsible {
+                display: none;
+                width: 100%;
+                margin-top: 0.75rem;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 0 0.9rem;
+            }
+
+            .toolbar-collapsible.expanded {
+                display: block;
+            }
+
+            .toolbar-collapsible>div {
+                width: 100%;
+                flex-wrap: wrap;
+                background: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                padding: 0.85rem 0 !important;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .toolbar-collapsible>div:last-child {
+                border-bottom: none;
+            }
+
+            .toolbar-collapsible select {
+                flex: 1 1 auto;
+                min-width: 0 !important;
+            }
         }
     </style>
 </head>
 
 <body>
 
+    <div class="mobile-brand-icon"><img src="assets/img/invoxa-mark.svg" alt="Invoxa"></div>
     <button type="button" class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Toggle menu"><i
             class="fa-solid fa-bars"></i></button>
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
@@ -9066,6 +9162,12 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             <!-- Invoice toolbar: two separate action groups -->
             <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: stretch; margin-bottom: 1.5rem;">
 
+                <button type="button" class="toolbar-toggle" id="invoicesToolbarToggle" onclick="toggleToolbar('invoices')">
+                    <span><i class="fa-solid fa-sliders"></i> Filters &amp; Export</span>
+                    <i class="fa-solid fa-chevron-down toolbar-toggle-chevron"></i>
+                </button>
+                <div class="toolbar-collapsible" id="invoicesToolbarGroups">
+
                 <!-- Group 1: Exports -->
                 <div
                     style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
@@ -9129,6 +9231,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         onclick="deleteFilterView('invoices')"><i class="fa-solid fa-trash"></i></button>
                 </div>
 
+                </div>
             </div>
 
             <!-- Bulk Actions — hidden until at least one row is checked; a sibling
@@ -9286,6 +9389,12 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                  while the table below scrolls). -->
             <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: stretch; margin-bottom: 1.5rem;">
 
+                <button type="button" class="toolbar-toggle" id="clientsToolbarToggle" onclick="toggleToolbar('clients')">
+                    <span><i class="fa-solid fa-sliders"></i> Filters &amp; Export</span>
+                    <i class="fa-solid fa-chevron-down toolbar-toggle-chevron"></i>
+                </button>
+                <div class="toolbar-collapsible" id="clientsToolbarGroups">
+
                 <!-- Group 1: Export / Import -->
                 <div
                     style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
@@ -9315,6 +9424,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         onclick="saveFilterView('clients')"><i class="fa-solid fa-plus"></i></button>
                     <button type="button" class="btn small" title="Delete the selected view"
                         onclick="deleteFilterView('clients')"><i class="fa-solid fa-trash"></i></button>
+                </div>
+
                 </div>
 
                 <button class="btn primary" onclick="openClientModal()"><i class="fa-solid fa-plus"></i> Add
@@ -9366,6 +9477,12 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             <!-- Expense toolbar: same group layout as the Invoices/Clients toolbar. -->
             <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: stretch; margin-bottom: 1.5rem;">
 
+                <button type="button" class="toolbar-toggle" id="expensesToolbarToggle" onclick="toggleToolbar('expenses')">
+                    <span><i class="fa-solid fa-sliders"></i> Filters &amp; Export</span>
+                    <i class="fa-solid fa-chevron-down toolbar-toggle-chevron"></i>
+                </button>
+                <div class="toolbar-collapsible" id="expensesToolbarGroups">
+
                 <!-- Group 1: Export -->
                 <div
                     style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
@@ -9385,6 +9502,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                     <span style="font-size:1.1rem; font-weight:700; color:var(--danger); white-space: nowrap;">
                         <?= htmlspecialchars($settings['currency'] ?? 'USD') ?> $<?= number_format($total_expenses, 2) ?>
                     </span>
+                </div>
+
                 </div>
 
                 <button class="btn primary" onclick="openExpenseModal()"><i class="fa-solid fa-plus"></i> Add
@@ -9468,6 +9587,12 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             <!-- Quote toolbar: same group layout as the Invoices/Clients/Expenses toolbar. -->
             <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: stretch; margin-bottom: 1.5rem;">
 
+                <button type="button" class="toolbar-toggle" id="quotesToolbarToggle" onclick="toggleToolbar('quotes')">
+                    <span><i class="fa-solid fa-sliders"></i> Filters &amp; Export</span>
+                    <i class="fa-solid fa-chevron-down toolbar-toggle-chevron"></i>
+                </button>
+                <div class="toolbar-collapsible" id="quotesToolbarGroups">
+
                 <!-- Group 1: Export -->
                 <div
                     style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
@@ -9476,6 +9601,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                             class="fa-solid fa-file-export" style="margin-right:0.3rem;"></i>Export</span>
                     <button class="btn" style="background: var(--surface-hover); white-space: nowrap;"
                         onclick="window.location.href='?export=quotes'"><i class="fa-solid fa-file-csv"></i> CSV</button>
+                </div>
+
                 </div>
 
                 <button class="btn primary" onclick="openQuoteModal()"><i class="fa-solid fa-plus"></i> New
@@ -11406,6 +11533,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
 
                                 <!-- Existing users -->
                                 <?php $__allUsers = $mysqli->query("SELECT id, username, email, role, created_at FROM invoxa_users ORDER BY id ASC"); ?>
+                                <div style="overflow-x:auto;">
                                 <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
                                     <thead>
                                         <tr style="text-align:left; color:var(--text-secondary); border-bottom:1px solid var(--border);">
@@ -11419,15 +11547,15 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     <tbody>
                                         <?php while ($__u2 = $__allUsers->fetch_assoc()): $__isSelf = (int) $__u2['id'] === $currentUserId; ?>
                                             <tr style="border-bottom:1px solid var(--border);">
-                                                <td style="padding:0.5rem;"><?= htmlspecialchars($__u2['username']) ?><?= $__isSelf ? ' <span class="badge" style="background:var(--surface-hover); color:var(--text-primary);">You</span>' : '' ?></td>
-                                                <td style="padding:0.5rem; color:var(--text-secondary);"><?= htmlspecialchars($__u2['email'] ?? '') ?></td>
+                                                <td style="padding:0.5rem; white-space:nowrap;"><?= htmlspecialchars($__u2['username']) ?><?= $__isSelf ? ' <span class="badge" style="background:var(--surface-hover); color:var(--text-primary);">You</span>' : '' ?></td>
+                                                <td style="padding:0.5rem; color:var(--text-secondary); white-space:nowrap;"><?= htmlspecialchars($__u2['email'] ?? '') ?></td>
                                                 <td style="padding:0.5rem;">
                                                     <select class="form-control" style="display:inline-block; width:auto; font-size:0.8rem; padding:0.2rem 0.4rem;" id="userRoleSelect<?= $__u2['id'] ?>">
                                                         <option value="member" <?= $__u2['role'] === 'member' ? 'selected' : '' ?>>Member</option>
                                                         <option value="admin" <?= $__u2['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
                                                     </select>
                                                 </td>
-                                                <td style="padding:0.5rem; color:var(--text-secondary);"><?= htmlspecialchars(substr($__u2['created_at'], 0, 10)) ?></td>
+                                                <td style="padding:0.5rem; color:var(--text-secondary); white-space:nowrap;"><?= htmlspecialchars(substr($__u2['created_at'], 0, 10)) ?></td>
                                                 <td style="padding:0.5rem; white-space:nowrap;">
                                                     <button class="btn small" type="button" onclick="updateUserRole(<?= $__u2['id'] ?>)" title="Save role"><i class="fa-solid fa-save"></i></button>
                                                     <button class="btn small danger" type="button" onclick="deleteUser(<?= $__u2['id'] ?>)" title="<?= $__isSelf ? "Can't delete your own account" : 'Delete' ?>" <?= $__isSelf ? 'disabled' : '' ?>><i class="fa-solid fa-trash"></i></button>
@@ -11436,6 +11564,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                         <?php endwhile; ?>
                                     </tbody>
                                 </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -12387,6 +12516,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             function toggleSidebar() {
                 document.querySelector('.sidebar').classList.toggle('open');
                 document.getElementById('sidebarBackdrop').classList.toggle('active');
+                document.body.classList.toggle('sidebar-open');
             }
 
             // ── Global quick search ───────────────────────────────────────
@@ -12520,6 +12650,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 if (fromClick) {
                     document.querySelector('.sidebar').classList.remove('open');
                     document.getElementById('sidebarBackdrop').classList.remove('active');
+                    document.body.classList.remove('sidebar-open');
                     document.querySelectorAll('.modal-overlay.active').forEach(el => el.classList.remove('active'));
                 }
                 document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -12735,6 +12866,14 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             if (storedStatsTab && document.getElementById('stats-pane-' + storedStatsTab)) navStats(storedStatsTab);
             else initStatsChartsFor('revenue');
 
+            function toggleToolbar(name) {
+                const wrap = document.getElementById(name + 'ToolbarGroups');
+                const btn = document.getElementById(name + 'ToolbarToggle');
+                if (!wrap) return;
+                const isExpanded = wrap.classList.toggle('expanded');
+                if (btn) btn.classList.toggle('expanded', isExpanded);
+            }
+
             const subnavSections = ['stats', 'docs', 'backup', 'settings'];
             const mobileMq = window.matchMedia('(max-width: 860px)');
             function placeSubnavs(isMobile) {
@@ -12770,6 +12909,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                     if (e.target.closest('.subnav-item')) {
                         nav(name, true);
                         slotEl.classList.remove('expanded');
+                        const toggleEl = document.querySelector('.nav-item[data-target="' + name + '"] .nav-subnav-toggle');
+                        if (toggleEl) toggleEl.classList.remove('expanded');
                     }
                 }, true);
             });
