@@ -9808,11 +9808,11 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         <div class="card">
                             <div class="card-body doc-content">
                                 <h1>Roadmap</h1>
-                                <p>What's coming next — actively in development, not just a wishlist.</p>
+                                <p>What's coming next.</p>
                                 <ul>
-                                    <li><strong>Currency-grouped Stats &amp; accounting exports</strong> — since 2.11.0, each client/invoice can carry its own currency, but Statistics and the Accounting Journal/QuickBooks (IIF) exports still report on the instance default currency only, excluding invoices in any other currency rather than blending them into one misleading total. Grouping those totals by currency instead (so nothing gets excluded) is the natural next step.</li>
+                                    <li><strong>Currency-grouped Stats &amp; accounting exports</strong> — Statistics and the Accounting Journal/QuickBooks (IIF) exports currently report on the instance default currency only, excluding other-currency invoices instead of grouping them in.</li>
                                 </ul>
-                                <p>No fixed release dates yet, but real work is underway. If that would help you, or you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
+                                <p>No fixed release dates yet, but work is underway. If that would help you, or you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
                             </div>
                         </div>
                     </div>
@@ -12116,17 +12116,14 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                             share the link yourself (email, etc.); nothing is sent automatically.
                             <?php if (!$licenseValid): ?><strong>Generating or regenerating a link requires a
                                     license</strong> — revoking an existing one stays free.<?php endif; ?></p>
-                        <div id="clientPortalNoLinkWrap">
-                            <div class="form-group" style="max-width:220px;">
-                                <label class="form-label">Expires</label>
-                                <select id="clientPortalExpiry" class="form-control" <?= $licenseValid ? '' : 'disabled' ?>>
-                                    <option value="never">Never</option>
-                                    <option value="30">30 days</option>
-                                    <option value="90" selected>90 days</option>
-                                    <option value="365">1 year</option>
-                                </select>
-                            </div>
-                            <button class="btn" id="generatePortalLinkBtn" type="button" onclick="generatePortalLink()"
+                        <div id="clientPortalNoLinkWrap" style="display:flex; gap:1.5rem; align-items:center; flex-wrap:wrap; margin-top:0.75rem;">
+                            <select id="clientPortalExpiry" class="form-control" style="width:auto;" <?= $licenseValid ? '' : 'disabled' ?>>
+                                <option value="never">Never</option>
+                                <option value="30">30 days</option>
+                                <option value="90" selected>90 days</option>
+                                <option value="365">1 year</option>
+                            </select>
+                            <button class="btn" id="generatePortalLinkBtn" type="button" onclick="generatePortalLink()" style="width:auto;"
                                 <?= $licenseValid ? '' : 'disabled title="Requires a license"' ?>><i
                                     class="fa-solid fa-link"></i> Generate Portal Link</button>
                         </div>
