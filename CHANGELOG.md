@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.1] - 2026-08-29
+
+### Added
+- Test Suite coverage for multi-currency: `invoxaResolveCurrency()`/`invoxaNormalizeCurrencyCode()` fallback and normalization, `invoxaGroupAmountsByCurrency()`/`invoxaFormatMoneyByCurrency()` grouping instead of blending, a fresh client's blank currency resolving to the instance default, and the core guarantee that an invoice's currency is a snapshot at creation time rather than a live link to its client's (a later change to the client's currency doesn't rewrite past invoices).
+
 ## [2.11.0] - 2026-08-29
 
 ### Added

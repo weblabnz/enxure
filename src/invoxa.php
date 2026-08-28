@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.0');
+define('APP_VERSION', '2.11.1');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -3692,13 +3692,13 @@ function invoxaTestCreateClient($mysqli): array
     return [$mysqli->insert_id, $key];
 }
 
-function invoxaTestCreateInvoice($mysqli, string $clientKey, float $amount): int
+function invoxaTestCreateInvoice($mysqli, string $clientKey, float $amount, string $currency = ''): int
 {
     // Must end in digits — generateInvoiceNumber()'s "highest number so far"
     // lookup only matches a trailing run of digits (/(\d+)$/).
     $invNum = 'ZTEST-' . strtoupper(bin2hex(random_bytes(3))) . random_int(100, 999);
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), ?, 'sent')");
-    $stmt->bind_param("ssd", $invNum, $clientKey, $amount);
+    $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), ?, ?, 'sent')");
+    $stmt->bind_param("ssds", $invNum, $clientKey, $amount, $currency);
     $stmt->execute();
     return $mysqli->insert_id;
 }
@@ -3869,18 +3869,60 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         invoxaAssertTrue(verifyTotpCode($secret, $oneStepBack), 'a code from one step ago should still verify');
         invoxaAssertTrue(!verifyTotpCode($secret, $twoStepsBack), 'a code from two steps ago should be rejected');
     });
+    $run('Core Logic', 'invoxaResolveCurrency', 'client currency wins, blank falls back to the instance default', 'A non-blank currency (however it\'s cased) is returned uppercased; a blank one falls back to Settings > General\'s currency — the same fallback processInvoice()/save_quote/renderInvoiceRows() all use.', function () use ($settings) {
+        invoxaAssertEquals('EUR', invoxaResolveCurrency('eur', $settings));
+        invoxaAssertEquals(strtoupper($settings['currency'] ?? 'USD'), invoxaResolveCurrency('', $settings));
+    });
+    $run('Core Logic', 'invoxaNormalizeCurrencyCode', 'strips non-letters, uppercases, caps at 3 characters', 'The Add/Edit Client Currency field goes through the same normalization Settings > General\'s Currency Code already used — stray digits/symbols stripped before the 3-letter cap.', function () {
+        invoxaAssertEquals('EUR', invoxaNormalizeCurrencyCode(' eur '));
+        invoxaAssertEquals('USD', invoxaNormalizeCurrencyCode('us1d$'));
+        invoxaAssertEquals('', invoxaNormalizeCurrencyCode(''));
+    });
+    $run('Core Logic', 'invoxaGroupAmountsByCurrency / invoxaFormatMoneyByCurrency', 'groups and renders per currency instead of blending totals', 'Two USD rows and one EUR row group into separate USD/EUR sums (not one number that adds unlike currencies together), and the formatted string used on the Dashboard/CSV exports names both totals rather than only one.', function () use ($settings) {
+        $rows = [['currency' => 'USD', 'amount' => 100], ['currency' => 'USD', 'amount' => 50], ['currency' => 'EUR', 'amount' => 30]];
+        $grouped = invoxaGroupAmountsByCurrency($rows, 'amount', $settings);
+        invoxaAssertEquals(150.0, $grouped['USD'] ?? null, 'USD total');
+        invoxaAssertEquals(30.0, $grouped['EUR'] ?? null, 'EUR total');
+        $rendered = invoxaFormatMoneyByCurrency($grouped);
+        invoxaAssertTrue(str_contains($rendered, 'USD $150.00'), 'rendered string names the USD total');
+        invoxaAssertTrue(str_contains($rendered, 'EUR $30.00'), 'rendered string names the EUR total');
+    });
 
     // ── Clients & Invoices ── the "add a client" / "add an invoice" paths,
     // exercised against disposable fixtures rather than the real AJAX actions.
     $run('Clients & Invoices', 'Client', 'created with correct defaults', 'A newly inserted client comes back active, flagged as test data, and with 0% discount/tax — the same defaults the Add Client form relies on.', function () use ($mysqli) {
         [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
         try {
-            $row = $mysqli->query("SELECT is_active, is_test, discount_pct, tax_rate FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+            $row = $mysqli->query("SELECT is_active, is_test, discount_pct, tax_rate, currency FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
             invoxaAssertTrue((bool) $row, 'client row exists');
             invoxaAssertEquals(1, (int) $row['is_active']);
             invoxaAssertEquals(1, (int) $row['is_test']);
             invoxaAssertEquals(0.0, (float) $row['discount_pct']);
             invoxaAssertEquals(0.0, (float) $row['tax_rate']);
+            invoxaAssertEquals('', $row['currency'] ?? null, 'blank currency by default');
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
+    $run('Clients & Invoices', 'Client currency', 'blank currency resolves to the instance default', 'A freshly added client (Currency left blank, the default) resolves to Settings > General\'s currency rather than an empty string once an invoice is generated for them.', function () use ($mysqli, $settings) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+            invoxaAssertEquals(strtoupper($settings['currency'] ?? 'USD'), invoxaResolveCurrency($client['currency'] ?? '', $settings));
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
+    $run('Clients & Invoices', 'Client currency', 'invoice snapshots the client\'s currency, unaffected by a later change', 'An invoice stamped with a client\'s currency at creation time (the same invoxaResolveCurrency() call processInvoice()/save_quote make) keeps that value even after the client\'s own currency is changed afterward — invoxa_invoices.currency is a snapshot, not a live link to invoxa_clients.currency.', function () use ($mysqli, $settings) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $mysqli->query("UPDATE invoxa_clients SET currency = 'EUR' WHERE id = $clientId");
+            $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+            $stampedCurrency = invoxaResolveCurrency($client['currency'] ?? '', $settings);
+            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 50.00, $stampedCurrency);
+            $mysqli->query("UPDATE invoxa_clients SET currency = 'GBP' WHERE id = $clientId");
+            $invRow = $mysqli->query("SELECT currency FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            invoxaAssertEquals('EUR', $invRow['currency']);
         } finally {
             invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
         }
