@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.1');
+define('APP_VERSION', '2.11.2');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -3752,17 +3752,6 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         $raw = random_bytes(20);
         invoxaAssertTrue(base32Decode(base32Encode($raw)) === $raw);
     });
-    $run('Core Logic', 'TOTP', 'current code verifies', 'A freshly generated secret\'s current 30-second TOTP code passes verifyTotpCode().', function () {
-        $secret = generateTotpSecret();
-        $code = totpCodeAt($secret, (int) floor(time() / 30));
-        invoxaAssertTrue(verifyTotpCode($secret, $code));
-    });
-    $run('Core Logic', 'TOTP', 'wrong code rejected', 'An incorrect 6-digit code fails verifyTotpCode() against a freshly generated secret.', function () {
-        $secret = generateTotpSecret();
-        $real = totpCodeAt($secret, (int) floor(time() / 30));
-        $wrong = ($real === '000000') ? '111111' : '000000';
-        invoxaAssertTrue(!verifyTotpCode($secret, $wrong));
-    });
     $run('Core Logic', 'Stripe', 'USD amount round-trip', '$19.99 converts to 1999 (cents) via stripeAmountToMinorUnits() and back to $19.99 via stripeAmountFromMinorUnits().', function () {
         $minor = stripeAmountToMinorUnits(19.99, 'USD');
         invoxaAssertEquals(1999, $minor);
@@ -3771,40 +3760,11 @@ function invoxaTestDefinitions($mysqli, array $settings): array
     $run('Core Logic', 'Stripe', 'zero-decimal currency', 'JPY 500 stays 500 (not multiplied by 100) since Stripe treats JPY as a zero-decimal currency.', function () {
         invoxaAssertEquals(500, stripeAmountToMinorUnits(500, 'JPY'));
     });
-    $run('Core Logic', 'Stripe webhook signature', 'valid signature accepted', 'A signature correctly computed as HMAC-SHA256 over "{timestamp}.{payload}" verifies successfully.', function () {
-        $payload = '{"type":"test"}';
-        $secret = 'whsec_testsecret';
-        $ts = time();
-        $sig = hash_hmac('sha256', $ts . '.' . $payload, $secret);
-        invoxaAssertTrue(stripeVerifyWebhookSignature($payload, "t={$ts},v1={$sig}", $secret));
-    });
-    $run('Core Logic', 'Stripe webhook signature', 'tampered payload rejected', 'Changing the payload after signing invalidates the signature check, as it should.', function () {
-        $payload = '{"type":"test"}';
-        $secret = 'whsec_testsecret';
-        $ts = time();
-        $sig = hash_hmac('sha256', $ts . '.' . $payload, $secret);
-        invoxaAssertTrue(!stripeVerifyWebhookSignature('{"type":"tampered"}', "t={$ts},v1={$sig}", $secret));
-    });
-    $run('Core Logic', 'Stripe webhook signature', 'stale timestamp rejected', 'A signature computed from a timestamp far in the past is rejected — this is what blocks replay attacks.', function () {
-        $payload = '{"type":"test"}';
-        $secret = 'whsec_testsecret';
-        $ts = time() - 999999;
-        $sig = hash_hmac('sha256', $ts . '.' . $payload, $secret);
-        invoxaAssertTrue(!stripeVerifyWebhookSignature($payload, "t={$ts},v1={$sig}", $secret));
-    });
     $run('Core Logic', 'Lockout', 'minutes-remaining math', 'invoxaLockoutMinutesRemaining() returns 0 for no lock or an already-expired one, and ~5 for a lock 5 minutes in the future.', function () {
         invoxaAssertEquals(0, invoxaLockoutMinutesRemaining(null));
         invoxaAssertEquals(0, invoxaLockoutMinutesRemaining(date('Y-m-d H:i:s', time() - 60)));
         $remaining = invoxaLockoutMinutesRemaining(date('Y-m-d H:i:s', time() + 300));
         invoxaAssertTrue($remaining >= 4 && $remaining <= 5, "expected ~5 minutes, got {$remaining}");
-    });
-    $run('Core Logic', 'Backup codes', 'format & uniqueness', '10 generated backup codes are all unique and every one matches the XXXXX-XXXXX uppercase-hex format.', function () {
-        $codes = invoxaGenerateBackupCodes(10);
-        invoxaAssertEquals(10, count($codes));
-        invoxaAssertEquals(10, count(array_unique($codes)));
-        foreach ($codes as $c) {
-            invoxaAssertTrue((bool) preg_match('/^[0-9A-F]{5}-[0-9A-F]{5}$/', $c), "code format: $c");
-        }
     });
     $run('Core Logic', 'invoxaTestViewFilter', 'all three data-view states', 'The Preferences data-view filter picks the right SQL fragment for each of its three states — real-only (hide test), everything (both off), and test-only (the "Show Only Test/Dummy Data" toggle, which wins over "Hide Test Clients Globally" whenever both are somehow on) — for both the client_key-subquery shape (invoices) and the direct-column shape (clients).', function () {
         invoxaAssertEquals("AND client_key NOT IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)", invoxaTestViewFilter(true, false), 'real-only');
@@ -3860,14 +3820,6 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
             @rmdir(INVOICES_DIR . 'test_suite_fixture');
         }
-    });
-    $run('Core Logic', 'TOTP', 'tolerates one step of clock drift', 'verifyTotpCode()\'s default ±1 step window accepts a code from 30 seconds ago (a slightly slow phone clock), but not one from 60 seconds ago — two steps out is still rejected.', function () {
-        $secret = generateTotpSecret();
-        $currentStep = (int) floor(time() / 30);
-        $oneStepBack = totpCodeAt($secret, $currentStep - 1);
-        $twoStepsBack = totpCodeAt($secret, $currentStep - 2);
-        invoxaAssertTrue(verifyTotpCode($secret, $oneStepBack), 'a code from one step ago should still verify');
-        invoxaAssertTrue(!verifyTotpCode($secret, $twoStepsBack), 'a code from two steps ago should be rejected');
     });
     $run('Core Logic', 'invoxaResolveCurrency', 'client currency wins, blank falls back to the instance default', 'A non-blank currency (however it\'s cased) is returned uppercased; a blank one falls back to Settings > General\'s currency — the same fallback processInvoice()/save_quote/renderInvoiceRows() all use.', function () use ($settings) {
         invoxaAssertEquals('EUR', invoxaResolveCurrency('eur', $settings));
@@ -4251,9 +4203,9 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $mysqli->query("DELETE FROM invoxa_api_tokens WHERE id = " . (int) $created['id']);
         }
     });
-    // ── Recurring Billing / Cron ── the double-billing guard's query, checked
+    // ── Billing Cron ── the double-billing guard's query, checked
     // directly rather than via run_recurring(), which would bill real clients.
-    $run('Recurring Billing / Cron', 'Double-billing guard', 'detects an invoice already billed this month', 'The same "already billed this period" query run_recurring() uses for monthly clients correctly finds an invoice dated today, and correctly finds none for a client with no invoices at all.', function () use ($mysqli) {
+    $run('Billing Cron', 'Double-billing guard', 'detects an invoice already billed this month', 'The same "already billed this period" query run_recurring() uses for monthly clients correctly finds an invoice dated today, and correctly finds none for a client with no invoices at all.', function () use ($mysqli) {
         [$billedId, $billedKey] = invoxaTestCreateClient($mysqli);
         [$freshId, $freshKey] = invoxaTestCreateClient($mysqli);
         try {
@@ -4274,7 +4226,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             invoxaTestCleanupClient($mysqli, $freshId, $freshKey);
         }
     });
-    $run('Recurring Billing / Cron', 'Late fees', 'eligibility query catches overdue, skips grace-period and already-charged invoices', 'The same eligibility check applyLateFees() runs (unpaid, non-quote, due_date past the grace period, no existing late_fee_charged action) picks up an invoice 10 days overdue against a 7-day grace period, but correctly skips one only 3 days overdue, and skips an eligible invoice that already has a late_fee_charged entry against it.', function () use ($mysqli) {
+    $run('Billing Cron', 'Late fees', 'eligibility query catches overdue, skips grace-period and already-charged invoices', 'The same eligibility check applyLateFees() runs (unpaid, non-quote, due_date past the grace period, no existing late_fee_charged action) picks up an invoice 10 days overdue against a 7-day grace period, but correctly skips one only 3 days overdue, and skips an eligible invoice that already has a late_fee_charged entry against it.', function () use ($mysqli) {
         [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
         try {
             $graceDays = 7;
@@ -4326,8 +4278,57 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         invoxaAssertTrue(str_contains($html, '99.00'), 'missing amount');
     });
 
-    // ── Security ── account-recovery paths that touch the database, using a
-    // real but isolated, fake user id (never invoxa_users itself).
+    // ── Security ── crypto/signature checks that are pure functions, plus the
+    // account-recovery paths that touch the database, using a real but
+    // isolated, fake user id (never invoxa_users itself).
+    $run('Security', 'TOTP', 'current code verifies', 'A freshly generated secret\'s current 30-second TOTP code passes verifyTotpCode().', function () {
+        $secret = generateTotpSecret();
+        $code = totpCodeAt($secret, (int) floor(time() / 30));
+        invoxaAssertTrue(verifyTotpCode($secret, $code));
+    });
+    $run('Security', 'TOTP', 'wrong code rejected', 'An incorrect 6-digit code fails verifyTotpCode() against a freshly generated secret.', function () {
+        $secret = generateTotpSecret();
+        $real = totpCodeAt($secret, (int) floor(time() / 30));
+        $wrong = ($real === '000000') ? '111111' : '000000';
+        invoxaAssertTrue(!verifyTotpCode($secret, $wrong));
+    });
+    $run('Security', 'TOTP', 'tolerates one step of clock drift', 'verifyTotpCode()\'s default ±1 step window accepts a code from 30 seconds ago (a slightly slow phone clock), but not one from 60 seconds ago — two steps out is still rejected.', function () {
+        $secret = generateTotpSecret();
+        $currentStep = (int) floor(time() / 30);
+        $oneStepBack = totpCodeAt($secret, $currentStep - 1);
+        $twoStepsBack = totpCodeAt($secret, $currentStep - 2);
+        invoxaAssertTrue(verifyTotpCode($secret, $oneStepBack), 'a code from one step ago should still verify');
+        invoxaAssertTrue(!verifyTotpCode($secret, $twoStepsBack), 'a code from two steps ago should be rejected');
+    });
+    $run('Security', 'Stripe webhook signature', 'valid signature accepted', 'A signature correctly computed as HMAC-SHA256 over "{timestamp}.{payload}" verifies successfully.', function () {
+        $payload = '{"type":"test"}';
+        $secret = 'whsec_testsecret';
+        $ts = time();
+        $sig = hash_hmac('sha256', $ts . '.' . $payload, $secret);
+        invoxaAssertTrue(stripeVerifyWebhookSignature($payload, "t={$ts},v1={$sig}", $secret));
+    });
+    $run('Security', 'Stripe webhook signature', 'tampered payload rejected', 'Changing the payload after signing invalidates the signature check, as it should.', function () {
+        $payload = '{"type":"test"}';
+        $secret = 'whsec_testsecret';
+        $ts = time();
+        $sig = hash_hmac('sha256', $ts . '.' . $payload, $secret);
+        invoxaAssertTrue(!stripeVerifyWebhookSignature('{"type":"tampered"}', "t={$ts},v1={$sig}", $secret));
+    });
+    $run('Security', 'Stripe webhook signature', 'stale timestamp rejected', 'A signature computed from a timestamp far in the past is rejected — this is what blocks replay attacks.', function () {
+        $payload = '{"type":"test"}';
+        $secret = 'whsec_testsecret';
+        $ts = time() - 999999;
+        $sig = hash_hmac('sha256', $ts . '.' . $payload, $secret);
+        invoxaAssertTrue(!stripeVerifyWebhookSignature($payload, "t={$ts},v1={$sig}", $secret));
+    });
+    $run('Security', 'Backup codes', 'format & uniqueness', '10 generated backup codes are all unique and every one matches the XXXXX-XXXXX uppercase-hex format.', function () {
+        $codes = invoxaGenerateBackupCodes(10);
+        invoxaAssertEquals(10, count($codes));
+        invoxaAssertEquals(10, count(array_unique($codes)));
+        foreach ($codes as $c) {
+            invoxaAssertTrue((bool) preg_match('/^[0-9A-F]{5}-[0-9A-F]{5}$/', $c), "code format: $c");
+        }
+    });
     $run('Security', 'Backup codes', 'single-use consumption', 'A backup code works the first time it\'s used; reusing that exact same code a second time is rejected.', function () use ($mysqli) {
         // A fake, out-of-range user_id — invoxaConsumeBackupCode() only ever
         // queries invoxa_totp_backup_codes by user_id, never invoxa_users, so
@@ -10313,8 +10314,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     Stripe/PayPal amount conversion and webhook signature verification, and real
                                     database behavior like the payment ledger, the Recurring Billing double-billing
                                     guard, and email content/template substitution. Tests are grouped into named
-                                    sections (Core Logic, Clients &amp; Invoices, Payments &amp; Refunds, Recurring
-                                    Billing / Cron, Email Content, Security), each with its own checkbox to select
+                                    sections (Core Logic, Clients &amp; Invoices, Payments &amp; Refunds, Billing
+                                    Cron, Email Content, Security), each with its own checkbox to select
                                     the whole section at once, and pill buttons above the table — an "All" pill,
                                     bold by default, or any single section — to isolate the table to just that
                                     slice and pre-select its rows. Run Selected only executes checked rows; an

@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.2] - 2026-08-29
+
+### Changed
+- Test Suite reorganization: TOTP, Stripe webhook signature, and Backup codes format/uniqueness checks moved from Core Logic into Security, where the rest of the auth/crypto checks already live — Backup codes had ended up split across both groups. Renamed the Recurring Billing / Cron group to Billing Cron.
+
 ## [2.11.1] - 2026-08-29
 
 ### Added
