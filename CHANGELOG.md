@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.3] - 2026-08-29
+
+### Changed
+- Code organization: `invoxa.php`'s client, stats, exports, and payments logic — rendering functions, AJAX action handlers, and the public Stripe/PayPal payment routes — moved into new `lib/clients.php`, `lib/stats.php`, `lib/exports.php`, and `lib/payments.php`, alongside the existing `lib/invoice_helpers.php`/`lib/license.php`. A relocation, not a rewrite — behavior is meant to be unchanged, run the internal Test Suite after upgrading to confirm. Settings, Backup & Restore, auth/2FA/API tokens, and the page template still live in `invoxa.php` — that split is future work.
+
 ## [2.11.2] - 2026-08-29
 
 ### Changed
