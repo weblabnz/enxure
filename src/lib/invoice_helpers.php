@@ -831,3 +831,71 @@ function paypalVerifyWebhookSignature(string $accessToken, string $environment, 
     ], $body);
     return $res['success'] && (($res['body']['verification_status'] ?? '') === 'SUCCESS');
 }
+
+// Best-effort vendor/amount extraction from raw Tesseract OCR text of a
+// receipt photo — used to prefill (not auto-submit) the Add Expense form.
+// Vendor: first line with enough letters in it to be a name rather than a
+// barcode/date/price row. Amount: the number next to a line with "total" as
+// its own word (\b...\b — a plain /total/i match would also fire on
+// "SUBTOTAL", which sits above the real total on most receipts and would win
+// by appearing first), or failing that the largest dollar-looking number on
+// the receipt, since the grand total is almost always the biggest figure
+// printed. 'confident' tells the caller (used when more than one file is
+// attached — see ocr_expense_receipt) whether the amount came from an actual
+// total label or just the largest-number guess.
+function parseReceiptOcrText(string $text): array
+{
+    $lines = array_values(array_filter(array_map('trim', explode("\n", $text)), fn($l) => $l !== ''));
+
+    $vendor = '';
+    foreach ($lines as $line) {
+        if (strlen(preg_replace('/[^A-Za-z]/', '', $line)) >= 3) {
+            $vendor = mb_substr($line, 0, 100);
+            break;
+        }
+    }
+
+    $amount = null;
+    $confident = false;
+    foreach ($lines as $line) {
+        if (preg_match('/\btotal\b/i', $line) && preg_match('/(\d[\d,]*\.\d{2})/', $line, $m)) {
+            $amount = (float) str_replace(',', '', $m[1]);
+            $confident = true;
+            break;
+        }
+    }
+    if ($amount === null && preg_match_all('/(\d[\d,]*\.\d{2})/', $text, $m) && !empty($m[1])) {
+        $amount = max(array_map(fn($v) => (float) str_replace(',', '', $v), $m[1]));
+    }
+
+    return ['vendor' => $vendor, 'amount' => $amount, 'confident' => $confident];
+}
+
+function invoxaDirSize(string $dir): int
+{
+    if (!is_dir($dir)) {
+        return 0;
+    }
+    $size = 0;
+    $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
+    foreach ($iterator as $file) {
+        $size += $file->getSize();
+    }
+    return $size;
+}
+
+function invoxaFormatBytes(int $bytes): string
+{
+    if ($bytes < 1024) {
+        return $bytes . ' B';
+    }
+    $units = ['KB', 'MB', 'GB', 'TB'];
+    $value = $bytes / 1024;
+    foreach ($units as $unit) {
+        if ($value < 1024 || $unit === end($units)) {
+            return number_format($value, 1) . ' ' . $unit;
+        }
+        $value /= 1024;
+    }
+    return number_format($value, 1) . ' TB';
+}

@@ -12,8 +12,10 @@
  * that is never shipped to buyers; this file only holds the public key.
  *
  * Two identity anchors are required: the request domain and the email on
- * the single admin account (invoxa_users.email) must both match what the
- * license was issued for.
+ * the original account — the one created via the signup screen, i.e. the
+ * lowest id in invoxa_users, regardless of how many teammates get added
+ * later via Settings > Users — must both match what the license was issued
+ * for.
  *
  * This is a deterrent against casual copying, not DRM — a buyer who
  * controls their own server can patch this check out under their AGPL
@@ -77,10 +79,12 @@ function licenseIsValid($mysqli, array $settings, bool $skipDomainCheck = false,
     }
     [$email, $licensedDomain, $issuedDate] = $fields;
 
-    // The account's email (Settings > Authentication) must match the email
-    // the license was issued to. Applies to both the browser and cron paths
-    // (unlike the domain check below, it doesn't depend on $skipDomainCheck).
-    $userRes = $mysqli->query("SELECT email FROM invoxa_users LIMIT 1");
+    // The original account's email (Settings > Account) must match the email
+    // the license was issued to — always the lowest id, not whichever user is
+    // currently logged in (or no one, on the cron path). Applies to both the
+    // browser and cron paths (unlike the domain check below, it doesn't
+    // depend on $skipDomainCheck).
+    $userRes = $mysqli->query("SELECT email FROM invoxa_users ORDER BY id ASC LIMIT 1");
     $profileEmail = $userRes ? trim((string) ($userRes->fetch_assoc()['email'] ?? '')) : '';
     if ($profileEmail === '') {
         $reason = 'no_profile_email';

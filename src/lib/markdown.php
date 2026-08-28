@@ -6,9 +6,24 @@
 function invoxaMarkdownInline(string $text): string
 {
     $text = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    // The one bit of raw HTML markdown source is allowed to use — a line
+    // break inside a pipe-table cell, which GFM tables have no other way to
+    // express. Narrow allowlist, not general HTML passthrough.
+    $text = preg_replace('/&lt;br\s*\/?&gt;/i', '<br>', $text);
     $text = preg_replace('/`([^`]+)`/', '<code>$1</code>', $text);
     $text = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $text);
     $text = preg_replace('/(?<!\*)\*([^*]+)\*(?!\*)/', '<em>$1</em>', $text);
+    // Must run before the link regex below — otherwise it matches the
+    // [alt](url) part of an image and leaves the leading ! behind as text.
+    $text = preg_replace_callback('/!\[([^\]]*)\]\(([^)]+)\)/', function ($m) {
+        if (preg_match('#^(javascript|data):#i', $m[2])) {
+            return $m[1];
+        }
+        // $m[1]/$m[2] are already htmlspecialchars-escaped (this whole string
+        // was, above) so they're safe to drop straight into src=/alt= as-is —
+        // escaping them again here would double-escape any & in the path.
+        return '<img src="' . $m[2] . '" alt="' . $m[1] . '" loading="lazy">';
+    }, $text);
     $text = preg_replace_callback('/\[([^\]]+)\]\(([^)]+)\)/', function ($m) {
         $url = $m[2];
         $safe = preg_match('#^(https?:)?//#i', $url) || strpos($url, '#') === 0 || preg_match('/^[a-zA-Z0-9_.\-]+\.md(#.*)?$/', $url);

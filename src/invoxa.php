@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.9.5');
+define('APP_VERSION', '2.10.2');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -91,15 +91,24 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_settings (setting_key VARCHAR(
 // Expenses (accounts payable) — same defensive-fallback reasoning as above;
 // sql/01-schema.sql is still canonical for a fresh install.
 $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_expenses (id INT AUTO_INCREMENT PRIMARY KEY, expense_date DATE NOT NULL, vendor VARCHAR(150) NOT NULL DEFAULT '', category VARCHAR(50) NOT NULL DEFAULT 'other', amount DECIMAL(10,2) NOT NULL DEFAULT 0.00, description TEXT, receipt_path VARCHAR(500) DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX idx_expense_date (expense_date), INDEX idx_category (category)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-// Expense receipts — one row per uploaded file (an expense can have more than
-// one, e.g. a receipt plus a card statement excerpt), files live on disk
-// under RECEIPTS_DIR/<expense_id>/. Superseded expenses.receipt_path (single
-// file, kept only for old rows) below.
+// Expense attachments — one row per uploaded file (an expense can have more
+// than one of each), files live on disk under RECEIPTS_DIR/<expense_id>/.
+// doc_type separates the Add Expense modal's two upload slots — Invoice (the
+// vendor's bill) and Receipt (proof of payment, the only one Receipt OCR
+// reads). Superseded expenses.receipt_path (single file, kept only for old
+// rows, always doc_type='receipt') below.
 $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_expense_receipts (id INT AUTO_INCREMENT PRIMARY KEY, expense_id INT NOT NULL, filename VARCHAR(255) NOT NULL, stored_path VARCHAR(500) NOT NULL, file_size INT NOT NULL DEFAULT 0, uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_expense_id (expense_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 $mysqli->query("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size)
     SELECT e.id, e.receipt_path, e.receipt_path, 0 FROM invoxa_expenses e
     WHERE e.receipt_path IS NOT NULL AND e.receipt_path != ''
     AND NOT EXISTS (SELECT 1 FROM invoxa_expense_receipts r WHERE r.expense_id = e.id AND r.stored_path = e.receipt_path)");
+// Same idea for installs that predate splitting the Add Expense upload into
+// separate Invoice/Receipt slots — every file uploaded before this existed
+// was under the old single "Receipts" field, so it defaults to 'receipt'.
+$hasDocTypeCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_expense_receipts' AND COLUMN_NAME = 'doc_type'")->num_rows > 0;
+if (!$hasDocTypeCol) {
+    $mysqli->query("ALTER TABLE invoxa_expense_receipts ADD COLUMN doc_type ENUM('invoice','receipt') NOT NULL DEFAULT 'receipt' AFTER file_size");
+}
 // Recurring expense templates (hosting, SaaS subscriptions, etc.) — the
 // run_recurring cron action auto-logs one invoxa_expenses row per active
 // template each period, same guard-against-double-billing idea as recurring
@@ -133,6 +142,17 @@ if ($settingsValueType === 'varchar') {
 $hasEmailCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_users' AND COLUMN_NAME = 'email'")->num_rows > 0;
 if (!$hasEmailCol) {
     $mysqli->query("ALTER TABLE invoxa_users ADD COLUMN email VARCHAR(255) DEFAULT NULL AFTER username");
+}
+// Multi-user (Settings > Users, a paid feature for account #2 onward) — every
+// pre-existing install has exactly one account, and DEFAULT 'admin' is
+// correct for it (it's the one that went through the signup screen).
+$hasRoleCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_users' AND COLUMN_NAME = 'role'")->num_rows > 0;
+if (!$hasRoleCol) {
+    $mysqli->query("ALTER TABLE invoxa_users ADD COLUMN role ENUM('admin','member') NOT NULL DEFAULT 'admin' AFTER email");
+}
+$hasActionUserCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_actions' AND COLUMN_NAME = 'performed_by_user_id'")->num_rows > 0;
+if (!$hasActionUserCol) {
+    $mysqli->query("ALTER TABLE invoxa_actions ADD COLUMN performed_by_user_id INT NULL AFTER performed_at, ADD COLUMN performed_by_username VARCHAR(190) NULL AFTER performed_by_user_id, ADD INDEX idx_performed_by_user_id (performed_by_user_id)");
 }
 // Same idea for installs that predate per-client payment terms — 21 days matches
 // the fixed "+3 weeks" due date every invoice used before this column existed.
@@ -244,6 +264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
             invoxaIssueEmailVerification($mysqli, (int) $mysqli->insert_id, $user, $email);
             $_SESSION['invoxa_auth'] = true;
             $_SESSION['invoxa_username'] = $user;
+            $_SESSION['invoxa_user_id'] = (int) $mysqli->insert_id;
             header("Location: ?login=1&welcome=1");
             exit;
         } elseif ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -275,6 +296,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
                     $mysqli->query("UPDATE invoxa_users SET failed_login_attempts = 0, locked_until = NULL WHERE id = " . (int) $row['id']);
                     $_SESSION['invoxa_auth'] = true;
                     $_SESSION['invoxa_username'] = $user;
+                    $_SESSION['invoxa_user_id'] = (int) $row['id'];
                     header("Location: ?login=1");
                     exit;
                 }
@@ -309,6 +331,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
                 unset($_SESSION['invoxa_2fa_pending_user']);
                 $_SESSION['invoxa_auth'] = true;
                 $_SESSION['invoxa_username'] = $pendingUser;
+                $_SESSION['invoxa_user_id'] = (int) $row['id'];
                 header("Location: ?login=1");
                 exit;
             } else {
@@ -363,6 +386,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
                 $stmt->execute();
                 $_SESSION['invoxa_auth'] = true;
                 $_SESSION['invoxa_username'] = $row['username'];
+                $_SESSION['invoxa_user_id'] = (int) $row['id'];
                 header("Location: ?login=1");
                 exit;
             }
@@ -395,6 +419,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
 
 $isAuth = isset($_SESSION['invoxa_auth']) && $_SESSION['invoxa_auth'] === true;
 $isCron = CRON_SECRET !== '' && isset($_REQUEST['cron_key']) && hash_equals(CRON_SECRET, (string) $_REQUEST['cron_key']);
+
+// The logged-in user's id/role — every "my account" or "am I allowed to do
+// this" check below is scoped to this, instead of the pre-multi-user
+// assumption that invoxa_users always has exactly one row.
+$currentUserId = 0;
+$currentUserRole = 'admin';
+$currentUsername = null;
+if ($isAuth) {
+    $currentUserId = (int) ($_SESSION['invoxa_user_id'] ?? 0);
+    if ($currentUserId > 0) {
+        $__curUserRow = $mysqli->query("SELECT role, username FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
+        $currentUserRole = $__curUserRow['role'] ?? 'admin';
+        $currentUsername = $__curUserRow['username'] ?? null;
+    } elseif (isset($_SESSION['invoxa_username'])) {
+        // A session created before multi-user existed never stored an id —
+        // resolve and cache it once instead of forcing a re-login.
+        $legacyRow = $mysqli->query("SELECT id, role FROM invoxa_users WHERE username = '" . $mysqli->real_escape_string($_SESSION['invoxa_username']) . "'")->fetch_assoc();
+        if ($legacyRow) {
+            $currentUserId = (int) $legacyRow['id'];
+            $currentUserRole = $legacyRow['role'];
+            $currentUsername = $_SESSION['invoxa_username'];
+            $_SESSION['invoxa_user_id'] = $currentUserId;
+        }
+    }
+}
+$isAdmin = $currentUserRole === 'admin';
+
+$__actorUserId = $currentUserId > 0 ? $currentUserId : null;
+$__actorUsername = $currentUsername;
+
+function invoxaLogAction($mysqli, $invoiceId, string $invoiceNumber, string $actionType, string $notes = ''): void
+{
+    global $__actorUserId, $__actorUsername;
+    $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes, performed_by_user_id, performed_by_username) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('isssis', $invoiceId, $invoiceNumber, $actionType, $notes, $__actorUserId, $__actorUsername);
+    $stmt->execute();
+}
 
 if (isset($_GET['verify_token'])) {
     $verifyHash = hash('sha256', (string) $_GET['verify_token']);
@@ -980,7 +1041,7 @@ if (isset($_GET['apiv1'])) {
 if (!$isAuth && !$isCron) {
     // Product identity (favicon/title/chrome) is always "Invoxa" — brand settings only
     // customize invoice output (see processInvoice()/generateInvoiceHTML()), not the tool itself.
-    echo '<!DOCTYPE html><html lang="en"><head><script>document.documentElement.setAttribute("data-theme", localStorage.getItem("invoxa_theme") || "light");</script><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Invoxa' . (INSTANCE_LABEL ? ' (' . htmlspecialchars(INSTANCE_LABEL) . ')' : '') . ' - ' . (['signup' => 'Setup', 'totp' => 'Two-Factor', 'forgot' => 'Recover Access', 'reset' => 'Reset Password'][$authMode] ?? 'Login') . '</title><link rel="icon" type="image/svg+xml" href="assets/img/invoxa-mark.svg"><link rel="alternate icon" href="assets/img/favicon.ico"><link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0a0f1c"><style>*{box-sizing:border-box;}html{overflow:hidden;height:100%;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:radial-gradient(1100px 500px at 15% -10%, rgba(79,124,255,0.2), transparent 60%), radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), #0a0f1c;background-size:auto,24px 24px,auto;color:#f7f9fc;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;overflow:hidden;position:relative;}body::before,body::after{content:"";position:absolute;border-radius:50%;filter:blur(50px);pointer-events:none;z-index:0;}body::before{width:600px;height:600px;top:-80px;left:-80px;background:radial-gradient(circle at 30% 30%, rgba(79,124,255,0.8), transparent 70%);animation:invoxaDriftA 22s ease-in-out infinite alternate;}body::after{width:540px;height:540px;bottom:-100px;right:-100px;background:radial-gradient(circle at 70% 70%, rgba(29,78,216,0.7), transparent 70%);animation:invoxaDriftB 26s ease-in-out infinite alternate;}@keyframes invoxaDriftA{0%{transform:translate(0,0);}100%{transform:translate(50px,35px);}}@keyframes invoxaDriftB{0%{transform:translate(0,0);}100%{transform:translate(-45px,-30px);}}@keyframes invoxaCardIn{from{opacity:0;transform:translateY(14px) scale(.97);}to{opacity:1;transform:translateY(0) scale(1);}}@keyframes invoxaFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-12px);}}@keyframes invoxaGlow{0%,100%{box-shadow:0 8px 24px -8px rgba(79,124,255,0.5);}50%{box-shadow:0 14px 34px -6px rgba(79,124,255,0.8);}}@media (prefers-reduced-motion: reduce){body::before,body::after,.auth-box,.auth-logo img{animation:none!important;}}.auth-box{position:relative;z-index:1;overflow:hidden;background:#131b2e;padding:2.75rem 2.5rem;border-radius:18px;width:100%;max-width:400px;border:1px solid rgba(255,255,255,0.08);box-shadow:0 24px 48px -16px rgba(0,0,0,0.55);animation:invoxaCardIn .5s ease both;}.auth-box::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,#5b8cff,#1d4ed8);box-shadow:0 0 20px 2px rgba(79,124,255,0.6);}.auth-logo{display:flex;justify-content:center;margin-bottom:1.25rem;}.auth-logo img{width:52px;height:52px;border-radius:14px;box-shadow:0 8px 24px -8px rgba(79,124,255,0.5);animation:invoxaFloat 2.6s ease-in-out infinite, invoxaGlow 2.6s ease-in-out infinite;}h2{margin-top:0;text-align:center;margin-bottom:1.75rem;font-weight:700;letter-spacing:-0.01em;font-size:1.35rem;}.form-group{margin-bottom:1.25rem;}label{display:block;margin-bottom:0.5rem;color:#90a0bb;font-size:0.85rem;font-weight:600;}input{width:100%;padding:0.75rem 0.9rem;background:#1a2439;border:1px solid rgba(255,255,255,0.08);color:#f7f9fc;border-radius:10px;box-sizing:border-box;font-family:inherit;font-size:16px;transition:border-color .15s ease, box-shadow .15s ease;}input:focus{outline:none;border-color:#4f7cff;box-shadow:0 0 0 3px rgba(79,124,255,0.15);}button{width:100%;padding:0.8rem;background:#4f7cff;border:none;color:white;border-radius:10px;font-weight:600;cursor:pointer;margin-top:0.5rem;font-family:inherit;font-size:0.95rem;transition:background 0.15s ease, transform .1s ease;box-shadow:0 4px 14px -4px rgba(79,124,255,0.5);}button:hover{background:#3d63e0;}button:active{transform:translateY(1px);}.error{color:#f5455c;margin-bottom:1.25rem;text-align:center;font-size:0.875rem;background:rgba(245,69,92,0.1);padding:0.6rem;border-radius:8px;}.doc-links{display:flex;justify-content:center;gap:1.25rem;margin-top:1.75rem;padding-top:1.25rem;border-top:1px solid rgba(255,255,255,0.08);}.doc-links a{color:#90a0bb;font-size:0.8rem;text-decoration:none;font-weight:500;background:none;border:none;padding:0;cursor:pointer;width:auto;margin:0;box-shadow:none;}.doc-links a:hover{color:#4f7cff;}.doc-modal-overlay{position:fixed;inset:0;background:rgba(5,8,16,0.65);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:1000;}.doc-modal-overlay.active{display:flex;}.doc-modal{background:#131b2e;border:1px solid rgba(255,255,255,0.08);border-radius:16px;width:90%;max-width:640px;max-height:78vh;display:flex;flex-direction:column;box-shadow:0 24px 48px -16px rgba(0,0,0,0.55);}.doc-modal-header{padding:1.1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;font-weight:700;}.doc-modal-actions{display:flex;gap:0.5rem;align-items:center;}.doc-modal button{width:auto;margin:0;box-shadow:none;font-family:inherit;}.doc-tab-btn{padding:0.4rem 0.7rem;font-size:0.75rem;background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#f7f9fc;}.doc-tab-btn:hover{background:#212d47;}.doc-close-btn{padding:0.3rem 0.6rem;background:transparent;font-size:1.1rem;line-height:1;border:none;color:#90a0bb;}.doc-close-btn:hover{background:transparent;color:#f5455c;}.doc-modal-body{padding:1.25rem 1.5rem;overflow-y:auto;}.doc-modal-body .doc-content h1,.doc-modal-body .doc-content h2,.doc-modal-body .doc-content h3,.doc-modal-body .doc-content h4{color:#f7f9fc;margin:1.25rem 0 0.6rem;line-height:1.3;}.doc-modal-body .doc-content h1:first-child,.doc-modal-body .doc-content h2:first-child{margin-top:0;}.doc-modal-body .doc-content h1{font-size:1.25rem;}.doc-modal-body .doc-content h2{font-size:1.05rem;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:0.35rem;}.doc-modal-body .doc-content h3{font-size:0.95rem;}.doc-modal-body .doc-content p,.doc-modal-body .doc-content li{color:#90a0bb;font-size:0.88rem;line-height:1.6;}.doc-modal-body .doc-content ul,.doc-modal-body .doc-content ol{margin:0.5rem 0 0.75rem;padding-left:1.3rem;}.doc-modal-body .doc-content strong{color:#f7f9fc;}.doc-modal-body .doc-content a{color:#4f7cff;text-decoration:none;}.doc-modal-body .doc-content a:hover{text-decoration:underline;}.doc-modal-body .doc-content code{background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.8rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#f7f9fc;}.doc-modal-body .doc-content pre{background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:0.8rem 1rem;overflow-x:auto;margin:0.75rem 0;}.doc-modal-body .doc-content pre code{background:none;border:none;padding:0;}.doc-modal-body .doc-content table{width:100%;border-collapse:collapse;margin:0.75rem 0 1.1rem;font-size:0.82rem;}.doc-modal-body .doc-content th,.doc-modal-body .doc-content td{border:1px solid rgba(255,255,255,0.08);padding:0.45rem 0.6rem;text-align:left;}.doc-modal-body .doc-content th{background:#1a2439;color:#f7f9fc;}.doc-modal-body .doc-content td{color:#90a0bb;}[data-theme="light"] body{background:radial-gradient(1100px 500px at 15% -10%, rgba(61,99,224,0.16), transparent 60%), radial-gradient(rgba(15,23,42,0.06) 1px, transparent 1px), #e8ecf4;background-size:auto,24px 24px,auto;color:#0f172a;}[data-theme="light"] body::before{background:radial-gradient(circle at 30% 30%, rgba(61,99,224,0.6), transparent 70%);}[data-theme="light"] body::after{background:radial-gradient(circle at 70% 70%, rgba(29,78,216,0.5), transparent 70%);}[data-theme="light"] .auth-box{background:#ffffff;border-color:rgba(15,23,42,0.08);box-shadow:0 24px 48px -16px rgba(15,23,42,0.12);}[data-theme="light"] label{color:#5c6b85;}[data-theme="light"] input{background:#f8f9fd;border-color:rgba(15,23,42,0.08);color:#0f172a;}[data-theme="light"] input:focus{border-color:#3d63e0;box-shadow:0 0 0 3px rgba(61,99,224,0.15);}[data-theme="light"] button{background:#3d63e0;box-shadow:0 4px 14px -4px rgba(61,99,224,0.5);}[data-theme="light"] button:hover{background:#2e4fc0;}[data-theme="light"] .error{color:#dc2626;background:rgba(220,38,38,0.08);}[data-theme="light"] .doc-links{border-top-color:rgba(15,23,42,0.08);}[data-theme="light"] .doc-links a{color:#5c6b85;}[data-theme="light"] .doc-links a:hover{color:#3d63e0;}[data-theme="light"] .doc-modal-overlay{background:rgba(15,23,42,0.45);}[data-theme="light"] .doc-modal{background:#ffffff;border-color:rgba(15,23,42,0.08);box-shadow:0 24px 48px -16px rgba(15,23,42,0.12);}[data-theme="light"] .doc-modal-header{border-bottom-color:rgba(15,23,42,0.08);}[data-theme="light"] .doc-tab-btn{background:#f8f9fd;border-color:rgba(15,23,42,0.08);color:#0f172a;}[data-theme="light"] .doc-tab-btn:hover{background:#eef1f8;}[data-theme="light"] .doc-close-btn{color:#5c6b85;}[data-theme="light"] .doc-close-btn:hover{color:#dc2626;}[data-theme="light"] .doc-modal-body .doc-content h1,[data-theme="light"] .doc-modal-body .doc-content h2,[data-theme="light"] .doc-modal-body .doc-content h3,[data-theme="light"] .doc-modal-body .doc-content h4{color:#0f172a;}[data-theme="light"] .doc-modal-body .doc-content h2{border-bottom-color:rgba(15,23,42,0.08);}[data-theme="light"] .doc-modal-body .doc-content p,[data-theme="light"] .doc-modal-body .doc-content li{color:#5c6b85;}[data-theme="light"] .doc-modal-body .doc-content strong{color:#0f172a;}[data-theme="light"] .doc-modal-body .doc-content a{color:#3d63e0;}[data-theme="light"] .doc-modal-body .doc-content code{background:#f8f9fd;border-color:rgba(15,23,42,0.08);color:#0f172a;}[data-theme="light"] .doc-modal-body .doc-content pre{background:#f8f9fd;border-color:rgba(15,23,42,0.08);}[data-theme="light"] .doc-modal-body .doc-content th,[data-theme="light"] .doc-modal-body .doc-content td{border-color:rgba(15,23,42,0.08);}[data-theme="light"] .doc-modal-body .doc-content th{background:#f8f9fd;color:#0f172a;}[data-theme="light"] .doc-modal-body .doc-content td{color:#5c6b85;}</style></head><body><div class="auth-box"><div class="auth-logo"><img src="assets/img/invoxa-mark.svg" width="52" height="52" alt=""></div><h2>Invoxa ' . (['signup' => 'Setup', 'totp' => 'Two-Factor Authentication', 'forgot' => 'Recover Access', 'reset' => 'Reset Password'][$authMode] ?? 'Login') . '</h2>';
+    echo '<!DOCTYPE html><html lang="en"><head><script>document.documentElement.setAttribute("data-theme", localStorage.getItem("invoxa_theme") || "light");</script><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Invoxa' . (INSTANCE_LABEL ? ' (' . htmlspecialchars(INSTANCE_LABEL) . ')' : '') . ' - ' . (['signup' => 'Setup', 'totp' => 'Two-Factor', 'forgot' => 'Recover Access', 'reset' => 'Reset Password'][$authMode] ?? 'Login') . '</title><link rel="icon" type="image/svg+xml" href="assets/img/invoxa-mark.svg"><link rel="alternate icon" href="assets/img/favicon.ico"><link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0a0f1c"><style>*{box-sizing:border-box;}html{overflow:hidden;height:100%;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:radial-gradient(1100px 500px at 15% -10%, rgba(79,124,255,0.2), transparent 60%), radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), #0a0f1c;background-size:auto,24px 24px,auto;color:#f7f9fc;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;overflow:hidden;position:relative;}body::before,body::after{content:"";position:absolute;border-radius:50%;filter:blur(50px);pointer-events:none;z-index:0;}body::before{width:600px;height:600px;top:-80px;left:-80px;background:radial-gradient(circle at 30% 30%, rgba(79,124,255,0.8), transparent 70%);animation:invoxaDriftA 22s ease-in-out infinite alternate;}body::after{width:540px;height:540px;bottom:-100px;right:-100px;background:radial-gradient(circle at 70% 70%, rgba(29,78,216,0.7), transparent 70%);animation:invoxaDriftB 26s ease-in-out infinite alternate;}@keyframes invoxaDriftA{0%{transform:translate(0,0);}100%{transform:translate(50px,35px);}}@keyframes invoxaDriftB{0%{transform:translate(0,0);}100%{transform:translate(-45px,-30px);}}@keyframes invoxaCardIn{from{opacity:0;transform:translateY(14px) scale(.97);}to{opacity:1;transform:translateY(0) scale(1);}}@keyframes invoxaFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-12px);}}@keyframes invoxaGlow{0%,100%{box-shadow:0 8px 24px -8px rgba(79,124,255,0.5);}50%{box-shadow:0 14px 34px -6px rgba(79,124,255,0.8);}}@media (prefers-reduced-motion: reduce){body::before,body::after,.auth-box,.auth-logo img{animation:none!important;}}.auth-box{position:relative;z-index:1;overflow:hidden;background:#131b2e;padding:2.75rem 2.5rem;border-radius:18px;width:100%;max-width:400px;border:1px solid rgba(255,255,255,0.08);box-shadow:0 24px 48px -16px rgba(0,0,0,0.55);animation:invoxaCardIn .5s ease both;}.auth-box::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,#5b8cff,#1d4ed8);box-shadow:0 0 20px 2px rgba(79,124,255,0.6);}.auth-logo{display:flex;justify-content:center;margin-bottom:1.25rem;}.auth-logo img{width:52px;height:52px;border-radius:14px;box-shadow:0 8px 24px -8px rgba(79,124,255,0.5);animation:invoxaFloat 2.6s ease-in-out infinite, invoxaGlow 2.6s ease-in-out infinite;}h2{margin-top:0;text-align:center;margin-bottom:1.75rem;font-weight:700;letter-spacing:-0.01em;font-size:1.35rem;}.form-group{margin-bottom:1.25rem;}label{display:block;margin-bottom:0.5rem;color:#90a0bb;font-size:0.85rem;font-weight:600;}input{width:100%;padding:0.75rem 0.9rem;background:#1a2439;border:1px solid rgba(255,255,255,0.08);color:#f7f9fc;border-radius:10px;box-sizing:border-box;font-family:inherit;font-size:16px;transition:border-color .15s ease, box-shadow .15s ease;}input:focus{outline:none;border-color:#4f7cff;box-shadow:0 0 0 3px rgba(79,124,255,0.15);}button{width:100%;padding:0.8rem;background:#4f7cff;border:none;color:white;border-radius:10px;font-weight:600;cursor:pointer;margin-top:0.5rem;font-family:inherit;font-size:0.95rem;transition:background 0.15s ease, transform .1s ease;box-shadow:0 4px 14px -4px rgba(79,124,255,0.5);}button:hover{background:#3d63e0;}button:active{transform:translateY(1px);}.error{color:#f5455c;margin-bottom:1.25rem;text-align:center;font-size:0.875rem;background:rgba(245,69,92,0.1);padding:0.6rem;border-radius:8px;}.doc-links{display:flex;justify-content:center;gap:1.25rem;margin-top:1.75rem;padding-top:1.25rem;border-top:1px solid rgba(255,255,255,0.08);}.doc-links a{color:#90a0bb;font-size:0.8rem;text-decoration:none;font-weight:500;background:none;border:none;padding:0;cursor:pointer;width:auto;margin:0;box-shadow:none;}.doc-links a:hover{color:#4f7cff;}.doc-modal-overlay{position:fixed;inset:0;background:rgba(5,8,16,0.65);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:1000;}.doc-modal-overlay.active{display:flex;}.doc-modal{background:#131b2e;border:1px solid rgba(255,255,255,0.08);border-radius:16px;width:90%;max-width:640px;max-height:78vh;display:flex;flex-direction:column;box-shadow:0 24px 48px -16px rgba(0,0,0,0.55);}.doc-modal-header{padding:1.1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;font-weight:700;}.doc-modal-actions{display:flex;gap:0.5rem;align-items:center;}.doc-modal button{width:auto;margin:0;box-shadow:none;font-family:inherit;}.doc-tab-btn{padding:0.4rem 0.7rem;font-size:0.75rem;background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#f7f9fc;}.doc-tab-btn:hover{background:#212d47;}.doc-close-btn{padding:0.3rem 0.6rem;background:transparent;font-size:1.1rem;line-height:1;border:none;color:#90a0bb;}.doc-close-btn:hover{background:transparent;color:#f5455c;}.doc-modal-body{padding:1.25rem 1.5rem;overflow-y:auto;}.doc-modal-body .doc-content h1,.doc-modal-body .doc-content h2,.doc-modal-body .doc-content h3,.doc-modal-body .doc-content h4{color:#f7f9fc;margin:1.25rem 0 0.6rem;line-height:1.3;}.doc-modal-body .doc-content h1:first-child,.doc-modal-body .doc-content h2:first-child{margin-top:0;}.doc-modal-body .doc-content h1{font-size:1.25rem;}.doc-modal-body .doc-content h2{font-size:1.05rem;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:0.35rem;}.doc-modal-body .doc-content h3{font-size:0.95rem;}.doc-modal-body .doc-content p,.doc-modal-body .doc-content li{color:#90a0bb;font-size:0.88rem;line-height:1.6;}.doc-modal-body .doc-content ul,.doc-modal-body .doc-content ol{margin:0.5rem 0 0.75rem;padding-left:1.3rem;}.doc-modal-body .doc-content strong{color:#f7f9fc;}.doc-modal-body .doc-content a{color:#4f7cff;text-decoration:none;}.doc-modal-body .doc-content a:hover{text-decoration:underline;}.doc-modal-body .doc-content code{background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:4px;padding:0.1rem 0.4rem;font-size:0.8rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#f7f9fc;}.doc-modal-body .doc-content pre{background:#1a2439;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:0.8rem 1rem;overflow-x:auto;margin:0.75rem 0;}.doc-modal-body .doc-content pre code{background:none;border:none;padding:0;}.doc-modal-body .doc-content table{width:100%;border-collapse:collapse;margin:0.75rem 0 1.1rem;font-size:0.82rem;}.doc-modal-body .doc-content th,.doc-modal-body .doc-content td{border:1px solid rgba(255,255,255,0.08);padding:0.45rem 0.6rem;text-align:left;}.doc-modal-body .doc-content th{background:#1a2439;color:#f7f9fc;}.doc-modal-body .doc-content td{color:#90a0bb;}.doc-modal-body .doc-content img{max-width:70%;height:auto;border-radius:8px;border:1px solid rgba(255,255,255,0.08);}[data-theme="light"] body{background:radial-gradient(1100px 500px at 15% -10%, rgba(61,99,224,0.16), transparent 60%), radial-gradient(rgba(15,23,42,0.06) 1px, transparent 1px), #e8ecf4;background-size:auto,24px 24px,auto;color:#0f172a;}[data-theme="light"] body::before{background:radial-gradient(circle at 30% 30%, rgba(61,99,224,0.6), transparent 70%);}[data-theme="light"] body::after{background:radial-gradient(circle at 70% 70%, rgba(29,78,216,0.5), transparent 70%);}[data-theme="light"] .auth-box{background:#ffffff;border-color:rgba(15,23,42,0.08);box-shadow:0 24px 48px -16px rgba(15,23,42,0.12);}[data-theme="light"] label{color:#5c6b85;}[data-theme="light"] input{background:#f8f9fd;border-color:rgba(15,23,42,0.08);color:#0f172a;}[data-theme="light"] input:focus{border-color:#3d63e0;box-shadow:0 0 0 3px rgba(61,99,224,0.15);}[data-theme="light"] button{background:#3d63e0;box-shadow:0 4px 14px -4px rgba(61,99,224,0.5);}[data-theme="light"] button:hover{background:#2e4fc0;}[data-theme="light"] .error{color:#dc2626;background:rgba(220,38,38,0.08);}[data-theme="light"] .doc-links{border-top-color:rgba(15,23,42,0.08);}[data-theme="light"] .doc-links a{color:#5c6b85;}[data-theme="light"] .doc-links a:hover{color:#3d63e0;}[data-theme="light"] .doc-modal-overlay{background:rgba(15,23,42,0.45);}[data-theme="light"] .doc-modal{background:#ffffff;border-color:rgba(15,23,42,0.08);box-shadow:0 24px 48px -16px rgba(15,23,42,0.12);}[data-theme="light"] .doc-modal-header{border-bottom-color:rgba(15,23,42,0.08);}[data-theme="light"] .doc-tab-btn{background:#f8f9fd;border-color:rgba(15,23,42,0.08);color:#0f172a;}[data-theme="light"] .doc-tab-btn:hover{background:#eef1f8;}[data-theme="light"] .doc-close-btn{color:#5c6b85;}[data-theme="light"] .doc-close-btn:hover{color:#dc2626;}[data-theme="light"] .doc-modal-body .doc-content h1,[data-theme="light"] .doc-modal-body .doc-content h2,[data-theme="light"] .doc-modal-body .doc-content h3,[data-theme="light"] .doc-modal-body .doc-content h4{color:#0f172a;}[data-theme="light"] .doc-modal-body .doc-content h2{border-bottom-color:rgba(15,23,42,0.08);}[data-theme="light"] .doc-modal-body .doc-content p,[data-theme="light"] .doc-modal-body .doc-content li{color:#5c6b85;}[data-theme="light"] .doc-modal-body .doc-content strong{color:#0f172a;}[data-theme="light"] .doc-modal-body .doc-content a{color:#3d63e0;}[data-theme="light"] .doc-modal-body .doc-content code{background:#f8f9fd;border-color:rgba(15,23,42,0.08);color:#0f172a;}[data-theme="light"] .doc-modal-body .doc-content pre{background:#f8f9fd;border-color:rgba(15,23,42,0.08);}[data-theme="light"] .doc-modal-body .doc-content th,[data-theme="light"] .doc-modal-body .doc-content td{border-color:rgba(15,23,42,0.08);}[data-theme="light"] .doc-modal-body .doc-content th{background:#f8f9fd;color:#0f172a;}[data-theme="light"] .doc-modal-body .doc-content td{color:#5c6b85;}</style></head><body><div class="auth-box"><div class="auth-logo"><img src="assets/img/invoxa-mark.svg" width="52" height="52" alt=""></div><h2>Invoxa ' . (['signup' => 'Setup', 'totp' => 'Two-Factor Authentication', 'forgot' => 'Recover Access', 'reset' => 'Reset Password'][$authMode] ?? 'Login') . '</h2>';
     if ($authMode === 'signup')
         echo '<p style="text-align:center; color:#94a3b8; font-size:0.875rem; margin-bottom: 1.5rem;">Create your master admin account.</p>';
     if ($authMode === 'totp')
@@ -1568,16 +1629,15 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
 
     $actionType = $emailSent ? 'email_sent' : 'email_failed';
     $notes = $emailSent ? "Invoice generated and emailed to {$client['email']}" : "Send failed: " . $errorMsg;
-    $stmtAction = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, ?, ?)");
     $iid = $stmt->insert_id;
-    $stmtAction->bind_param("isss", $iid, $invNum, $actionType, $notes);
-    $stmtAction->execute();
+    invoxaLogAction($mysqli, $iid, $invNum, $actionType, $notes);
+
+    if (!$emailSent) {
+        notifyChannel($mysqli, $settings, 'notify_on_email_failed', "\xE2\x9C\x89\xEF\xB8\x8F Invoice email failed to send — {$invNum} ({$client['client_name']}): {$errorMsg}");
+    }
 
     if ($memo !== null && trim($memo) !== '') {
-        $memoStmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, 'note_added', ?)");
-        $memoTrimmed = trim($memo);
-        $memoStmt->bind_param("iss", $iid, $invNum, $memoTrimmed);
-        $memoStmt->execute();
+        invoxaLogAction($mysqli, $iid, $invNum, 'note_added', trim($memo));
     }
 
     return ['success' => $emailSent, 'invNum' => $invNum, 'error' => $errorMsg];
@@ -1606,9 +1666,7 @@ function notifyChannel($mysqli, array $settings, string $eventToggleKey, string 
     }
     if (!$result['success']) {
         $notes = ucfirst($channel) . ' notification failed: ' . $result['error'];
-        $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'notification_failed', ?)");
-        $stmt->bind_param("s", $notes);
-        $stmt->execute();
+        invoxaLogAction($mysqli, null, '', 'notification_failed', $notes);
     }
 }
 
@@ -1675,14 +1733,12 @@ function recordInvoicePayment($mysqli, array $settings, int $invoiceId, float $a
     $stmt->execute();
 
     $sourceLabel = $provider === 'manual' ? '' : ' via ' . invoxaProviderLabel($provider);
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, ?, ?)");
     $actionType = $isPartial ? 'mark_partial_paid' : 'mark_paid';
     $notes = ($isPartial ? "Partial payment logged: $" : "Marked as paid: $") . number_format($amount, 2)
         . " (total paid to date: $" . number_format($totalPaid, 2) . " of $" . number_format($invAmount, 2) . ")"
         . $sourceLabel
         . ($note !== '' ? " — {$note}" : '');
-    $stmt->bind_param("isss", $invoiceId, $invNum, $actionType, $notes);
-    $stmt->execute();
+    invoxaLogAction($mysqli, $invoiceId, $invNum, $actionType, $notes);
 
     $currencyCode = $settings['currency'] ?? 'USD';
     notifyChannel($mysqli, $settings, 'notify_on_payment', ($isPartial ? "\xF0\x9F\x92\xB0 Partial payment received" : "\xE2\x9C\x85 Invoice paid in full") . " — {$invNum} ({$invRow['client_name']}){$sourceLabel}: {$currencyCode} " . number_format($amount, 2));
@@ -1736,13 +1792,11 @@ function recordInvoiceRefund($mysqli, array $settings, int $invoiceId, float $re
     $stmt->execute();
 
     $sourceLabel = ' via ' . invoxaProviderLabel($provider);
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, 'refund_issued', ?)");
     $notes = "Refund issued: $" . number_format($refundAmount, 2) . " (total paid now: $" . number_format($totalPaid, 2) . " of $" . number_format($invAmount, 2) . ")" . $sourceLabel;
-    $stmt->bind_param("iss", $invoiceId, $invRow['invoice_number'], $notes);
-    $stmt->execute();
+    invoxaLogAction($mysqli, $invoiceId, $invRow['invoice_number'], 'refund_issued', $notes);
 
     $currencyCode = $settings['currency'] ?? 'USD';
-    notifyChannel($mysqli, $settings, 'notify_on_payment', "\xE2\x86\xA9\xEF\xB8\x8F Refund issued — {$invRow['invoice_number']} ({$invRow['client_name']}){$sourceLabel}: {$currencyCode} " . number_format($refundAmount, 2));
+    notifyChannel($mysqli, $settings, 'notify_on_refund', "\xE2\x86\xA9\xEF\xB8\x8F Refund issued — {$invRow['invoice_number']} ({$invRow['client_name']}){$sourceLabel}: {$currencyCode} " . number_format($refundAmount, 2));
 
     return ['success' => true, 'duplicate' => false, 'total_paid' => $totalPaid, 'invoice_number' => $invRow['invoice_number']];
 }
@@ -1798,9 +1852,7 @@ function convertQuoteToInvoice($mysqli, array $settings, int $quoteId, string $s
     $actionNotes = $source === 'client'
         ? "Quote {$row['invoice_number']} accepted by {$clientName} via the Client Portal, now invoice {$newNum}"
         : "Quote {$row['invoice_number']} converted to invoice {$newNum}";
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("isss", $quoteId, $newNum, $actionType, $actionNotes);
-    $stmt->execute();
+    invoxaLogAction($mysqli, $quoteId, $newNum, $actionType, $actionNotes);
 
     if ($source === 'client') {
         notifyChannel($mysqli, $settings, 'notify_on_quote_accepted', "\xF0\x9F\x93\x9D Quote accepted — {$row['invoice_number']} ({$clientName}), now invoice {$newNum}");
@@ -1814,10 +1866,10 @@ function convertQuoteToInvoice($mysqli, array $settings, int $quoteId, string $s
 // The webhook handlers still return 200 either way, but this leaves a trail.
 function invoxaLogUnmatchedWebhook($mysqli, string $provider, string $eventType, string $reference): void
 {
+    global $settings;
     $notes = ucfirst($provider) . " webhook ({$eventType}) referenced an invoice/reference Invoxa doesn't recognize: '{$reference}'. Payment not credited.";
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'webhook_unmatched', ?)");
-    $stmt->bind_param("s", $notes);
-    $stmt->execute();
+    invoxaLogAction($mysqli, null, '', 'webhook_unmatched', $notes);
+    notifyChannel($mysqli, $settings, 'notify_on_webhook_unmatched', "\xE2\x9A\xA0\xEF\xB8\x8F " . ucfirst($provider) . " payment webhook didn't match any invoice ('{$reference}') — payment not credited.");
 }
 
 // Emails a one-time overdue reminder for every unpaid, non-quote invoice
@@ -1905,9 +1957,7 @@ function sendOverdueReminders($mysqli, array $settings, string $emailPassword): 
         $notes = $emailSent
             ? "Overdue reminder emailed to {$inv['recipient_email']} ({$daysOverdue} days overdue)"
             : "Overdue reminder failed: " . $errorMsg;
-        $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("isss", $inv['id'], $inv['invoice_number'], $actionType, $notes);
-        $stmt->execute();
+        invoxaLogAction($mysqli, $inv['id'], $inv['invoice_number'], $actionType, $notes);
 
         // Fired regardless of whether the email itself sent — a broken SMTP
         // config shouldn't also silence the Telegram/Slack alert.
@@ -1984,9 +2034,10 @@ function applyLateFees($mysqli, array $settings, string $emailPassword): array
         $notes = $result['success']
             ? "Late fee invoice {$result['invNum']} generated for " . number_format($feeAmount, 2)
             : "Late fee invoice {$result['invNum']} generated for " . number_format($feeAmount, 2) . " but email failed: " . $result['error'];
-        $act = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, 'late_fee_charged', ?)");
-        $act->bind_param("iss", $inv['id'], $inv['invoice_number'], $notes);
-        $act->execute();
+        invoxaLogAction($mysqli, $inv['id'], $inv['invoice_number'], 'late_fee_charged', $notes);
+
+        $currencyCode = $settings['currency'] ?? 'USD';
+        notifyChannel($mysqli, $settings, 'notify_on_late_fee', "\xE2\x9A\xA0\xEF\xB8\x8F Late fee charged — {$inv['invoice_number']} ({$client['client_name']}): {$currencyCode} " . number_format($feeAmount, 2));
 
         if ($result['success'])
             $charged++;
@@ -2014,9 +2065,7 @@ function pruneAuditActions($mysqli, array $settings): int
     // Only logged when the feature is on, to avoid a "pruned 0" entry every
     // cron cycle. Inserted after the delete so it can't be swept up by this run.
     $notes = "Removed {$pruned} audit log entr" . ($pruned === 1 ? 'y' : 'ies') . " older than {$days} days";
-    $logStmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'audit_log_pruned', ?)");
-    $logStmt->bind_param("s", $notes);
-    $logStmt->execute();
+    invoxaLogAction($mysqli, null, '', 'audit_log_pruned', $notes);
 
     return $pruned;
 }
@@ -2422,7 +2471,10 @@ function renderStatsSection(): string
     $stats_email_sent, $stats_email_failed, $stats_email_total, $stats_email_success_rate,
     $stats_ty_monthly, $stats_tax_year_days_total, $stats_tax_year_days_elapsed, $stats_tax_year_progress_pct,
     $stats_last_recurring_run, $stats_late_fees_charged, $stats_reminders_sent, $stats_reminders_failed,
-    $most_active_clients;
+    $most_active_clients, $stats_invoice_status, $stats_revenue_trend, $stats_expense_ty_total, $stats_net_income_ty,
+    $stats_expense_categories, $stats_expense_monthly, $stats_db_size_bytes, $stats_invoices_dir_size_bytes,
+    $stats_backups_dir_size_bytes, $stats_webhook_unmatched_total, $stats_webhook_unmatched_30d,
+    $stats_php_version, $stats_mysql_version;
     ob_start();
     ?>
     <h2 class="page-title">Data Statistics &amp; Forecasting</h2>
@@ -2451,6 +2503,8 @@ function renderStatsSection(): string
                 onclick="navStats('forecasting')"><i class="fa-solid fa-chart-line"></i> Forecasting</button>
             <button type="button" class="subnav-item" data-stats-target="clients"
                 onclick="navStats('clients')"><i class="fa-solid fa-users"></i> Clients</button>
+            <button type="button" class="subnav-item" data-stats-target="expenses"
+                onclick="navStats('expenses')"><i class="fa-solid fa-receipt"></i> Expenses</button>
             <button type="button" class="subnav-item" data-stats-target="tax"
                 onclick="navStats('tax')"><i class="fa-solid fa-file-invoice-dollar"></i> Tax &amp; Compliance</button>
             <button type="button" class="subnav-item" data-stats-target="activity"
@@ -2555,6 +2609,38 @@ function renderStatsSection(): string
                         </div>
                     </div>
                 </div>
+
+                <div class="mobile-grid" style="display:grid; grid-template-columns:1fr 1.3fr; gap:1rem; align-items:stretch;">
+                <div class="card" style="margin-bottom:0;">
+                    <div class="card-header">
+                        <h3>Invoice Status Breakdown</h3>
+                    </div>
+                    <?php if (!empty($stats_invoice_status)): ?>
+                        <div class="card-body">
+                            <div style="height:220px; position:relative;"><canvas id="invoiceStatusChart"></canvas></div>
+                        </div>
+                        <script>
+                            window.__invoiceStatusData = <?= json_encode($stats_invoice_status) ?>;
+                        </script>
+                    <?php else: ?>
+                        <div class="card-body">
+                            <p style="color:var(--text-secondary); margin:0;">No invoices yet.</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="card" style="margin-bottom:0;">
+                    <div class="card-header">
+                        <h3>Revenue Trend (Last 12 Months)</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="height:220px; position:relative;"><canvas id="revenueTrendChart"></canvas></div>
+                    </div>
+                    <script>
+                        window.__revenueTrendData = <?= json_encode($stats_revenue_trend) ?>;
+                    </script>
+                </div>
+                </div>
             </div>
 
             <!-- Forecasting -->
@@ -2610,6 +2696,12 @@ function renderStatsSection(): string
                     <div class="card-body">
                         <p style="color:var(--text-secondary); margin-bottom: 1rem; font-size:0.875rem;">How overdue
                             the currently outstanding balance is, bucketed by days past due date.</p>
+                        <?php if (array_sum(array_column($stats_aging, 'amount')) > 0): ?>
+                            <div style="height:160px; position:relative; margin-bottom:1.25rem;"><canvas id="arAgingChart"></canvas></div>
+                            <script>
+                                window.__arAgingData = <?= json_encode($stats_aging) ?>;
+                            </script>
+                        <?php endif; ?>
                         <?php $stats_aging_max = max(1, ...array_column($stats_aging, 'amount')); ?>
                         <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:0.75rem;">
                             <?php foreach ($stats_aging as $bucket): ?>
@@ -2771,6 +2863,70 @@ function renderStatsSection(): string
                 </div>
             </div>
 
+            <!-- Expenses -->
+            <div class="subnav-pane" id="stats-pane-expenses">
+                <div class="mobile-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:stretch;">
+                <div class="card" style="margin-bottom:0;">
+                    <div class="card-header">
+                        <h3>Profit &amp; Loss (<?= htmlspecialchars($taxYearLabel) ?>)</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats-grid" style="margin-bottom: 0;">
+                            <div class="stat-card" style="border-top: 3px solid #10b981;">
+                                <div class="label">Revenue Received</div>
+                                <div class="value">$<?= number_format($stats_ty_paid, 2) ?></div>
+                            </div>
+                            <div class="stat-card" style="border-top: 3px solid #ef4444;">
+                                <div class="label">Expenses</div>
+                                <div class="value">$<?= number_format($stats_expense_ty_total, 2) ?></div>
+                            </div>
+                            <div class="stat-card"
+                                style="border-top: 3px solid <?= $stats_net_income_ty >= 0 ? '#10b981' : '#ef4444' ?>;">
+                                <div class="label">Net Income</div>
+                                <div class="value">$<?= number_format($stats_net_income_ty, 2) ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom:0;">
+                    <div class="card-header">
+                        <h3>Expenses by Category</h3>
+                    </div>
+                    <?php if (!empty($stats_expense_categories)): ?>
+                        <div class="card-body">
+                            <div style="height:220px; position:relative;"><canvas id="expenseCategoryChart"></canvas></div>
+                        </div>
+                        <script>
+                            window.__expenseCategoryData = <?= json_encode($stats_expense_categories) ?>;
+                        </script>
+                    <?php else: ?>
+                        <div class="card-body">
+                            <p style="color:var(--text-secondary); margin:0;">No expenses logged this tax year.</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Expenses Over Time</h3>
+                    </div>
+                    <?php if (!empty($stats_expense_monthly)): ?>
+                        <div class="card-body">
+                            <div style="height:220px; position:relative;"><canvas id="expenseTrendChart"></canvas></div>
+                        </div>
+                        <script>
+                            window.__expenseTrendData = <?= json_encode($stats_expense_monthly) ?>;
+                        </script>
+                    <?php else: ?>
+                        <div class="card-body">
+                            <p style="color:var(--text-secondary); margin:0;">No expenses logged this tax year.</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <!-- Tax & Compliance -->
             <div class="subnav-pane" id="stats-pane-tax">
                 <div class="card">
@@ -2914,7 +3070,8 @@ function renderStatsSection(): string
 
             <!-- System -->
             <div class="subnav-pane" id="stats-pane-system">
-                <div class="card">
+                <div class="mobile-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:stretch;">
+                <div class="card" style="margin-bottom:0;">
                     <div class="card-header">
                         <h3>Email Delivery Health</h3>
                     </div>
@@ -2951,6 +3108,30 @@ function renderStatsSection(): string
                     </div>
                 </div>
 
+                <div class="card" style="margin-bottom:0;">
+                    <div class="card-header">
+                        <h3>Webhook Health</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                            <div>
+                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (Last 30 Days):</p>
+                                <div style="font-size: 1.5rem; font-weight: 700; color:<?= $stats_webhook_unmatched_30d > 0 ? 'var(--warning)' : '#10b981' ?>;">
+                                    <?= number_format($stats_webhook_unmatched_30d) ?></div>
+                            </div>
+                            <div>
+                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (All-Time):</p>
+                                <div style="font-size: 1.2rem; font-weight: 700;"><?= number_format($stats_webhook_unmatched_total) ?></div>
+                            </div>
+                        </div>
+                        <?php if ($stats_webhook_unmatched_30d > 0): ?>
+                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:1rem; margin-bottom:0;">
+                                Check the Audit Log for individual <code>webhook_unmatched</code> entries — usually a Stripe/PayPal event referencing an invoice that was deleted or never existed here.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                </div>
+
                 <div class="card">
                     <div class="card-header">
                         <h3>System Health</h3>
@@ -2984,7 +3165,7 @@ function renderStatsSection(): string
                             </label>
                         </div>
                         <div
-                            style="max-height: 200px; overflow-y: auto; background: var(--surface-hover); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border);">
+                            style="max-height: 480px; overflow-y: auto; background: var(--surface-hover); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border);">
                             <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;">
                                 <?php foreach ($all_tables_info as $tName => $tRows): ?>
                                     <?php $isInvoxa = (strpos($tName, 'invoxa_') === 0); ?>
@@ -2997,6 +3178,52 @@ function renderStatsSection(): string
                             </ul>
                         </div>
                     </div>
+                </div>
+
+                <div class="mobile-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:stretch;">
+                <div class="card" style="margin-bottom:0;">
+                    <div class="card-header">
+                        <h3>Storage Footprint</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="height:150px; position:relative; margin-bottom:0.75rem;"><canvas id="storageFootprintChart"></canvas></div>
+                        <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Total: <?= htmlspecialchars(invoxaFormatBytes($stats_db_size_bytes + $stats_invoices_dir_size_bytes + $stats_backups_dir_size_bytes)) ?></p>
+                    </div>
+                    <script>
+                        window.__storageFootprintData = {
+                            db: <?= (int) $stats_db_size_bytes ?>,
+                            invoices: <?= (int) $stats_invoices_dir_size_bytes ?>,
+                            backups: <?= (int) $stats_backups_dir_size_bytes ?>,
+                            labels: {
+                                db: <?= json_encode('Database (' . invoxaFormatBytes($stats_db_size_bytes) . ')') ?>,
+                                invoices: <?= json_encode('Invoices (' . invoxaFormatBytes($stats_invoices_dir_size_bytes) . ')') ?>,
+                                backups: <?= json_encode('Backups (' . invoxaFormatBytes($stats_backups_dir_size_bytes) . ')') ?>
+                            }
+                        };
+                    </script>
+                </div>
+
+                <div class="card" style="margin-bottom:0;">
+                    <div class="card-header">
+                        <h3>Environment</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                            <div>
+                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">PHP Version:</p>
+                                <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars($stats_php_version) ?></div>
+                            </div>
+                            <div>
+                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">MySQL Version:</p>
+                                <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars($stats_mysql_version) ?></div>
+                            </div>
+                            <div>
+                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">App Version:</p>
+                                <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars(APP_VERSION) ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 </div>
             </div>
 
@@ -3122,7 +3349,7 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
 // client-side state worth preserving across a refresh).
 function renderAuditSection(array $actions): string
 {
-    $icons = ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban', 'quote_accepted' => 'fa-file-circle-check', 'quote_converted' => 'fa-file-invoice'];
+    $icons = ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban', 'quote_accepted' => 'fa-file-circle-check', 'quote_converted' => 'fa-file-invoice', 'user_created' => 'fa-user-plus', 'user_role_changed' => 'fa-user-gear', 'user_password_reset' => 'fa-key', 'user_deleted' => 'fa-user-xmark'];
     ob_start();
     ?>
     <h2 class="page-title">Audit Log
@@ -3153,7 +3380,9 @@ function renderAuditSection(array $actions): string
             foreach ($actions as $act):
                 $icon = $icons[$act['action_type']] ?? 'fa-bolt';
                 $client = !empty($act['client_name']) ? htmlspecialchars($act['client_name']) : 'Unknown Client';
-                $searchBlob = strtolower($client . ' ' . $act['invoice_number'] . ' ' . str_replace('_', ' ', $act['action_type']) . ' ' . ($act['notes'] ?? ''));
+                $performedBy = $act['performed_by_username'] ?? null;
+                $performedByLabel = $performedBy !== null ? htmlspecialchars($performedBy) : 'System';
+                $searchBlob = strtolower($client . ' ' . $act['invoice_number'] . ' ' . str_replace('_', ' ', $act['action_type']) . ' ' . ($act['notes'] ?? '') . ' ' . $performedByLabel);
                 ?>
                 <div class="timeline-item" data-action-type="<?= htmlspecialchars($act['action_type']) ?>"
                     data-search="<?= htmlspecialchars($searchBlob) ?>">
@@ -3170,6 +3399,9 @@ function renderAuditSection(array $actions): string
                             <span
                                 style="background: rgba(255,255,255,0.05); padding: 0.2rem 0.4rem; border-radius: 4px; border: 1px solid var(--border); font-size: 0.65rem; text-transform: uppercase; margin-right: 0.75rem; font-weight: 600; letter-spacing: 0.5px;"><?= htmlspecialchars(str_replace('_', ' ', $act['action_type'])) ?></span><?= htmlspecialchars($act['notes'] ?? '') ?>
                         </div>
+                        <div style="font-size: 0.78rem; min-width: 110px; color: var(--text-secondary); white-space: nowrap;"
+                            title="Performed by"><i class="fa-solid fa-user-shield"
+                                style="font-size: 0.7rem; margin-right: 0.3rem;"></i><?= $performedByLabel ?></div>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -3267,7 +3499,6 @@ function seedDemoData($mysqli, array $settings): int
     $today = new DateTime();
     $insertClient = $mysqli->prepare("INSERT INTO invoxa_clients (client_key, client_name, email, account_name, account_number, monthly_rate, is_active, is_test) VALUES (?, ?, ?, ?, ?, ?, 1, 1)");
     $insertInvoice = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, paid_at, paid_amount, html_content, file_path, is_quote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $insertAction = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, ?, ?)");
 
     foreach ($demoClients as $ci => $dc) {
         $clientKey = INVOXA_DEMO_CLIENT_KEY_PREFIX . sprintf('%02d', $ci + 1);
@@ -3319,8 +3550,7 @@ function seedDemoData($mysqli, array $settings): int
             $iid = $insertInvoice->insert_id;
             $actionType = $paid ? 'mark_paid' : 'email_sent';
             $notes = $paid ? 'Marked as paid: $' . number_format($amount, 2) : 'Invoice generated and emailed to ' . $email;
-            $insertAction->bind_param("isss", $iid, $invNum, $actionType, $notes);
-            $insertAction->execute();
+            invoxaLogAction($mysqli, $iid, $invNum, $actionType, $notes);
         }
 
         // A couple of clients also get an open quote, so the Quotes tab isn't empty.
@@ -3983,9 +4213,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $alreadyChargedId = invoxaTestCreateInvoice($mysqli, $clientKey, 100.00);
             $mysqli->query("UPDATE invoxa_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 30 DAY) WHERE id = $alreadyChargedId");
             $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $alreadyChargedId")->fetch_assoc()['invoice_number'];
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, 'late_fee_charged', 'test fixture')");
-            $stmt->bind_param("is", $alreadyChargedId, $invNum);
-            $stmt->execute();
+            invoxaLogAction($mysqli, $alreadyChargedId, $invNum, 'late_fee_charged', 'test fixture');
 
             $eligibleSql = "SELECT i.id FROM invoxa_invoices i
                  WHERE i.is_quote = 0
@@ -4046,6 +4274,157 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         }
     });
 
+    // ── Receipt OCR ── the Add Expense vendor/amount prefill. The first two
+    // tests are pure logic (no dependencies at all); the third renders an
+    // actual receipt-shaped image with GD and feeds it through the exact
+    // shell_exec(tesseract) call the "ocr_expense_receipt" action uses, so it
+    // also catches a broken/missing tesseract install, not just bad regexes.
+    $run('Receipt OCR', 'parseReceiptOcrText', 'extracts vendor and total from OCR text', 'Given typical multi-line receipt OCR output, the vendor is the first line that looks like a name (not a price/date row) and the amount comes from the line labeled TOTAL, not an earlier line-item price.', function () {
+        $text = "ACME HARDWARE\n123 Main St\nWidget           12.00\nGadget           18.50\nSUBTOTAL         30.50\nTAX               2.49\nTOTAL            32.99\nTHANK YOU";
+        $parsed = parseReceiptOcrText($text);
+        invoxaAssertEquals('ACME HARDWARE', $parsed['vendor']);
+        invoxaAssertEquals(32.99, $parsed['amount']);
+    });
+    $run('Receipt OCR', 'parseReceiptOcrText', 'falls back to the largest amount when nothing is labeled TOTAL', 'With no line recognizable as a total (a cropped photo, an unusual layout), the parser falls back to the largest dollar figure on the receipt, since the grand total is almost always the biggest number printed.', function () {
+        $text = "COFFEE SHOP\nLatte    4.50\nMuffin   3.25\n7.75";
+        $parsed = parseReceiptOcrText($text);
+        invoxaAssertEquals('COFFEE SHOP', $parsed['vendor']);
+        invoxaAssertEquals(7.75, $parsed['amount']);
+    });
+    $run('Receipt OCR', 'End-to-end', 'reads vendor and total off a rendered receipt image', 'A receipt-shaped PNG with a known store name and total is generated on the fly (GD, no fixture file to maintain), run through the same tesseract shell_exec() the real upload path uses, and the parsed result must match. Counts as a pass with nothing asserted if this environment is missing the gd extension or the tesseract binary — those are this one check\'s dependencies, not the app\'s.', function () {
+        if (!function_exists('imagecreate') || trim((string) shell_exec('command -v tesseract 2>/dev/null')) === '') {
+            return;
+        }
+        // GD's built-in bitmap font is only ~8x16px per character — too small
+        // for tesseract to read reliably — so it's drawn small, then upscaled
+        // 4x (the way a real photographed receipt has far more than 8px per
+        // character) before being handed to tesseract.
+        $w = 420;
+        $h = 140;
+        $small = imagecreatetruecolor($w, $h);
+        imagefill($small, 0, 0, imagecolorallocate($small, 255, 255, 255));
+        $fg = imagecolorallocate($small, 0, 0, 0);
+        imagestring($small, 5, 10, 10, 'ZTEST HARDWARE CO', $fg);
+        imagestring($small, 5, 10, 55, 'WIDGET   12.00', $fg);
+        imagestring($small, 5, 10, 90, 'TOTAL    45.67', $fg);
+        $scale = 4;
+        $img = imagecreatetruecolor($w * $scale, $h * $scale);
+        imagecopyresampled($img, $small, 0, 0, 0, 0, $w * $scale, $h * $scale, $w, $h);
+        imagedestroy($small);
+        $path = sys_get_temp_dir() . '/' . uniqid('ocr_test_', true) . '.png';
+        imagepng($img, $path);
+        imagedestroy($img);
+        try {
+            $text = (string) shell_exec('tesseract ' . escapeshellarg($path) . ' stdout 2>/dev/null');
+            $parsed = parseReceiptOcrText($text);
+            invoxaAssertTrue(str_contains(strtoupper((string) $parsed['vendor']), 'ZTEST'), 'vendor should contain the rendered store name, got: ' . var_export($parsed['vendor'], true));
+            invoxaAssertEquals(45.67, $parsed['amount']);
+        } finally {
+            @unlink($path);
+        }
+    });
+    $run('Receipt OCR', 'Expense attachments', 'doc_type separates Invoice and Receipt uploads', 'A row inserted as doc_type=\'invoice\' and another as doc_type=\'receipt\' against the same expense are both stored and stay distinguishable by that column — the same one the Add Expense modal\'s two upload slots (and Receipt OCR, which only ever reads the receipt one) rely on.', function () use ($mysqli) {
+        $mysqli->query("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description) VALUES (CURDATE(), 'Test Suite Fixture', 'other', 10.00, '')");
+        $expenseId = $mysqli->insert_id;
+        try {
+            $ins = $mysqli->prepare("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, 'inv.pdf', 'zt/inv.pdf', 100, 'invoice')");
+            $ins->bind_param("i", $expenseId);
+            $ins->execute();
+            $ins2 = $mysqli->prepare("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, 'rcpt.jpg', 'zt/rcpt.jpg', 100, 'receipt')");
+            $ins2->bind_param("i", $expenseId);
+            $ins2->execute();
+            $rows = $mysqli->query("SELECT filename, doc_type FROM invoxa_expense_receipts WHERE expense_id = $expenseId")->fetch_all(MYSQLI_ASSOC);
+            invoxaAssertEquals(2, count($rows), 'both attachments should be stored');
+            $byType = array_column($rows, 'filename', 'doc_type');
+            invoxaAssertEquals('inv.pdf', $byType['invoice'] ?? null, 'invoice row');
+            invoxaAssertEquals('rcpt.jpg', $byType['receipt'] ?? null, 'receipt row');
+        } finally {
+            $mysqli->query("DELETE FROM invoxa_expense_receipts WHERE expense_id = $expenseId");
+            $mysqli->query("DELETE FROM invoxa_expenses WHERE id = $expenseId");
+        }
+    });
+    $run('Receipt OCR', 'Expense attachments', 'move_expense_receipt re-tags a file between Invoice and Receipt', 'The same UPDATE the "Move to Invoice/Receipt" button runs flips a row\'s doc_type in place, for when the wrong slot was picked at upload time — the stored file itself is never touched, only which section it shows up in.', function () use ($mysqli) {
+        $mysqli->query("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description) VALUES (CURDATE(), 'Test Suite Fixture', 'other', 10.00, '')");
+        $expenseId = $mysqli->insert_id;
+        try {
+            $ins = $mysqli->prepare("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, 'oops.jpg', 'zt/oops.jpg', 100, 'invoice')");
+            $ins->bind_param("i", $expenseId);
+            $ins->execute();
+            $receiptId = $mysqli->insert_id;
+            $upd = $mysqli->prepare("UPDATE invoxa_expense_receipts SET doc_type = 'receipt' WHERE id = ?");
+            $upd->bind_param("i", $receiptId);
+            $upd->execute();
+            $docType = $mysqli->query("SELECT doc_type FROM invoxa_expense_receipts WHERE id = $receiptId")->fetch_assoc()['doc_type'];
+            invoxaAssertEquals('receipt', $docType, 'doc_type should flip to receipt');
+        } finally {
+            $mysqli->query("DELETE FROM invoxa_expense_receipts WHERE expense_id = $expenseId");
+            $mysqli->query("DELETE FROM invoxa_expenses WHERE id = $expenseId");
+        }
+    });
+
+    // ── Users & Roles ── Settings > Users. Fixture accounts are prefixed
+    // 'zt_' and always deleted in a finally block, same convention as the
+    // client/invoice fixtures above.
+    $run('Users & Roles', 'Last admin guard', 'counts other admins correctly', 'The same "how many OTHER admins exist" query update_user/delete_user run before demoting or deleting an admin never counts the target account itself, and correctly counts a newly added second admin — the two ways that count could be wrong and let the last admin lock everyone out.', function () use ($mysqli) {
+        $adminUser = 'zt_admin_' . bin2hex(random_bytes(4));
+        $stmt = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, 'zt@invalid.example', 'admin', 'x')");
+        $stmt->bind_param("s", $adminUser);
+        $stmt->execute();
+        $fixtureId = $mysqli->insert_id;
+        try {
+            $selfIncluded = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != $fixtureId AND id = $fixtureId")->fetch_assoc()['c'];
+            invoxaAssertEquals(0, $selfIncluded, 'the target admin itself should never be counted as an "other" admin');
+            $before = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != $fixtureId")->fetch_assoc()['c'];
+            $secondAdmin = 'zt_admin2_' . bin2hex(random_bytes(4));
+            $stmt2 = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, 'zt2@invalid.example', 'admin', 'x')");
+            $stmt2->bind_param("s", $secondAdmin);
+            $stmt2->execute();
+            $secondId = $mysqli->insert_id;
+            try {
+                $after = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != $fixtureId")->fetch_assoc()['c'];
+                invoxaAssertEquals($before + 1, $after, 'adding a second admin should increase the "other admins" count by exactly one');
+            } finally {
+                $mysqli->query("DELETE FROM invoxa_users WHERE id = $secondId");
+            }
+        } finally {
+            $mysqli->query("DELETE FROM invoxa_users WHERE id = $fixtureId");
+        }
+    });
+    $run('Users & Roles', 'Role assignment', 'a new account stores its role and update_user\'s UPDATE flips it', 'A user created with role=member is stored as member (never silently promoted), and the same "UPDATE invoxa_users SET role = ?" update_user runs correctly flips it to admin.', function () use ($mysqli) {
+        $username = 'zt_user_' . bin2hex(random_bytes(4));
+        $stmt = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, 'zt@invalid.example', 'member', 'x')");
+        $stmt->bind_param("s", $username);
+        $stmt->execute();
+        $id = $mysqli->insert_id;
+        try {
+            $role = $mysqli->query("SELECT role FROM invoxa_users WHERE id = $id")->fetch_assoc()['role'];
+            invoxaAssertEquals('member', $role, 'newly created user should be member');
+            $upd = $mysqli->prepare("UPDATE invoxa_users SET role = 'admin' WHERE id = ?");
+            $upd->bind_param("i", $id);
+            $upd->execute();
+            $role2 = $mysqli->query("SELECT role FROM invoxa_users WHERE id = $id")->fetch_assoc()['role'];
+            invoxaAssertEquals('admin', $role2, 'role should update to admin');
+        } finally {
+            $mysqli->query("DELETE FROM invoxa_users WHERE id = $id");
+        }
+    });
+
+    $run('Users & Roles', 'Audit Log attribution', 'invoxaLogAction() stamps the current session\'s user id/username on the row it writes', 'invoxa_actions rows carry performed_by_user_id/performed_by_username (the username is denormalized so the Audit Log stays readable even after that user is later deleted) — confirms invoxaLogAction(), the one shared helper every audit entry now goes through, actually stamps them rather than leaving the row anonymous.', function () use ($mysqli) {
+        global $__actorUserId, $__actorUsername;
+        $marker = 'zt_audit_' . bin2hex(random_bytes(4));
+        invoxaLogAction($mysqli, null, '', 'note_added', $marker);
+        try {
+            $row = $mysqli->query("SELECT performed_by_user_id, performed_by_username FROM invoxa_actions WHERE notes = '" . $mysqli->real_escape_string($marker) . "' ORDER BY id DESC LIMIT 1")->fetch_assoc();
+            invoxaAssertTrue($row !== null, 'expected the logged row to exist');
+            $expectedUserId = $__actorUserId !== null ? (string) $__actorUserId : null;
+            $actualUserId = $row['performed_by_user_id'] !== null ? (string) $row['performed_by_user_id'] : null;
+            invoxaAssertEquals($expectedUserId, $actualUserId, 'performed_by_user_id should match the current session');
+            invoxaAssertEquals($__actorUsername, $row['performed_by_username'], 'performed_by_username should match the current session');
+        } finally {
+            $mysqli->query("DELETE FROM invoxa_actions WHERE notes = '" . $mysqli->real_escape_string($marker) . "'");
+        }
+    });
+
     return $definitions;
 }
 
@@ -4076,8 +4455,8 @@ function invoxaRunTestSuite($mysqli, array $settings, ?array $selected = null): 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
     try {
-        // Open-core: everything works without a license except six paid
-        // capabilities. Four are POST actions, gated here in one place; the
+        // Open-core: everything works without a license except seven paid
+        // capabilities. Five are POST actions, gated here in one place; the
         // other two (Reporting & Statistics, hiding "Powered by Invoxa") are
         // checked at render time — see renderStatsSection() and
         // save_business_identity below.
@@ -4089,9 +4468,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         //   stay free).
         // - Recurring expense templates (same bucket as recurring billing
         //   automation; deleting a template stays free, same as the others above).
-        $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense'];
+        // - Adding a teammate beyond the original account (create_user; editing
+        //   or removing one — update_user/delete_user — stays free, same pattern
+        //   as the others above).
+        $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense', 'create_user'];
         if (!$licenseValid && in_array($_POST['action'], $__licensePaidActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This needs a license — add a key under Settings > License, or see Docs for what a license unlocks.']);
+            exit;
+        }
+        // Everything a "member" account (Settings > Users) can't do — system
+        // configuration, billing/API credentials, other users' accounts, and
+        // Data Management. Members keep full access to day-to-day invoicing,
+        // clients, quotes, and expenses, plus their own Account tab (personal
+        // profile/password/2FA — see update_profile/totp_* below, deliberately
+        // not on this list). $isCron requests bypass this the same way they
+        // bypass the $isAuth gate above — a cron-triggered run has no user at
+        // all, and CRON_SECRET is its own, separate authorization.
+        $__adminOnlyActions = ['backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'delete_api_token', 'delete_missing_db', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'get_db_stats', 'import_backup', 'import_clients_csv', 'list_backups', 'preview_restore', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_recurring', 'run_test_suite', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
+        if (!$isCron && !$isAdmin && in_array($_POST['action'], $__adminOnlyActions, true)) {
+            echo json_encode(['success' => false, 'error' => 'This requires an admin account — see Settings > Users.']);
             exit;
         }
         if ($_POST['action'] === 'get_nav_counts') {
@@ -4269,13 +4664,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'get_expense_receipts') {
             $expenseId = (int) ($_POST['expense_id'] ?? 0);
-            $res = $mysqli->query("SELECT id, filename, stored_path, file_size, uploaded_at FROM invoxa_expense_receipts WHERE expense_id = $expenseId ORDER BY uploaded_at DESC");
+            $res = $mysqli->query("SELECT id, filename, stored_path, file_size, doc_type, uploaded_at FROM invoxa_expense_receipts WHERE expense_id = $expenseId ORDER BY uploaded_at DESC");
             $receipts = [];
             while ($r = $res->fetch_assoc()) {
                 $r['url'] = RECEIPTS_URL . implode('/', array_map('rawurlencode', explode('/', $r['stored_path'])));
                 $receipts[] = $r;
             }
             echo json_encode(['success' => true, 'receipts' => $receipts]);
+            exit;
+        }
+        if ($_POST['action'] === 'ocr_expense_receipt') {
+            // Best-effort prefill only — never blocks or fails the actual
+            // upload/save, since expense creation works fine without it.
+            if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+                echo json_encode(['success' => false, 'error' => 'No file uploaded, or the upload failed.']);
+                exit;
+            }
+            $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+                echo json_encode(['success' => false, 'error' => 'OCR only works on image receipts, not PDFs.']);
+                exit;
+            }
+            if (trim((string) shell_exec('command -v tesseract 2>/dev/null')) === '') {
+                echo json_encode(['success' => false, 'error' => 'OCR is not available on this server (tesseract is not installed).']);
+                exit;
+            }
+            $tmpPath = sys_get_temp_dir() . '/' . uniqid('ocr_', true) . '.' . $ext;
+            if (!move_uploaded_file($_FILES['file']['tmp_name'], $tmpPath)) {
+                echo json_encode(['success' => false, 'error' => 'Failed to read the uploaded file.']);
+                exit;
+            }
+            $text = (string) shell_exec('tesseract ' . escapeshellarg($tmpPath) . ' stdout 2>/dev/null');
+            @unlink($tmpPath);
+            $parsed = parseReceiptOcrText($text);
+            echo json_encode(['success' => true, 'vendor' => $parsed['vendor'], 'amount' => $parsed['amount'], 'confident' => $parsed['confident']]);
             exit;
         }
         if ($_POST['action'] === 'upload_expense_receipt') {
@@ -4306,8 +4728,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             $storedPath = "$expenseId/$storedName";
             $size = (int) $_FILES['file']['size'];
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("issi", $expenseId, $origName, $storedPath, $size);
+            $docType = ($_POST['doc_type'] ?? 'receipt') === 'invoice' ? 'invoice' : 'receipt';
+            $stmt = $mysqli->prepare("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("issis", $expenseId, $origName, $storedPath, $size, $docType);
             $stmt->execute();
             echo json_encode(['success' => true]);
             exit;
@@ -4321,6 +4744,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->bind_param("i", $id);
                 $stmt->execute();
             }
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'move_expense_receipt') {
+            // Re-tags an attachment between the modal's Invoice and Receipt slots
+            // without touching the file on disk — for when the wrong one was picked
+            // at upload time.
+            $id = (int) ($_POST['id'] ?? 0);
+            $docType = ($_POST['doc_type'] ?? '') === 'invoice' ? 'invoice' : 'receipt';
+            $stmt = $mysqli->prepare("UPDATE invoxa_expense_receipts SET doc_type = ? WHERE id = ?");
+            $stmt->bind_param("si", $docType, $id);
+            $stmt->execute();
             echo json_encode(['success' => true]);
             exit;
         }
@@ -4587,9 +5022,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $memo = trim($_POST['memo'] ?? '');
             if ($memo !== '') {
                 $qid = $stmt->insert_id;
-                $memoStmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, 'note_added', ?)");
-                $memoStmt->bind_param("iss", $qid, $quoteNum, $memo);
-                $memoStmt->execute();
+                invoxaLogAction($mysqli, $qid, $quoteNum, 'note_added', $memo);
             }
             echo json_encode(['success' => true, 'quoteNum' => $quoteNum]);
             exit;
@@ -4700,9 +5133,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 . ". Reminders sent {$remindersSent}, errors {$reminderErrors}."
                 . " Late fees charged {$lateFeesCharged}, errors {$lateFeeErrors}."
                 . " Recurring expenses logged {$recurExpSent}, skipped {$recurExpSkipped}, errors {$recurExpErrors}.";
-            $runStmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'recurring_run', ?)");
-            $runStmt->bind_param("s", $runNotes);
-            $runStmt->execute();
+            invoxaLogAction($mysqli, null, '', 'recurring_run', $runNotes);
+            $totalRunErrors = $errors + $reminderErrors + $lateFeeErrors + $recurExpErrors;
+            if ($totalRunErrors > 0) {
+                notifyChannel($mysqli, $settings, 'notify_on_recurring_errors', "\xE2\x9A\xA0\xEF\xB8\x8F Recurring billing run had {$totalRunErrors} error" . ($totalRunErrors === 1 ? '' : 's') . " — {$runNotes}");
+            }
             echo json_encode(['success' => true, 'sent' => $sent, 'errors' => $errors, 'skipped' => $skipped, 'reminders_sent' => $remindersSent, 'reminder_errors' => $reminderErrors, 'late_fees_charged' => $lateFeesCharged, 'late_fee_errors' => $lateFeeErrors, 'audit_log_pruned' => $auditPruned, 'recurring_expenses_logged' => $recurExpSent, 'recurring_expenses_skipped' => $recurExpSkipped, 'recurring_expenses_errors' => $recurExpErrors]);
             exit;
         }
@@ -4742,9 +5177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt->bind_param("i", $id);
             $stmt->execute();
             $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $id")->fetch_assoc()['invoice_number'] ?? '';
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, 'mark_unpaid', 'Marked as unpaid — payment history cleared')");
-            $stmt->bind_param("is", $id, $invNum);
-            $stmt->execute();
+            invoxaLogAction($mysqli, $id, $invNum, 'mark_unpaid', 'Marked as unpaid — payment history cleared');
             echo json_encode(['success' => true]);
             exit;
         }
@@ -4767,9 +5200,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt->bind_param("i", $id);
             $stmt->execute();
             $notes = 'Voided' . ($reason !== '' ? ": $reason" : '');
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, 'invoice_voided', ?)");
-            $stmt->bind_param("iss", $id, $invRow['invoice_number'], $notes);
-            $stmt->execute();
+            invoxaLogAction($mysqli, $id, $invRow['invoice_number'], 'invoice_voided', $notes);
+            notifyChannel($mysqli, $settings, 'notify_on_invoice_voided', "\xF0\x9F\x9A\xAB Invoice voided — {$invRow['invoice_number']}" . ($reason !== '' ? ": {$reason}" : ''));
             echo json_encode(['success' => true]);
             exit;
         }
@@ -4779,9 +5211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = 'sent' WHERE id = ? AND status = 'void'");
             $stmt->bind_param("i", $id);
             $stmt->execute();
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, 'invoice_unvoided', 'Restored from void')");
-            $stmt->bind_param("is", $id, $invNum);
-            $stmt->execute();
+            invoxaLogAction($mysqli, $id, $invNum, 'invoice_unvoided', 'Restored from void');
             echo json_encode(['success' => true]);
             exit;
         }
@@ -4838,9 +5268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             $actionType = $emailSent ? 'email_sent' : 'email_failed';
             $notes = $emailSent ? "Invoice resent to {$inv['recipient_email']}" : "Resend failed: " . $errorMsg;
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("isss", $id, $inv['invoice_number'], $actionType, $notes);
-            $stmt->execute();
+            invoxaLogAction($mysqli, $id, $inv['invoice_number'], $actionType, $notes);
             // A successful resend clears a previously-failed status — it's been
             // sent now, same as if it had succeeded the first time.
             if ($emailSent && $inv['status'] === 'failed') {
@@ -4866,9 +5294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $id = (int) $_POST['id'];
             $note = $_POST['note'];
             $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $id")->fetch_assoc()['invoice_number'] ?? '';
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (?, ?, 'note_added', ?)");
-            $stmt->bind_param("iss", $id, $invNum, $note);
-            $stmt->execute();
+            invoxaLogAction($mysqli, $id, $invNum, 'note_added', $note);
             echo json_encode(['success' => true]);
             exit;
         }
@@ -4992,16 +5418,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $mail->Body = "This is a test email sent from {$fromName} to verify SMTP configuration.";
                 $mail->send();
                 $logNotes = "Test email sent to {$to}";
-                $stmtAction = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'smtp_test', ?)");
-                $stmtAction->bind_param("s", $logNotes);
-                $stmtAction->execute();
+                invoxaLogAction($mysqli, null, '', 'smtp_test', $logNotes);
                 echo json_encode(['success' => true]);
                 exit;
             } catch (Exception $e) {
                 $logNotes = "Test email to {$to} failed: " . $e->getMessage();
-                $stmtAction = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'smtp_test', ?)");
-                $stmtAction->bind_param("s", $logNotes);
-                $stmtAction->execute();
+                invoxaLogAction($mysqli, null, '', 'smtp_test', $logNotes);
                 throw new Exception($e->getMessage());
             }
         }
@@ -5017,6 +5439,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $notifyPayment = ($_POST['notify_on_payment'] ?? '0') === '1' ? '1' : '0';
             $notifyOverdue = ($_POST['notify_on_overdue'] ?? '0') === '1' ? '1' : '0';
             $notifyQuoteAccepted = ($_POST['notify_on_quote_accepted'] ?? '0') === '1' ? '1' : '0';
+            $notifyEmailFailed = ($_POST['notify_on_email_failed'] ?? '0') === '1' ? '1' : '0';
+            $notifyLateFee = ($_POST['notify_on_late_fee'] ?? '0') === '1' ? '1' : '0';
+            $notifyInvoiceVoided = ($_POST['notify_on_invoice_voided'] ?? '0') === '1' ? '1' : '0';
+            $notifyWebhookUnmatched = ($_POST['notify_on_webhook_unmatched'] ?? '0') === '1' ? '1' : '0';
+            $notifyRefund = ($_POST['notify_on_refund'] ?? '0') === '1' ? '1' : '0';
+            $notifyRecurringErrors = ($_POST['notify_on_recurring_errors'] ?? '0') === '1' ? '1' : '0';
+            $notifySecurityEvent = ($_POST['notify_on_security_event'] ?? '0') === '1' ? '1' : '0';
             $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
             foreach ([
                 'notification_channel' => $channel,
@@ -5028,6 +5457,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'notify_on_payment' => $notifyPayment,
                 'notify_on_overdue' => $notifyOverdue,
                 'notify_on_quote_accepted' => $notifyQuoteAccepted,
+                'notify_on_email_failed' => $notifyEmailFailed,
+                'notify_on_late_fee' => $notifyLateFee,
+                'notify_on_invoice_voided' => $notifyInvoiceVoided,
+                'notify_on_webhook_unmatched' => $notifyWebhookUnmatched,
+                'notify_on_refund' => $notifyRefund,
+                'notify_on_recurring_errors' => $notifyRecurringErrors,
+                'notify_on_security_event' => $notifySecurityEvent,
             ] as $key => $value) {
                 $upsert->bind_param("ss", $key, $value);
                 $upsert->execute();
@@ -5054,10 +5490,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $result = ['success' => false, 'error' => 'Choose a notification channel first'];
             }
             $logNotes = $result['success'] ? ucfirst($channel ?? '') . ' test message sent' : 'Notification test failed: ' . $result['error'];
-            $stmtAction = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', ?, ?)");
             $actionType = $result['success'] ? 'notification_test' : 'notification_failed';
-            $stmtAction->bind_param("ss", $actionType, $logNotes);
-            $stmtAction->execute();
+            invoxaLogAction($mysqli, null, '', $actionType, $logNotes);
             echo json_encode($result);
             exit;
         }
@@ -5118,7 +5552,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             $expiryDays = ['never' => null, '30' => 30, '90' => 90, '365' => 365][$_POST['expiry'] ?? 'never'] ?? null;
             $created = invoxaCreateApiToken($mysqli, $label, $expiryDays);
-            $mysqli->query("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'api_token_created', 'API token created: " . $mysqli->real_escape_string($label) . "')");
+            invoxaLogAction($mysqli, null, '', 'api_token_created', 'API token created: ' . $label);
+            notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F API token created: {$label}");
             echo json_encode(['success' => true, 'token' => $created['token']]);
             exit;
         }
@@ -5142,7 +5577,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $mysqli->prepare("UPDATE invoxa_api_tokens SET revoked_at = NOW() WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
-            $mysqli->query("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'api_token_revoked', 'API token revoked: " . $mysqli->real_escape_string($label) . "')");
+            invoxaLogAction($mysqli, null, '', 'api_token_revoked', 'API token revoked: ' . $label);
+            notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F API token revoked: {$label}");
             echo json_encode(['success' => true]);
             exit;
         }
@@ -5162,7 +5598,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $mysqli->prepare("DELETE FROM invoxa_api_tokens WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
-            $mysqli->query("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'api_token_revoked', 'API token permanently deleted: " . $mysqli->real_escape_string($row['label']) . "')");
+            invoxaLogAction($mysqli, null, '', 'api_token_revoked', 'API token permanently deleted: ' . $row['label']);
             echo json_encode(['success' => true]);
             exit;
         }
@@ -5172,8 +5608,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $currentPassword = $_POST['current_password'] ?? '';
             $newPassword = $_POST['new_password'] ?? '';
             $confirmPassword = $_POST['confirm_password'] ?? '';
-            // Fetch current user (single admin)
-            $userRes = $mysqli->query("SELECT * FROM invoxa_users LIMIT 1");
+            // Always the logged-in user's own account — never another user's.
+            $userRes = $mysqli->query("SELECT * FROM invoxa_users WHERE id = " . $currentUserId);
             if (!$userRes || $userRes->num_rows === 0) {
                 throw new Exception('User not found');
             }
@@ -5226,9 +5662,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         if ($_POST['action'] === 'totp_setup_init') {
-            // Single-admin app (see the signup gate above) — no user_id param needed,
-            // it's always "the" account.
-            $userRow = $mysqli->query("SELECT id, username FROM invoxa_users LIMIT 1")->fetch_assoc();
+            // Always the logged-in user's own account — 2FA is per-user now
+            // that Settings > Users exists.
+            $userRow = $mysqli->query("SELECT id, username FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
             if (!$userRow) {
                 throw new Exception('Account not found');
             }
@@ -5240,7 +5676,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         if ($_POST['action'] === 'totp_setup_confirm') {
-            $userRow = $mysqli->query("SELECT id, totp_secret_pending FROM invoxa_users LIMIT 1")->fetch_assoc();
+            $userRow = $mysqli->query("SELECT id, totp_secret_pending FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
             if (!$userRow || empty($userRow['totp_secret_pending'])) {
                 throw new Exception('No setup in progress — click Enable Two-Factor Authentication to start again.');
             }
@@ -5251,12 +5687,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt->bind_param("i", $userRow['id']);
             $stmt->execute();
             $backupCodes = invoxaIssueBackupCodes($mysqli, (int) $userRow['id']);
-            $mysqli->query("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'totp_enabled', 'Two-factor authentication enabled')");
+            invoxaLogAction($mysqli, null, '', 'totp_enabled', 'Two-factor authentication enabled');
+            notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F Two-factor authentication enabled");
             echo json_encode(['success' => true, 'backup_codes' => $backupCodes]);
             exit;
         }
         if ($_POST['action'] === 'totp_regenerate_backup_codes') {
-            $userRow = $mysqli->query("SELECT id, password_hash, totp_secret FROM invoxa_users LIMIT 1")->fetch_assoc();
+            $userRow = $mysqli->query("SELECT id, password_hash, totp_secret FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
             if (!$userRow || empty($userRow['totp_secret'])) {
                 throw new Exception('Two-factor authentication is not enabled.');
             }
@@ -5264,12 +5701,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 throw new Exception('Current password is incorrect.');
             }
             $backupCodes = invoxaIssueBackupCodes($mysqli, (int) $userRow['id']);
-            $mysqli->query("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'totp_enabled', 'Backup codes regenerated — previous codes no longer work')");
+            invoxaLogAction($mysqli, null, '', 'totp_enabled', 'Backup codes regenerated — previous codes no longer work');
+            notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F Two-factor authentication backup codes regenerated — previous codes no longer work");
             echo json_encode(['success' => true, 'backup_codes' => $backupCodes]);
             exit;
         }
         if ($_POST['action'] === 'totp_disable') {
-            $userRow = $mysqli->query("SELECT id, password_hash FROM invoxa_users LIMIT 1")->fetch_assoc();
+            $userRow = $mysqli->query("SELECT id, password_hash FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
             if (!$userRow || !password_verify($_POST['current_password'] ?? '', $userRow['password_hash'])) {
                 throw new Exception('Current password is incorrect.');
             }
@@ -5277,7 +5715,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt->bind_param("i", $userRow['id']);
             $stmt->execute();
             $mysqli->query("DELETE FROM invoxa_totp_backup_codes WHERE user_id = " . (int) $userRow['id']);
-            $mysqli->query("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes) VALUES (NULL, '', 'totp_disabled', 'Two-factor authentication disabled')");
+            invoxaLogAction($mysqli, null, '', 'totp_disabled', 'Two-factor authentication disabled');
+            notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F Two-factor authentication disabled");
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'create_user') {
+            $newUsername = trim($_POST['username'] ?? '');
+            $newEmail = trim($_POST['email'] ?? '');
+            $newPassword = $_POST['password'] ?? '';
+            $newRole = ($_POST['role'] ?? 'member') === 'admin' ? 'admin' : 'member';
+            if ($newUsername === '' || $newEmail === '' || $newPassword === '') {
+                throw new Exception('Username, email, and password are all required.');
+            }
+            if (!filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
+                throw new Exception('Enter a valid email address.');
+            }
+            if (strlen($newPassword) < PASSWORD_MIN_LENGTH) {
+                throw new Exception('Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters.');
+            }
+            $exists = $mysqli->query("SELECT 1 FROM invoxa_users WHERE username = '" . $mysqli->real_escape_string($newUsername) . "'")->num_rows > 0;
+            if ($exists) {
+                throw new Exception('That username is already taken.');
+            }
+            $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+            $stmt = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("ssss", $newUsername, $newEmail, $newRole, $hash);
+            $stmt->execute();
+            invoxaLogAction($mysqli, null, '', 'user_created', "User account created: {$newUsername} ({$newRole})");
+            notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F User account created: {$newUsername} ({$newRole})");
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'update_user') {
+            $id = (int) ($_POST['id'] ?? 0);
+            $newRole = ($_POST['role'] ?? 'member') === 'admin' ? 'admin' : 'member';
+            $newPassword = $_POST['new_password'] ?? '';
+            $target = $mysqli->query("SELECT id, username, role FROM invoxa_users WHERE id = " . $id)->fetch_assoc();
+            if (!$target) {
+                throw new Exception('User not found.');
+            }
+            if ($target['role'] === 'admin' && $newRole === 'member') {
+                $otherAdmins = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != " . $id)->fetch_assoc()['c'];
+                if ($otherAdmins === 0) {
+                    throw new Exception("Can't demote the last admin — promote someone else first.");
+                }
+            }
+            if ($newPassword !== '' && strlen($newPassword) < PASSWORD_MIN_LENGTH) {
+                throw new Exception('Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters.');
+            }
+            if ($newPassword !== '') {
+                $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+                $stmt = $mysqli->prepare("UPDATE invoxa_users SET role = ?, password_hash = ? WHERE id = ?");
+                $stmt->bind_param("ssi", $newRole, $hash, $id);
+            } else {
+                $stmt = $mysqli->prepare("UPDATE invoxa_users SET role = ? WHERE id = ?");
+                $stmt->bind_param("si", $newRole, $id);
+            }
+            $stmt->execute();
+            if ($newRole !== $target['role']) {
+                invoxaLogAction($mysqli, null, '', 'user_role_changed', "{$target['username']}'s role changed to {$newRole}");
+                notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F {$target['username']}'s role changed to {$newRole}");
+            }
+            if ($newPassword !== '') {
+                invoxaLogAction($mysqli, null, '', 'user_password_reset', "Password reset for {$target['username']} by an admin");
+            }
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'delete_user') {
+            $id = (int) ($_POST['id'] ?? 0);
+            if ($id === $currentUserId) {
+                throw new Exception("You can't delete your own account — have another admin do it.");
+            }
+            $target = $mysqli->query("SELECT username, role FROM invoxa_users WHERE id = " . $id)->fetch_assoc();
+            if (!$target) {
+                throw new Exception('User not found.');
+            }
+            if ($target['role'] === 'admin') {
+                $otherAdmins = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != " . $id)->fetch_assoc()['c'];
+                if ($otherAdmins === 0) {
+                    throw new Exception("Can't delete the last admin.");
+                }
+            }
+            $mysqli->query("DELETE FROM invoxa_totp_backup_codes WHERE user_id = " . $id);
+            $stmt = $mysqli->prepare("DELETE FROM invoxa_users WHERE id = ?");
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+            invoxaLogAction($mysqli, null, '', 'user_deleted', "User account deleted: {$target['username']}");
+            notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F User account deleted: {$target['username']}");
             echo json_encode(['success' => true]);
             exit;
         }
@@ -5602,7 +6128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if (($_POST['confirm'] ?? '') !== 'RESET') {
                     throw new Exception('Type RESET to confirm.');
                 }
-                $userRes = $mysqli->query("SELECT password_hash FROM invoxa_users LIMIT 1");
+                $userRes = $mysqli->query("SELECT password_hash FROM invoxa_users WHERE id = " . $currentUserId);
                 $user = $userRes ? $userRes->fetch_assoc() : null;
                 if (!$user || !password_verify($_POST['password'] ?? '', $user['password_hash'])) {
                     throw new Exception('Current password is incorrect.');
@@ -5622,7 +6148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             error_reporting(0);
             ob_start();
             try {
-                $user = $mysqli->query("SELECT id, username, email FROM invoxa_users LIMIT 1")->fetch_assoc();
+                $user = $mysqli->query("SELECT id, username, email FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
                 if (!$user || empty($user['email'])) {
                     throw new Exception('No account email on file.');
                 }
@@ -5910,7 +6436,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $clientMap[strtolower(str_replace(' ', '_', $row['client_name']))] = $row;
             }
             $insertInvoice = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?) ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), html_content = VALUES(html_content), amount = VALUES(amount), client_key = VALUES(client_key), client_name = VALUES(client_name)");
-            $insertAction = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_number, action_type, notes) SELECT ?, 'synced', 'Imported via Web UI Sync' WHERE NOT EXISTS (SELECT 1 FROM invoxa_actions WHERE invoice_number = ? AND action_type = 'synced')");
+            $insertAction = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_number, action_type, notes, performed_by_user_id, performed_by_username) SELECT ?, 'synced', 'Imported via Web UI Sync', ?, ? WHERE NOT EXISTS (SELECT 1 FROM invoxa_actions WHERE invoice_number = ? AND action_type = 'synced')");
             foreach ($files as $filePath) {
                 $fullPath = "/usr/share/nginx/html/invoxa-invoices/" . preg_replace('#^invoices/#', '', $filePath);
                 if (!file_exists($fullPath)) {
@@ -5945,7 +6471,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $insertInvoice->bind_param("ssssssdss", $invNum, $client['client_key'], $client['client_name'], $client['email'], normaliseDateTime(extractField($html, 'Invoice Date')), normaliseDate(extractField($html, 'Invoice Due')), $amount, $html, $filePath);
                     $insertInvoice->execute();
                     if ($insertInvoice->affected_rows > 0) {
-                        $insertAction->bind_param("ss", $invNum, $invNum);
+                        $insertAction->bind_param("siss", $invNum, $__actorUserId, $__actorUsername, $invNum);
                         $insertAction->execute();
                         $imported++;
                     }
@@ -6770,6 +7296,67 @@ if ($res_active) {
         $most_active_clients[] = $r;
 }
 
+$stats_invoice_status = [];
+$statusLabels = ['paid' => 'Paid', 'sent' => 'Sent', 'pending' => 'Pending', 'draft' => 'Draft', 'failed' => 'Failed', 'void' => 'Void'];
+$statusColors = ['paid' => '#10b981', 'sent' => '#3b82f6', 'pending' => '#f59e0b', 'draft' => '#94a3b8', 'failed' => '#ef4444', 'void' => '#6b7280'];
+$res_status = $mysqli->query("SELECT status, COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 0 $testFilter GROUP BY status");
+$statusCounts = [];
+if ($res_status) {
+    while ($r = $res_status->fetch_assoc())
+        $statusCounts[$r['status']] = $r;
+}
+foreach ($statusLabels as $sKey => $sLabel) {
+    if (!empty($statusCounts[$sKey])) {
+        $stats_invoice_status[] = ['status' => $sKey, 'label' => $sLabel, 'count' => (int) $statusCounts[$sKey]['c'], 'amount' => (float) $statusCounts[$sKey]['total'], 'color' => $statusColors[$sKey]];
+    }
+}
+
+$stats_revenue_trend = [];
+$res_trend = $mysqli->query("
+    SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month,
+           SUM(amount) as total_invoiced,
+           SUM(COALESCE(paid_amount, 0)) as total_paid
+    FROM invoxa_invoices
+    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH) $testFilter
+    GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
+    ORDER BY month ASC
+");
+$trendByMonth = [];
+if ($res_trend) {
+    while ($r = $res_trend->fetch_assoc())
+        $trendByMonth[$r['month']] = $r;
+}
+for ($m = 11; $m >= 0; $m--) {
+    $monthKey = (new DateTime())->modify("-{$m} months")->format('Y-m');
+    $row = $trendByMonth[$monthKey] ?? ['total_invoiced' => 0, 'total_paid' => 0];
+    $stats_revenue_trend[] = ['month' => $monthKey, 'total_invoiced' => (float) $row['total_invoiced'], 'total_paid' => (float) $row['total_paid']];
+}
+
+$stats_expense_ty_total = (float) ($mysqli->query("SELECT SUM(amount) as t FROM invoxa_expenses WHERE expense_date >= '$startStr'")->fetch_assoc()['t'] ?? 0);
+$stats_net_income_ty = $stats_ty_paid - $stats_expense_ty_total;
+
+$expenseCatLabels = expenseCategories();
+$stats_expense_categories = [];
+$res_expcat = $mysqli->query("SELECT category, SUM(amount) as total FROM invoxa_expenses WHERE expense_date >= '$startStr' GROUP BY category ORDER BY total DESC");
+if ($res_expcat) {
+    while ($r = $res_expcat->fetch_assoc()) {
+        $stats_expense_categories[] = ['category' => $r['category'], 'label' => $expenseCatLabels[$r['category']] ?? ucfirst($r['category']), 'total' => (float) $r['total']];
+    }
+}
+
+$stats_expense_monthly = [];
+$res_expmonthly = $mysqli->query("
+    SELECT DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(amount) as total
+    FROM invoxa_expenses
+    WHERE expense_date >= '$startStr'
+    GROUP BY DATE_FORMAT(expense_date, '%Y-%m')
+    ORDER BY month ASC
+");
+if ($res_expmonthly) {
+    while ($r = $res_expmonthly->fetch_assoc())
+        $stats_expense_monthly[] = ['month' => $r['month'], 'total' => (float) $r['total']];
+}
+
 // System Health
 $stats_db_rows = 0;
 $all_tables_info = [];
@@ -6797,6 +7384,16 @@ if (is_dir($backup_dir)) {
         $latest_backup = date('M j, Y', filemtime($files[0]));
     }
 }
+
+$stats_db_size_bytes = (int) ($mysqli->query("SELECT SUM(data_length + index_length) as s FROM information_schema.TABLES WHERE table_schema = DATABASE()")->fetch_assoc()['s'] ?? 0);
+$stats_invoices_dir_size_bytes = invoxaDirSize(INVOICES_DIR);
+$stats_backups_dir_size_bytes = invoxaDirSize($backup_dir);
+
+$stats_webhook_unmatched_total = (int) ($mysqli->query("SELECT COUNT(*) as c FROM invoxa_actions WHERE action_type = 'webhook_unmatched'")->fetch_assoc()['c'] ?? 0);
+$stats_webhook_unmatched_30d = (int) ($mysqli->query("SELECT COUNT(*) as c FROM invoxa_actions WHERE action_type = 'webhook_unmatched' AND performed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetch_assoc()['c'] ?? 0);
+
+$stats_php_version = PHP_VERSION;
+$stats_mysql_version = $mysqli->server_info;
 
 // Offsite push status — written by the offsite cron/rclone script after each
 // push attempt, not by invoxa.php. Missing file just means it hasn't run yet.
@@ -7946,6 +8543,13 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
 
         .doc-content td { color: var(--text-secondary); }
 
+        .doc-content img {
+            max-width: 70%;
+            height: auto;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+
         .toast {
             position: fixed;
             bottom: 2rem;
@@ -8072,6 +8676,11 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
         .datatable-table td {
             padding: 0.9rem 1rem;
             border-bottom: 1px solid var(--border);
+        }
+
+        .datatable-table > tbody > tr > td,
+        .datatable-table > tbody > tr > th {
+            vertical-align: middle;
         }
 
         .datatable-table th {
@@ -8274,8 +8883,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 class="fa-solid fa-chart-pie"></i><span>Dashboard</span></button>
         <button type="button" class="mobile-bottom-nav-item" data-target="invoices" onclick="nav('invoices', true)"><i
                 class="fa-solid fa-file-lines"></i><span>Invoices</span></button>
-        <button type="button" class="mobile-bottom-nav-item" onclick="openExpenseModal()"><i
-                class="fa-solid fa-circle-plus"></i><span>Add Expense</span></button>
+        <button type="button" class="mobile-bottom-nav-item" data-target="billing" onclick="nav('billing', true); resetAdhocMode();"><i
+                class="fa-solid fa-circle-plus"></i><span>Add Invoice</span></button>
         <button type="button" class="mobile-bottom-nav-item" data-target="clients" onclick="nav('clients', true)"><i
                 class="fa-solid fa-users"></i><span>Clients</span></button>
     </nav>
@@ -8335,12 +8944,14 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
         <div class="nav-item tool-item" data-target="audit" onclick="nav('audit', true)"><i
                 class="fa-solid fa-clock-rotate-left"></i>
             Audit Log</div>
+        <?php if ($isAdmin): ?>
         <div class="nav-item tool-item" data-target="backup" onclick="nav('backup', true)"><i
                 class="fa-solid fa-database"></i> Data Management
             <button type="button" class="nav-subnav-toggle" onclick="event.stopPropagation(); toggleNavSubnav('backup')"
                 aria-label="Expand Data Management menu"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
         <div class="nav-subnav-slot" data-for="backup"></div>
+        <?php endif; ?>
         <div class="nav-item tool-item" data-target="docs" onclick="nav('docs', true)"><i class="fa-solid fa-book"></i> Docs
             <button type="button" class="nav-subnav-toggle" onclick="event.stopPropagation(); toggleNavSubnav('docs')"
                 aria-label="Expand Docs menu"><i class="fa-solid fa-chevron-down"></i></button>
@@ -8354,7 +8965,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 aria-label="Expand Settings menu"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
         <div class="nav-subnav-slot" data-for="settings"></div>
-        <div style="margin-top:0.5rem; padding-top:1rem; border-top:1px solid var(--border);">
+        <div style="margin-top:1.25rem; border-top:1px solid var(--border);"></div>
+        <div style="padding-top:2rem;">
             <div class="global-search-wrap">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input type="text" id="globalSearchInput" placeholder="Search"
@@ -8997,13 +9609,12 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         <div class="card">
                             <div class="card-body doc-content">
                                 <h1>Roadmap</h1>
-                                <p>Ideas being considered for future releases — not commitments, and not on any particular schedule, just the current shortlist.</p>
+                                <p>What's coming next — actively in development, not just a wishlist.</p>
                                 <ul>
                                     <li><strong>Multi-currency per client/invoice</strong> — currency is currently one setting for the whole instance (Settings &gt; General); each client or invoice would carry its own instead, for anyone billing across more than one currency.</li>
                                     <li><strong>Two-way accounting sync (Xero/QuickBooks API)</strong> — Data Management's exports (CSV, IIF) are a one-way handoff today; a live API sync would push and pull instead of a manual file import.</li>
-                                    <li><strong>Receipt OCR</strong> — prefill an expense's vendor and amount straight from the receipt photo you just uploaded, instead of typing them in by hand.</li>
                                 </ul>
-                                <p>None of these are scheduled yet. If one of them would help you, or you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
+                                <p>No fixed release dates yet, but real work is underway. If one of them would help you, or you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
                             </div>
                         </div>
                     </div>
@@ -9027,10 +9638,11 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     Public License v3.0 (AGPL-3.0). You can self-host it, read every line of it, and
                                     modify your own copy — the full, unmodified license text is reproduced below
                                     exactly as it must be distributed. A paid license key is a separate, optional
-                                    unlock for six specific features (Stripe/PayPal payment collection, recurring
+                                    unlock for seven specific features (Stripe/PayPal payment collection, recurring
                                     billing automation, the Client Portal, the external API, Reporting &amp;
-                                    Statistics, and removing the "Powered by Invoxa" credit) — see
-                                    <strong>Security</strong> under Features for how that works.</p>
+                                    Statistics, adding teammates beyond your own account, and removing the "Powered
+                                    by Invoxa" credit) — see <strong>Security</strong> under Features for how that
+                                    works.</p>
                                 <?php
                                 $__licenseFile = DOCS_DIR . 'LICENSE';
                                 echo is_file($__licenseFile)
@@ -9057,9 +9669,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         <div class="card">
                             <div class="card-body doc-content">
                                 <h1>What Invoxa Does</h1>
-                                <p>A self-hosted invoicing and billing tool for one business, run from a single admin
-                                    account. Each topic under <strong>Features</strong> in the sidebar covers one part
-                                    in more depth — this page is just the map.</p>
+                                <p>A self-hosted invoicing and billing tool for one business — one or more
+                                    accounts (Settings &gt; Users), each Admin or Member. Each topic under
+                                    <strong>Features</strong> in the sidebar covers one part in more depth — this
+                                    page is just the map.</p>
                                 <ul>
                                     <li><strong>Invoicing &amp; Quotes</strong> — ad hoc invoices, line items,
                                         discount/tax, PDF generation, quotes.</li>
@@ -9309,15 +9922,27 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     login. The counter resets on a successful login. This is enforced server-side
                                     regardless of what the login form itself shows, so it can't be bypassed by
                                     retrying more carefully.</p>
-                                <h2>Invoxa is open source — licensing only unlocks six extras</h2>
+                                <h2>Users &amp; roles</h2>
+                                <p>Settings &gt; Users manages every account. <strong>Admin</strong> accounts have
+                                    full access, including Settings and Data Management.
+                                    <strong>Member</strong> accounts can use everything day-to-day — Dashboard,
+                                    Invoices, Clients, Quotes, Expenses — plus their own Account tab (username,
+                                    email, password, 2FA), but nothing else under Settings and nothing under Data
+                                    Management. The account created at signup is always an admin; the last admin
+                                    can't be demoted or deleted, so there's always at least one account able to
+                                    manage the rest. Adding a second (or further) account requires a license —
+                                    editing or removing an existing one stays free either way, the same pattern as
+                                    API tokens and the Client Portal below.</p>
+                                <h2>Invoxa is open source — licensing only unlocks seven extras</h2>
                                 <p>Invoxa is free and open source (AGPL-3.0): client and invoice management, quotes,
                                     manual payments, backups, and 2FA all work fully with no license key at all — an
                                     unlicensed install is never locked out of its own account or its own data. A
-                                    license is a paid, optional unlock for six specific capabilities: Stripe/PayPal
+                                    license is a paid, optional unlock for seven specific capabilities: Stripe/PayPal
                                     payment collection, recurring billing automation, the Client Portal, the
-                                    external API, Reporting &amp; Statistics, and removing the "Powered by Invoxa"
-                                    credit line from invoices and emails. Everything else in this Docs section works
-                                    exactly the same whether or not you've added a key.</p>
+                                    external API, Reporting &amp; Statistics, adding teammates beyond your own
+                                    account, and removing the "Powered by Invoxa" credit line from invoices and
+                                    emails. Everything else in this Docs section works exactly the same whether or
+                                    not you've added a key.</p>
                             </div>
                         </div>
                     </div>
@@ -9460,8 +10085,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 <h2>Danger zone</h2>
                                 <p><strong>Factory Reset</strong> wipes the instance back to a clean install —
                                     every client, invoice, quote, note, and setting, every generated invoice file,
-                                    every stored backup, and the admin account itself, landing back on the signup
-                                    screen exactly like a fresh install. It requires typing <code>RESET</code>
+                                    every stored backup, and every user account (not just yours), landing back on the
+                                    signup screen exactly like a fresh install. It requires typing <code>RESET</code>
                                     exactly into a confirmation field (the button stays disabled until that matches)
                                     plus re-entering your current admin password — two independent confirmations
                                     specifically because there's no undo once it runs; take a backup first if
@@ -9518,10 +10143,13 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             <div class="subnav-layout">
 
                 <nav class="subnav">
+                    <?php if ($isAdmin): ?>
                     <button type="button" class="subnav-item active" data-settings-target="general"
                         onclick="navSettings('general')"><i class="fa-solid fa-sliders"></i> General</button>
-                    <button type="button" class="subnav-item" data-settings-target="account"
+                    <?php endif; ?>
+                    <button type="button" class="subnav-item<?= $isAdmin ? '' : ' active' ?>" data-settings-target="account"
                         onclick="navSettings('account')"><i class="fa-solid fa-lock"></i> Account</button>
+                    <?php if ($isAdmin): ?>
                     <button type="button" class="subnav-item" data-settings-target="branding"
                         onclick="navSettings('branding')"><i class="fa-solid fa-paint-roller"></i> Branding</button>
                     <button type="button" class="subnav-item" data-settings-target="email"
@@ -9563,14 +10191,24 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         onclick="navSettings('notifications')"><i class="fa-solid fa-bell"></i> Notifications
                         <span class="subnav-dot <?= $__notificationsOn ? 'on' : 'off' ?>"
                             title="<?= $__notificationsOn ? 'Notifications active (' . htmlspecialchars(ucfirst($settings['notification_channel'])) . ')' : 'Notifications off' ?>"></span></button>
+                    <?php $__userCount = (int) ($mysqli->query("SELECT COUNT(*) as c FROM invoxa_users")->fetch_assoc()['c'] ?? 0); ?>
+                    <button type="button" class="subnav-item" data-settings-target="users"
+                        onclick="navSettings('users')"><i class="fa-solid fa-users-gear"></i> Users
+                        <span style="margin-left:auto; display:inline-flex; align-items:center; gap:0.4rem;">
+                            <?php if (!$licenseValid): ?><i class="fa-solid fa-lock" title="Adding more than one user requires a license"
+                                    style="color:var(--text-secondary); font-size:0.8rem;"></i><?php endif; ?>
+                            <span class="subnav-dot on" style="margin-left:0;" title="<?= $__userCount ?> user<?= $__userCount === 1 ? '' : 's' ?>"></span>
+                        </span></button>
                     <button type="button" class="subnav-item" data-settings-target="license"
                         onclick="navSettings('license')"><i class="fa-solid fa-key"></i> License
                         <span class="subnav-dot <?= $licenseValid ? 'on' : 'off' ?>"
                             title="<?= $licenseValid ? 'Licensed' : 'Not licensed' ?>"></span></button>
+                    <?php endif; ?>
                 </nav>
 
                 <div class="subnav-content">
 
+                    <?php if ($isAdmin): ?>
                     <!-- General -->
                     <div class="subnav-pane active" id="settings-pane-general">
                         <div class="card">
@@ -9665,9 +10303,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                             </div>
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <!-- Account -->
-                    <div class="subnav-pane" id="settings-pane-account">
+                    <div class="subnav-pane<?= $isAdmin ? '' : ' active' ?>" id="settings-pane-account">
                         <div class="card">
                             <div class="card-header">
                                 <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-lock"
@@ -9677,7 +10316,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 <div class="form-group">
                                     <label class="form-label"
                                         style="font-size:0.8rem; color:var(--text-secondary);">Username</label>
-                                    <?php $__u = $mysqli->query("SELECT username, email, totp_secret, email_verified_at FROM invoxa_users LIMIT 1")->fetch_assoc();
+                                    <?php $__u = $mysqli->query("SELECT username, email, totp_secret, email_verified_at FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
                                     $__totpEnabled = !empty($__u['totp_secret']); ?>
                                     <input type="text" id="newUsername" class="form-control"
                                         value="<?= htmlspecialchars($__u['username'] ?? '') ?>">
@@ -9793,6 +10432,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         </div>
                     </div>
 
+                    <?php if ($isAdmin): ?>
                     <!-- Billing -->
                     <div class="subnav-pane" id="settings-pane-billing">
                         <?php if (!$licenseValid): ?>
@@ -10054,25 +10694,81 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                             </select>
                                         </div>
                                     </div>
-                                    <div class="form-group" style="margin-top:0.5rem; padding-top:0.75rem; border-top:1px solid var(--border);">
+                                    <div style="margin-top:0.5rem; padding-top:0.75rem; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+                                        <span style="font-size:0.8rem; color:var(--text-secondary); font-weight:500;">Events</span>
+                                        <span style="display:flex; gap:0.5rem;">
+                                            <button type="button" class="btn small" onclick="setAllNotifyEvents(true)">Select All</button>
+                                            <button type="button" class="btn small" onclick="setAllNotifyEvents(false)">Select None</button>
+                                        </span>
+                                    </div>
+                                    <div class="form-group" style="margin-top:0.5rem;">
                                         <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" id="notifyOnPayment" name="notify_on_payment" value="1"
+                                            <input type="checkbox" class="notify-event-cb" id="notifyOnPayment" name="notify_on_payment" value="1"
                                                 <?= ($settings['notify_on_payment'] ?? '1') === '1' ? 'checked' : '' ?>>
                                             Notify when a payment is received
                                         </label>
                                     </div>
                                     <div class="form-group">
                                         <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" id="notifyOnOverdue" name="notify_on_overdue" value="1"
+                                            <input type="checkbox" class="notify-event-cb" id="notifyOnRefund" name="notify_on_refund" value="1"
+                                                <?= ($settings['notify_on_refund'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                            Notify when a refund is issued
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                            <input type="checkbox" class="notify-event-cb" id="notifyOnOverdue" name="notify_on_overdue" value="1"
                                                 <?= ($settings['notify_on_overdue'] ?? '1') === '1' ? 'checked' : '' ?>>
                                             Notify when an invoice becomes overdue (same trigger as the reminder email)
                                         </label>
                                     </div>
                                     <div class="form-group">
                                         <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" id="notifyOnQuoteAccepted" name="notify_on_quote_accepted" value="1"
+                                            <input type="checkbox" class="notify-event-cb" id="notifyOnQuoteAccepted" name="notify_on_quote_accepted" value="1"
                                                 <?= ($settings['notify_on_quote_accepted'] ?? '1') === '1' ? 'checked' : '' ?>>
                                             Notify when a client accepts a quote from their Client Portal
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                            <input type="checkbox" class="notify-event-cb" id="notifyOnEmailFailed" name="notify_on_email_failed" value="1"
+                                                <?= ($settings['notify_on_email_failed'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                            Notify when an invoice email fails to send
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                            <input type="checkbox" class="notify-event-cb" id="notifyOnLateFee" name="notify_on_late_fee" value="1"
+                                                <?= ($settings['notify_on_late_fee'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                            Notify when a late fee is charged
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                            <input type="checkbox" class="notify-event-cb" id="notifyOnInvoiceVoided" name="notify_on_invoice_voided" value="1"
+                                                <?= ($settings['notify_on_invoice_voided'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                            Notify when an invoice is voided
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                            <input type="checkbox" class="notify-event-cb" id="notifyOnWebhookUnmatched" name="notify_on_webhook_unmatched" value="1"
+                                                <?= ($settings['notify_on_webhook_unmatched'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                            Notify when an incoming payment doesn't match any invoice
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                            <input type="checkbox" class="notify-event-cb" id="notifyOnRecurringErrors" name="notify_on_recurring_errors" value="1"
+                                                <?= ($settings['notify_on_recurring_errors'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                            Notify when a recurring billing run has errors
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                            <input type="checkbox" class="notify-event-cb" id="notifyOnSecurityEvent" name="notify_on_security_event" value="1"
+                                                <?= ($settings['notify_on_security_event'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                            Notify on security events (2FA enabled/disabled, API tokens created/revoked)
                                         </label>
                                     </div>
                                     <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
@@ -10622,7 +11318,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                         <span style="color:var(--warning); font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Not licensed</span>
                                         <?php
                                         $__licenseMsgs = [
-                                            'empty' => 'Invoxa is free and open source — everything works without a key. A license unlocks six paid extras: Stripe/PayPal payment collection, recurring billing automation, the Client Portal, the external API, Reporting & Statistics, and removing the "Powered by Invoxa" credit.',
+                                            'empty' => 'Invoxa is free and open source — everything works without a key. A license unlocks seven paid extras: Stripe/PayPal payment collection, recurring billing automation, the Client Portal, the external API, Reporting & Statistics, adding teammates beyond your own account (Settings > Users), and removing the "Powered by Invoxa" credit.',
                                             'demo_mode' => 'This is a public demo instance — paid features stay locked here regardless of any key entered, so you can see them (dimmed) without anyone being able to actually use them. Buy a license to unlock them on your own instance.',
                                             'malformed' => 'That license key doesn\'t look valid — check you copied the whole string with nothing missing.',
                                             'bad_signature' => 'That license key failed verification — check you copied it exactly, with nothing missing or altered.',
@@ -10654,6 +11350,97 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         </div>
                     </div>
 
+                    <!-- Users -->
+                    <div class="subnav-pane" id="settings-pane-users">
+                        <?php if (!$licenseValid): ?>
+                            <div class="card" style="border-left:3px solid var(--warning); margin-bottom:1rem;">
+                                <div class="card-body" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
+                                    <i class="fa-solid fa-lock" style="color:var(--warning); font-size:1.1rem;"></i>
+                                    <div><strong>Adding more than one user requires a license.</strong>
+                                        <span style="color:var(--text-secondary); font-size:0.85rem; display:block; margin-top:0.15rem;">
+                                            Editing or removing an existing user stays free either way.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-users-gear"
+                                        style="color:var(--accent); margin-right:0.5rem;"></i>Users</h3>
+                            </div>
+                            <div class="card-body">
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                                    <strong>Admin</strong> accounts have full access, including Settings and Data
+                                    Management. <strong>Member</strong> accounts can use everything day-to-day —
+                                    Dashboard, Invoices, Clients, Quotes, Expenses — plus their own Account tab, but
+                                    not the rest of Settings or Data Management.
+                                </p>
+
+                                <!-- Create user -->
+                                <div style="padding:1rem; border:1px solid var(--border); border-radius:8px; margin-bottom:1.5rem; <?= $licenseValid ? '' : 'opacity:0.5;' ?>">
+                                    <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap;">
+                                        <div class="form-group" style="margin-bottom:0; flex:1; min-width:140px;">
+                                            <label class="form-label">Username</label>
+                                            <input type="text" id="newUserUsername" class="form-control" <?= $licenseValid ? '' : 'disabled' ?>>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom:0; flex:1; min-width:180px;">
+                                            <label class="form-label">Email</label>
+                                            <input type="email" id="newUserEmail" class="form-control" <?= $licenseValid ? '' : 'disabled' ?>>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom:0; flex:1; min-width:140px;">
+                                            <label class="form-label">Password</label>
+                                            <input type="password" id="newUserPassword" class="form-control" minlength="<?= PASSWORD_MIN_LENGTH ?>" autocomplete="new-password" <?= $licenseValid ? '' : 'disabled' ?>>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom:0;">
+                                            <label class="form-label">Role</label>
+                                            <select id="newUserRole" class="form-control" <?= $licenseValid ? '' : 'disabled' ?>>
+                                                <option value="member" selected>Member</option>
+                                                <option value="admin">Admin</option>
+                                            </select>
+                                        </div>
+                                        <button class="btn primary" id="createUserBtn" type="button" onclick="createUser()"
+                                            <?= $licenseValid ? '' : 'disabled title="Requires a license"' ?>><i
+                                                class="fa-solid fa-plus"></i> Add User</button>
+                                    </div>
+                                </div>
+
+                                <!-- Existing users -->
+                                <?php $__allUsers = $mysqli->query("SELECT id, username, email, role, created_at FROM invoxa_users ORDER BY id ASC"); ?>
+                                <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                                    <thead>
+                                        <tr style="text-align:left; color:var(--text-secondary); border-bottom:1px solid var(--border);">
+                                            <th style="padding:0.4rem 0.5rem;">Username</th>
+                                            <th style="padding:0.4rem 0.5rem;">Email</th>
+                                            <th style="padding:0.4rem 0.5rem;">Role</th>
+                                            <th style="padding:0.4rem 0.5rem;">Created</th>
+                                            <th style="padding:0.4rem 0.5rem;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php while ($__u2 = $__allUsers->fetch_assoc()): $__isSelf = (int) $__u2['id'] === $currentUserId; ?>
+                                            <tr style="border-bottom:1px solid var(--border);">
+                                                <td style="padding:0.5rem;"><?= htmlspecialchars($__u2['username']) ?><?= $__isSelf ? ' <span class="badge" style="background:var(--surface-hover); color:var(--text-primary);">You</span>' : '' ?></td>
+                                                <td style="padding:0.5rem; color:var(--text-secondary);"><?= htmlspecialchars($__u2['email'] ?? '') ?></td>
+                                                <td style="padding:0.5rem;">
+                                                    <select class="form-control" style="display:inline-block; width:auto; font-size:0.8rem; padding:0.2rem 0.4rem;" id="userRoleSelect<?= $__u2['id'] ?>">
+                                                        <option value="member" <?= $__u2['role'] === 'member' ? 'selected' : '' ?>>Member</option>
+                                                        <option value="admin" <?= $__u2['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
+                                                    </select>
+                                                </td>
+                                                <td style="padding:0.5rem; color:var(--text-secondary);"><?= htmlspecialchars(substr($__u2['created_at'], 0, 10)) ?></td>
+                                                <td style="padding:0.5rem; white-space:nowrap;">
+                                                    <button class="btn small" type="button" onclick="updateUserRole(<?= $__u2['id'] ?>)" title="Save role"><i class="fa-solid fa-save"></i></button>
+                                                    <button class="btn small danger" type="button" onclick="deleteUser(<?= $__u2['id'] ?>)" title="<?= $__isSelf ? "Can't delete your own account" : 'Delete' ?>" <?= $__isSelf ? 'disabled' : '' ?>><i class="fa-solid fa-trash"></i></button>
+                                                </td>
+                                            </tr>
+                                        <?php endwhile; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                 </div>
             </div>
             </div>
@@ -10661,6 +11448,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
 
         <!-- LICENSE -->
         <!-- BACKUP & RESTORE -->
+        <?php if ($isAdmin): ?>
         <div id="sec-backup" class="section">
             <h2 class="page-title">Data Management</h2>
             <div class="section-scroll">
@@ -10818,13 +11606,13 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                             <div class="card-body">
                                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
                                     Checks invoice math, TOTP, Stripe/PayPal amount conversion and webhook signature
-                                    verification, and the payment ledger's actual database behavior (partial payments,
-                                    duplicate-webhook idempotency, refunds). Every check that touches the database
-                                    creates its own disposable client/invoice (never a real one, never Demo Data's)
-                                    and deletes it again immediately after — nothing from a run is left behind, pass
-                                    or fail. Does <strong>not</strong> call the real Stripe/PayPal/SMTP APIs — those
-                                    need live credentials this can't assume exist, and a real API call isn't something
-                                    a button click should cause.
+                                    verification, receipt OCR, user roles, and the payment ledger's actual database
+                                    behavior (partial payments, duplicate-webhook idempotency, refunds). Every check
+                                    that touches the database creates its own disposable client/invoice/user (never a
+                                    real one, never Demo Data's) and deletes it again immediately after — nothing
+                                    from a run is left behind, pass or fail. Does <strong>not</strong> call the real
+                                    Stripe/PayPal/SMTP APIs — those need live credentials this can't assume exist,
+                                    and a real API call isn't something a button click should cause.
                                 </p>
                                 <?php
                                 $__testDefs = invoxaTestDefinitions($mysqli, $settings);
@@ -11034,6 +11822,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <!-- Modals -->
         <div id="clientModal" class="modal-overlay">
@@ -11187,11 +11976,18 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
                         <textarea id="expenseDescription" class="form-control" rows="2"></textarea>
                     </div>
-                    <div class="form-group"><label class="form-label">Receipts <span
-                                style="font-weight:400; color:var(--text-secondary);">(optional — a scanned receipt plus a card statement excerpt, for example)</span></label>
+                    <div class="form-group"><label class="form-label">Invoice <span
+                                style="font-weight:400; color:var(--text-secondary);">(optional — the vendor's bill, if you keep that separately from the receipt)</span></label>
+                        <div id="expenseInvoiceFilesList" style="margin-bottom:0.5rem;"></div>
+                        <input type="file" id="expenseInvoiceFiles" class="form-control" accept="image/*,.pdf" multiple
+                            style="padding:0.5rem;">
+                    </div>
+                    <div class="form-group"><label class="form-label">Receipt <span
+                                style="font-weight:400; color:var(--text-secondary);">(optional — proof of payment; an image here is scanned to prefill Vendor/Amount above)</span></label>
                         <div id="expenseReceiptsList" style="margin-bottom:0.5rem;"></div>
                         <input type="file" id="expenseReceiptFiles" class="form-control" accept="image/*,.pdf" multiple
-                            style="padding:0.5rem;">
+                            style="padding:0.5rem;" onchange="handleExpenseReceiptFilesChange()">
+                        <p id="expenseOcrStatus" style="display:none; color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem; margin-bottom:0;"></p>
                     </div>
                 </div>
                 <div class="modal-footer"><button class="btn" onclick="closeModal('expenseModal')">Cancel</button><button
@@ -11376,7 +12172,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 <div class="modal-body">
                     <p style="color:var(--text-secondary); font-size:0.9rem; margin-top:0;">This permanently deletes
                         every client, invoice, quote, note, and setting, every generated invoice file, every stored
-                        backup, and the admin account. There is no undo.</p>
+                        backup, and every user account — not just yours. There is no undo.</p>
                     <div class="form-group">
                         <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Type
                             <strong>RESET</strong> to confirm</label>
@@ -11472,7 +12268,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             </div>
         </div>
 
-        <?php $__ev = $mysqli->query("SELECT email, email_verified_at FROM invoxa_users LIMIT 1")->fetch_assoc(); ?>
+        <?php $__ev = $mysqli->query("SELECT email, email_verified_at FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc(); ?>
         <div id="onboardingModal" class="modal-overlay">
             <div class="modal" style="max-width:440px; text-align:center;">
                 <div class="modal-body" style="padding-top:2.5rem;">
@@ -11724,6 +12520,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 if (fromClick) {
                     document.querySelector('.sidebar').classList.remove('open');
                     document.getElementById('sidebarBackdrop').classList.remove('active');
+                    document.querySelectorAll('.modal-overlay.active').forEach(el => el.classList.remove('active'));
                 }
                 document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
                 document.querySelector('.nav-item[data-target="' + section + '"]').classList.add('active');
@@ -11812,14 +12609,66 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 // while its pane is still display:none, so each chart is only created
                 // the first time its tab actually becomes visible.
                 if (__statsChartsInit[target] || typeof Chart === 'undefined') return;
-                if (target === 'revenue' && window.__revenueBreakdownData && document.getElementById('revenueBreakdownChart')) {
+                if (target === 'revenue') {
                     __statsChartsInit.revenue = true;
-                    const d = window.__revenueBreakdownData;
-                    new Chart(document.getElementById('revenueBreakdownChart').getContext('2d'), {
+                    if (window.__revenueBreakdownData && document.getElementById('revenueBreakdownChart')) {
+                        const d = window.__revenueBreakdownData;
+                        new Chart(document.getElementById('revenueBreakdownChart').getContext('2d'), {
+                            type: 'bar',
+                            data: { labels: ['Invoiced', 'Paid', 'Outstanding'], datasets: [{ data: [d.invoiced, d.paid, d.outstanding], backgroundColor: ['#3b82f6', '#10b981', '#f59e0b'] }] },
+                            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+                        });
+                    }
+                    if (window.__invoiceStatusData && document.getElementById('invoiceStatusChart')) {
+                        const rows = window.__invoiceStatusData;
+                        new Chart(document.getElementById('invoiceStatusChart').getContext('2d'), {
+                            type: 'doughnut',
+                            data: { labels: rows.map(r => r.label), datasets: [{ data: rows.map(r => r.amount), backgroundColor: rows.map(r => r.color) }] },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } }, cutout: '60%' }
+                        });
+                    }
+                    if (window.__revenueTrendData && document.getElementById('revenueTrendChart')) {
+                        const rows = window.__revenueTrendData;
+                        new Chart(document.getElementById('revenueTrendChart').getContext('2d'), {
+                            type: 'line',
+                            data: {
+                                labels: rows.map(r => r.month),
+                                datasets: [
+                                    { label: 'Invoiced', data: rows.map(r => r.total_invoiced), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', tension: 0.3, fill: true },
+                                    { label: 'Paid', data: rows.map(r => r.total_paid), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', tension: 0.3, fill: true }
+                                ]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+                        });
+                    }
+                }
+                if (target === 'forecasting' && window.__arAgingData && document.getElementById('arAgingChart')) {
+                    __statsChartsInit.forecasting = true;
+                    const rows = window.__arAgingData;
+                    new Chart(document.getElementById('arAgingChart').getContext('2d'), {
                         type: 'bar',
-                        data: { labels: ['Invoiced', 'Paid', 'Outstanding'], datasets: [{ data: [d.invoiced, d.paid, d.outstanding], backgroundColor: ['#3b82f6', '#10b981', '#f59e0b'] }] },
-                        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+                        data: { labels: rows.map(r => r.label), datasets: [{ data: rows.map(r => r.amount), backgroundColor: rows.map(r => r.color) }] },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
                     });
+                }
+                if (target === 'expenses') {
+                    __statsChartsInit.expenses = true;
+                    if (window.__expenseCategoryData && document.getElementById('expenseCategoryChart')) {
+                        const rows = window.__expenseCategoryData;
+                        new Chart(document.getElementById('expenseCategoryChart').getContext('2d'), {
+                            type: 'doughnut',
+                            data: { labels: rows.map(r => r.label), datasets: [{ data: rows.map(r => r.total), backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316', '#06b6d4', '#ec4899', '#84cc16', '#6b7280'] }] },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } }, cutout: '60%' }
+                        });
+                    }
+                    if (window.__expenseTrendData && document.getElementById('expenseTrendChart')) {
+                        const rows = window.__expenseTrendData;
+                        new Chart(document.getElementById('expenseTrendChart').getContext('2d'), {
+                            type: 'bar',
+                            data: { labels: rows.map(r => r.month), datasets: [{ label: 'Expenses', data: rows.map(r => r.total), backgroundColor: '#ef4444' }] },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                        });
+                    }
                 }
                 if (target === 'tax' && window.__taxMonthlyData && document.getElementById('taxMonthlyChart')) {
                     __statsChartsInit.tax = true;
@@ -11856,14 +12705,24 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
                     });
                 }
-                if (target === 'system' && window.__emailHealthData && document.getElementById('emailHealthChart')) {
+                if (target === 'system') {
                     __statsChartsInit.system = true;
-                    const d = window.__emailHealthData;
-                    new Chart(document.getElementById('emailHealthChart').getContext('2d'), {
-                        type: 'doughnut',
-                        data: { labels: ['Sent', 'Failed'], datasets: [{ data: [d.sent, d.failed], backgroundColor: ['#10b981', '#ef4444'] }] },
-                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '65%' }
-                    });
+                    if (window.__emailHealthData && document.getElementById('emailHealthChart')) {
+                        const d = window.__emailHealthData;
+                        new Chart(document.getElementById('emailHealthChart').getContext('2d'), {
+                            type: 'doughnut',
+                            data: { labels: ['Sent', 'Failed'], datasets: [{ data: [d.sent, d.failed], backgroundColor: ['#10b981', '#ef4444'] }] },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '65%' }
+                        });
+                    }
+                    if (window.__storageFootprintData && document.getElementById('storageFootprintChart')) {
+                        const d = window.__storageFootprintData;
+                        new Chart(document.getElementById('storageFootprintChart').getContext('2d'), {
+                            type: 'bar',
+                            data: { labels: [d.labels.db, d.labels.invoices, d.labels.backups], datasets: [{ data: [d.db, d.invoices, d.backups], backgroundColor: ['#3b82f6', '#10b981', '#f59e0b'] }] },
+                            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+                        });
+                    }
                 }
             }
             function navStats(target) {
@@ -12139,26 +12998,39 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 document.getElementById('expenseCategory').value = e ? e.category : 'other';
                 document.getElementById('expenseAmount').value = e ? e.amount : '0.00';
                 document.getElementById('expenseDescription').value = e ? (e.description || '') : '';
+                document.getElementById('expenseInvoiceFiles').value = '';
+                document.getElementById('expenseInvoiceFilesList').innerHTML = '';
                 document.getElementById('expenseReceiptFiles').value = '';
                 document.getElementById('expenseReceiptsList').innerHTML = '';
+                document.getElementById('expenseOcrStatus').style.display = 'none';
                 document.getElementById('expenseModal').classList.add('active');
                 if (e && e.id) loadExpenseReceipts(e.id);
             }
-            async function loadExpenseReceipts(expenseId) {
-                const list = document.getElementById('expenseReceiptsList');
-                list.innerHTML = '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Loading…</p>';
-                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'get_expense_receipts', expense_id: expenseId }) });
-                const json = await res.json();
-                if (!json.success || !json.receipts.length) { list.innerHTML = ''; return; }
-                list.innerHTML = json.receipts.map(r => `
+            function _renderExpenseFileList(files, expenseId) {
+                if (!files.length) return '';
+                return files.map(r => {
+                    const target = r.doc_type === 'invoice' ? 'receipt' : 'invoice';
+                    return `
                     <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.4rem 0; border-bottom:1px solid var(--border);">
                         <a href="${r.url}" target="_blank" style="color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.85rem;"><i class="fa-solid fa-paperclip"></i> ${r.filename}</a>
                         <div style="display:flex; align-items:center; gap:0.5rem; white-space:nowrap;">
                             <span style="color:var(--text-secondary); font-size:0.75rem;">${_formatFileSize(r.file_size)}</span>
+                            <button type="button" class="btn small" title="Move to ${target === 'invoice' ? 'Invoice' : 'Receipt'}" onclick="moveExpenseReceipt(${r.id}, ${expenseId}, '${target}')"><i class="fa-solid fa-right-left"></i></button>
                             <button type="button" class="btn small danger" onclick="deleteExpenseReceipt(${r.id}, ${expenseId})"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
-                `).join('');
+                `;
+                }).join('');
+            }
+            async function loadExpenseReceipts(expenseId) {
+                const invoiceList = document.getElementById('expenseInvoiceFilesList');
+                const receiptList = document.getElementById('expenseReceiptsList');
+                receiptList.innerHTML = '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Loading…</p>';
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'get_expense_receipts', expense_id: expenseId }) });
+                const json = await res.json();
+                if (!json.success) { invoiceList.innerHTML = ''; receiptList.innerHTML = ''; return; }
+                invoiceList.innerHTML = _renderExpenseFileList(json.receipts.filter(r => r.doc_type === 'invoice'), expenseId);
+                receiptList.innerHTML = _renderExpenseFileList(json.receipts.filter(r => r.doc_type !== 'invoice'), expenseId);
             }
             async function deleteExpenseReceipt(id, expenseId) {
                 if (!confirm('Delete this receipt?')) return;
@@ -12166,6 +13038,49 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const json = await res.json();
                 if (json.success) { showToast('Receipt deleted!'); await loadExpenseReceipts(expenseId); refreshTable('expenses'); }
                 else showToast(json.error || 'Failed to delete', true);
+            }
+            async function moveExpenseReceipt(id, expenseId, docType) {
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'move_expense_receipt', id: id, doc_type: docType }) });
+                const json = await res.json();
+                if (json.success) { showToast(`Moved to ${docType === 'invoice' ? 'Invoice' : 'Receipt'}!`); await loadExpenseReceipts(expenseId); }
+                else showToast(json.error || 'Failed to move', true);
+            }
+            async function handleExpenseReceiptFilesChange() {
+                const files = Array.from(document.getElementById('expenseReceiptFiles').files).filter(f => /^image\//.test(f.type));
+                const statusEl = document.getElementById('expenseOcrStatus');
+                if (!files.length) { statusEl.style.display = 'none'; return; }
+                const vendorField = document.getElementById('expenseVendor');
+                const amountField = document.getElementById('expenseAmount');
+                const vendorEmpty = vendorField.value.trim() === '';
+                const amountEmpty = amountField.value.trim() === '' || parseFloat(amountField.value) === 0;
+                if (!vendorEmpty && !amountEmpty) { statusEl.style.display = 'none'; return; }
+                statusEl.textContent = 'Reading receipt' + (files.length > 1 ? 's' : '') + '…';
+                statusEl.style.display = '';
+                try {
+                    const results = await Promise.all(files.map(async file => {
+                        const formData = new FormData();
+                        formData.append('action', 'ocr_expense_receipt');
+                        formData.append('file', file);
+                        const res = await fetch('', { method: 'POST', body: formData });
+                        return res.json();
+                    }));
+                    // With more than one file attached (e.g. a vendor invoice plus the
+                    // actual payment receipt), prefer whichever result found a line
+                    // genuinely labeled TOTAL over one that just guessed the largest
+                    // number — that's the one more likely to be the real receipt.
+                    const usable = results.filter(r => r.success && (r.vendor || r.amount));
+                    const best = usable.find(r => r.confident) || usable[0];
+                    if (best) {
+                        if (vendorEmpty && best.vendor) vendorField.value = best.vendor;
+                        if (amountEmpty && best.amount) amountField.value = best.amount.toFixed(2);
+                        statusEl.textContent = 'Prefilled from the receipt — double-check before saving.';
+                    } else {
+                        const firstError = results.find(r => !r.success && r.error);
+                        statusEl.textContent = firstError ? firstError.error : "Couldn't read a vendor/amount from these receipts.";
+                    }
+                } catch (e) {
+                    statusEl.style.display = 'none';
+                }
             }
             async function saveExpense() {
                 const btn = document.getElementById('saveExpenseBtn'); btn.disabled = true;
@@ -12180,11 +13095,15 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const res = await fetch('', { method: 'POST', body: formData });
                 const json = await res.json();
                 if (!json.success) { showToast(json.error || 'Failed to save', true); btn.disabled = false; return; }
-                const receiptFiles = document.getElementById('expenseReceiptFiles').files;
-                for (const file of receiptFiles) {
+                const filesToUpload = [
+                    ...Array.from(document.getElementById('expenseInvoiceFiles').files).map(file => ({ file, docType: 'invoice' })),
+                    ...Array.from(document.getElementById('expenseReceiptFiles').files).map(file => ({ file, docType: 'receipt' })),
+                ];
+                for (const { file, docType } of filesToUpload) {
                     const rFormData = new FormData();
                     rFormData.append('action', 'upload_expense_receipt');
                     rFormData.append('expense_id', json.id);
+                    rFormData.append('doc_type', docType);
                     rFormData.append('file', file);
                     await fetch('', { method: 'POST', body: rFormData });
                 }
@@ -13104,6 +14023,9 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 document.getElementById('webhookFields').style.display = channel === 'webhook' ? '' : 'none';
             }
             updateNotificationChannelUI();
+            function setAllNotifyEvents(checked) {
+                document.querySelectorAll('#notificationSettingsForm .notify-event-cb').forEach(cb => { cb.checked = checked; });
+            }
             async function saveNotificationSettings() {
                 const btn = document.getElementById('saveNotificationSettingsBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; btn.disabled = true;
                 const form = document.getElementById('notificationSettingsForm');
@@ -13208,6 +14130,34 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const json = await res.json();
                 if (json.success) { showToast('Token deleted.'); setTimeout(() => window.location.reload(), 800); }
                 else showToast(json.error || 'Failed to delete token', true);
+            }
+            async function createUser() {
+                const username = document.getElementById('newUserUsername').value.trim();
+                const email = document.getElementById('newUserEmail').value.trim();
+                const password = document.getElementById('newUserPassword').value;
+                const role = document.getElementById('newUserRole').value;
+                if (!username || !email || !password) return showToast('Username, email, and password are all required', true);
+                const btn = document.getElementById('createUserBtn'); btn.disabled = true;
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'create_user', username, email, password, role }) });
+                const json = await res.json();
+                btn.disabled = false;
+                if (!json.success) return showToast(json.error || 'Failed to create user', true);
+                showToast('User created!');
+                setTimeout(() => window.location.reload(), 800);
+            }
+            async function updateUserRole(id) {
+                const role = document.getElementById('userRoleSelect' + id).value;
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'update_user', id, role }) });
+                const json = await res.json();
+                if (json.success) { showToast('User updated!'); setTimeout(() => window.location.reload(), 800); }
+                else showToast(json.error || 'Failed to update user', true);
+            }
+            async function deleteUser(id) {
+                if (!confirm('Delete this user account? This can\'t be undone.')) return;
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'delete_user', id }) });
+                const json = await res.json();
+                if (json.success) { showToast('User deleted.'); setTimeout(() => window.location.reload(), 800); }
+                else showToast(json.error || 'Failed to delete user', true);
             }
             async function saveInvoiceNumbering() {
                 const btn = document.getElementById('saveInvoiceNumberingBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; btn.disabled = true;
@@ -13487,7 +14437,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 }
             }
             async function clearLicenseKey() {
-                if (!confirm('Deactivate your license? The six paid features (payment collection, recurring billing, Client Portal, external API, Reporting & Statistics, and Powered-by removal) will lock again until you activate a key.')) return;
+                if (!confirm('Deactivate your license? The seven paid features (payment collection, recurring billing, Client Portal, external API, Reporting & Statistics, adding teammates, and Powered-by removal) will lock again until you activate a key.')) return;
                 const btn = document.getElementById('clearLicenseBtn'); btn.disabled = true;
                 const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'save_license_key', license_key: '' }) });
                 const json = await res.json();

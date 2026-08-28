@@ -91,9 +91,14 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./src:/usr/share/nginx/html:ro
       - ./invoxa-invoices:/usr/share/nginx/html/invoxa-invoices:ro
-      # Backups and docs are deliberately not mounted here — backups are full
-      # DB dumps and must only be reachable through the authenticated app, and
-      # docs are rendered in-app by php (see above), never served by nginx.
+      # README.md's screenshots — plain public images, so served directly by
+      # nginx rather than round-tripping through php (see nginx.conf's
+      # /docs/screenshots/ location).
+      - ./docs/screenshots:/usr/share/nginx/html/docs/screenshots:ro
+      # Backups and the docs' markdown/text source are deliberately not
+      # mounted here — backups are full DB dumps and must only be reachable
+      # through the authenticated app, and the markdown/text docs are
+      # rendered in-app by php (see above), never served raw by nginx.
     networks:
       - invoxa-net
     healthcheck:

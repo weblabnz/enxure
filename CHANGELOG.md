@@ -2,6 +2,41 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.10.2] - 2026-08-28
+
+### Added
+- Statistics: five new charts. Revenue tab gets an Invoice Status Breakdown (doughnut, by amount) and a Revenue Trend line chart (trailing 12 calendar months, independent of the tax-year window the Tax tab uses); Forecasting's existing Accounts Receivable Aging list gets a matching bar chart above it; a new Expenses tab shows a tax-year Profit & Loss summary (revenue received vs expenses vs net income), an Expenses by Category doughnut, and an Expenses Over Time bar chart — Expenses previously had no presence anywhere in Statistics at all.
+- Statistics &gt; System: three more cards — Storage Footprint (a bar chart of database size vs the invoices/ and backups/ directories on disk, plus the combined total), Webhook Health (unmatched Stripe/PayPal webhook counts, last 30 days and all-time — sits side by side with Email Delivery Health), and Environment (PHP/MySQL/app version, for support requests — sits side by side with Storage Footprint).
+
+### Changed
+- Data Management &gt; System &gt; "Tables in Database" list no longer needs to scroll for a normal-sized instance (200px &rarr; 480px).
+
+## [2.10.1] - 2026-08-28
+
+### Added
+- Audit Log now records *which* user performed an action — every `invoxa_actions` row gets a `performed_by_user_id`/`performed_by_username` (the username is denormalized at insert time so the trail stays readable even after that user is later deleted), and the Activity/Audit Log timeline shows a "performed by" label on every entry (cron/system-triggered rows, like the nightly recurring-billing run or webhook events, show "System"). All ~30 places that write an audit entry now go through one shared `invoxaLogAction()` helper instead of each hand-rolling its own `INSERT`. Settings > Users actions (create/role change/password reset/delete) now also write their own audit entries, not just a notification.
+
+### Changed
+- Sidebar: the gap above Search (below Settings) now matches the gap above the "Data & Tools" section label (below Clients) — was noticeably tighter before.
+
+## [2.10.0] - 2026-08-28
+
+### Added
+- **Multi-user accounts (Settings > Users).** Invoxa was single-admin-only until now — sign-up was hard-gated to the very first account, and every "your account" query (profile, 2FA, license binding) silently assumed there was only ever one row in `invoxa_users`. Added a `role` column (`admin`/`member`), a Settings > Users pane to add/edit-role/delete accounts, and scoped every one of those "your account" queries to the actual logged-in session instead of an arbitrary `LIMIT 1` row. Admins have full access, including Settings and Data Management; members get full day-to-day access (Dashboard, Invoices, Clients, Quotes, Expenses) plus their own Account tab (username/email/password/2FA), but nothing else under Settings and no Data Management. The account created at signup is always an admin; the last remaining admin can't be demoted or deleted. Adding a second (or further) account is the 7th paid capability — editing or removing an existing one stays free, same pattern as API tokens and the Client Portal. The license's email-binding check now always reads the original (lowest-id) account specifically, regardless of who's logged in or how many teammates exist.
+
+## [2.9.6] - 2026-08-28
+
+### Added
+- Add/Edit Expense: the old single "Receipts" upload is now two separate slots, Invoice (the vendor's bill) and Receipt (proof of payment) — each expense attachment is tagged `invoice` or `receipt` in the database accordingly, and each already-uploaded file gets a "move" button to re-tag it into the other slot if it was dropped in the wrong one. Picking image receipt(s) in the Receipt slot runs each through OCR (Tesseract) server-side and prefills Vendor and Amount if they're still blank — a "Prefilled from the receipt — double-check before saving" note appears so it's clear the values are a guess, not a manual entry. When more than one image is attached there, whichever one has a line genuinely labeled TOTAL wins over one where the amount is just a largest-number guess. Only the Receipt slot is ever scanned — the Invoice slot is never OCR'd. PDFs and files with no detected total/vendor fall back to manual entry as before.
+- Settings > Notifications: extended from 3 event toggles to 10 — added invoice email failures, late fees charged, invoices voided, unmatched payment webhooks, refunds (split out from "payment received"), recurring billing run errors, and security events (2FA enabled/disabled, API tokens created/revoked) — plus a Select All / Select None control for the list.
+
+### Changed
+- Mobile bottom nav's third button is now "Add Invoice" (jumps to the Ad Hoc Invoice section) instead of "Add Expense" (which opened a modal) — invoicing is the more frequent on-the-go action; logging an expense is still one tap away via Invoices/Dashboard.
+
+### Fixed
+- `nav()` (both the sidebar and the mobile bottom nav) now closes any open modal on navigation — previously, opening Add Expense from the mobile bottom nav and then tapping Dashboard/Invoices/Clients left the modal open on top of the newly navigated section.
+- Docs > Quick Start's Screenshots table rendered as broken text (`!Invoices<br>Invoices — ...`) instead of images: the in-app markdown renderer had no `![alt](url)` image support at all (it fell through to the link-handling code, which strips anything that isn't `http(s)`/`#anchor`/`*.md`, leaving a stray `!` and a bare `<br>` that got HTML-escaped instead of rendered) — added real image support, and even with that fixed the screenshot files were never reachable: nginx blocked all of `/docs/` (including `/docs/screenshots/`) and the `docs/screenshots/` folder wasn't mounted into any container. Added a `^~ /docs/screenshots/` allow-list ahead of that block and mounted the folder read-only into the nginx service.
+
 ## [2.9.5] - 2026-08-27
 
 ### Changed
