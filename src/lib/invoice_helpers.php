@@ -52,6 +52,42 @@ function invoiceWatermarkFingerprint(array $settings): string
     return substr(hash('sha256', $key), 0, 10);
 }
 
+function invoxaResolveCurrency(?string $recordCurrency, array $settings): string
+{
+    $recordCurrency = trim((string) $recordCurrency);
+    if ($recordCurrency !== '') {
+        return strtoupper($recordCurrency);
+    }
+    return strtoupper($settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD'));
+}
+
+function invoxaNormalizeCurrencyCode(string $raw): string
+{
+    return substr(strtoupper(preg_replace('/[^A-Za-z]/', '', $raw)), 0, 3);
+}
+
+function invoxaGroupAmountsByCurrency(array $rows, string $amountKey, array $settings): array
+{
+    $out = [];
+    foreach ($rows as $row) {
+        $ccy = invoxaResolveCurrency($row['currency'] ?? '', $settings);
+        $out[$ccy] = ($out[$ccy] ?? 0) + (float) ($row[$amountKey] ?? 0);
+    }
+    return $out;
+}
+
+function invoxaFormatMoneyByCurrency(array $byCcy): string
+{
+    if (empty($byCcy)) {
+        return '$0.00';
+    }
+    $parts = [];
+    foreach ($byCcy as $ccy => $amount) {
+        $parts[] = htmlspecialchars($ccy) . ' $' . number_format($amount, 2);
+    }
+    return implode(' + ', $parts);
+}
+
 // Computes subtotal/discount/tax/total from line items and a single
 // invoice-level discount % and tax % (not per line item). Discount is taken
 // off the subtotal first, then tax applied to what's left. Mutates

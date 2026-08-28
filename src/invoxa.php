@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.10.3');
+define('APP_VERSION', '2.11.0');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -181,6 +181,10 @@ $hasClientPhoneCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WH
 if (!$hasClientPhoneCol) {
     $mysqli->query("ALTER TABLE invoxa_clients ADD COLUMN phone VARCHAR(50) NOT NULL DEFAULT '' AFTER email, ADD COLUMN address TEXT AFTER phone");
 }
+$hasClientCurrencyCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_clients' AND COLUMN_NAME = 'currency'")->num_rows > 0;
+if (!$hasClientCurrencyCol) {
+    $mysqli->query("ALTER TABLE invoxa_clients ADD COLUMN currency VARCHAR(3) NOT NULL DEFAULT '' AFTER tax_rate");
+}
 // Same idea for installs that predate two-factor auth — NULL defaults keep
 // 2FA off until enabled under Settings > Authentication.
 $hasTotpCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_users' AND COLUMN_NAME = 'totp_secret'")->num_rows > 0;
@@ -233,6 +237,10 @@ if ($statusColType && strpos($statusColType, "'void'") === false) {
 $hasQuoteExpiryCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_invoices' AND COLUMN_NAME = 'quote_expires_at'")->num_rows > 0;
 if (!$hasQuoteExpiryCol) {
     $mysqli->query("ALTER TABLE invoxa_invoices ADD COLUMN quote_expires_at DATE DEFAULT NULL");
+}
+$hasInvoiceCurrencyCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoxa_invoices' AND COLUMN_NAME = 'currency'")->num_rows > 0;
+if (!$hasInvoiceCurrencyCol) {
+    $mysqli->query("ALTER TABLE invoxa_invoices ADD COLUMN currency VARCHAR(3) NOT NULL DEFAULT '' AFTER amount");
 }
 
 $userCount = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users")->fetch_assoc()['c'] ?? 0;
@@ -526,8 +534,7 @@ if (isset($_GET['portal'])) {
         $portalClient = null; // expired — treated identically to "not found" below, no separate branch needed
     }
     $businessName = $settings['business_name'] ?? 'Invoxa';
-    $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
-    $portalStyle = '*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:#0a0f1c;color:#f7f9fc;margin:0;padding:2rem 1.25rem;}.wrap{max-width:760px;margin:0 auto;}h1{font-size:1.4rem;margin:0 0 0.25rem;}h2{font-size:1.05rem;margin:2rem 0 0.75rem;}.sub{color:#90a0bb;font-size:0.9rem;margin:0 0 2rem;}table{width:100%;border-collapse:collapse;background:#131b2e;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);}th,td{padding:0.85rem 1rem;text-align:left;font-size:0.9rem;}th{background:rgba(255,255,255,0.04);color:#90a0bb;font-weight:600;text-transform:uppercase;font-size:0.75rem;letter-spacing:0.04em;}td{border-top:1px solid rgba(255,255,255,0.06);}.status{display:inline-block;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.78rem;font-weight:600;}.status-paid{background:rgba(34,197,94,0.15);color:#4ade80;}.status-overdue{background:rgba(239,68,68,0.15);color:#f87171;}.status-outstanding{background:rgba(234,179,8,0.15);color:#facc15;}.status-void{background:rgba(148,163,184,0.15);color:#94a3b8;}.status-quote{background:rgba(139,92,246,0.15);color:#a78bfa;}.empty{color:#90a0bb;text-align:center;padding:3rem 1rem;}.pay-btn,.accept-btn{display:inline-block;background:#4f7cff;color:#fff;text-decoration:none;padding:0.4rem 0.85rem;border-radius:6px;font-size:0.82rem;font-weight:600;white-space:nowrap;border:none;font-family:inherit;cursor:pointer;}.pay-btn:hover,.accept-btn:hover{background:#3d63e0;}.confirm-box{background:#131b2e;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:1.5rem;}.confirm-actions{display:flex;gap:0.75rem;margin-top:1.25rem;}.cancel-link{display:inline-flex;align-items:center;color:#90a0bb;text-decoration:none;font-size:0.9rem;padding:0.4rem 0.85rem;}';
+    $portalStyle ='*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:#0a0f1c;color:#f7f9fc;margin:0;padding:2rem 1.25rem;}.wrap{max-width:760px;margin:0 auto;}h1{font-size:1.4rem;margin:0 0 0.25rem;}h2{font-size:1.05rem;margin:2rem 0 0.75rem;}.sub{color:#90a0bb;font-size:0.9rem;margin:0 0 2rem;}table{width:100%;border-collapse:collapse;background:#131b2e;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);}th,td{padding:0.85rem 1rem;text-align:left;font-size:0.9rem;}th{background:rgba(255,255,255,0.04);color:#90a0bb;font-weight:600;text-transform:uppercase;font-size:0.75rem;letter-spacing:0.04em;}td{border-top:1px solid rgba(255,255,255,0.06);}.status{display:inline-block;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.78rem;font-weight:600;}.status-paid{background:rgba(34,197,94,0.15);color:#4ade80;}.status-overdue{background:rgba(239,68,68,0.15);color:#f87171;}.status-outstanding{background:rgba(234,179,8,0.15);color:#facc15;}.status-void{background:rgba(148,163,184,0.15);color:#94a3b8;}.status-quote{background:rgba(139,92,246,0.15);color:#a78bfa;}.empty{color:#90a0bb;text-align:center;padding:3rem 1rem;}.pay-btn,.accept-btn{display:inline-block;background:#4f7cff;color:#fff;text-decoration:none;padding:0.4rem 0.85rem;border-radius:6px;font-size:0.82rem;font-weight:600;white-space:nowrap;border:none;font-family:inherit;cursor:pointer;}.pay-btn:hover,.accept-btn:hover{background:#3d63e0;}.confirm-box{background:#131b2e;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:1.5rem;}.confirm-actions{display:flex;gap:0.75rem;margin-top:1.25rem;}.cancel-link{display:inline-flex;align-items:center;color:#90a0bb;text-decoration:none;font-size:0.9rem;padding:0.4rem 0.85rem;}';
     if (!$portalClient) {
         http_response_code(404);
         echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Link not found</h1><p class="sub">This portal link is invalid or has been revoked. Contact ' . htmlspecialchars($businessName) . ' for a new one.</p></div></body></html>';
@@ -562,7 +569,7 @@ if (isset($_GET['portal'])) {
     }
     if (isset($_GET['accept_quote'])) {
         $quoteId = (int) $_GET['accept_quote'];
-        $quoteRow = $mysqli->query("SELECT invoice_number, amount, quote_expires_at, client_key FROM invoxa_invoices WHERE id = $quoteId AND is_quote = 1")->fetch_assoc();
+        $quoteRow = $mysqli->query("SELECT invoice_number, amount, currency, quote_expires_at, client_key FROM invoxa_invoices WHERE id = $quoteId AND is_quote = 1")->fetch_assoc();
         if (!$quoteRow || $quoteRow['client_key'] !== $portalClient['client_key']) {
             echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Quote not found</h1><p class="sub">This quote is no longer available. <a href="?portal=' . htmlspecialchars($portalToken) . '" style="color:#4f7cff;">Back to your invoices</a></p></div></body></html>';
             exit;
@@ -572,10 +579,10 @@ if (isset($_GET['portal'])) {
             echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>This quote has expired</h1><p class="sub">Contact ' . htmlspecialchars($businessName) . ' for a new one. <a href="?portal=' . htmlspecialchars($portalToken) . '" style="color:#4f7cff;">Back to your invoices</a></p></div></body></html>';
             exit;
         }
-        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Accept quote ' . htmlspecialchars($quoteRow['invoice_number']) . '?</h1><div class="confirm-box"><p style="margin:0; color:#90a0bb;">' . htmlspecialchars($currencyCode) . ' ' . number_format((float) $quoteRow['amount'], 2) . '. Accepting turns this into a real invoice — ' . htmlspecialchars($businessName) . ' will be notified right away.</p><form method="POST" class="confirm-actions"><input type="hidden" name="confirm_accept_quote" value="' . (int) $quoteId . '"><button type="submit" class="accept-btn">Accept Quote</button><a href="?portal=' . htmlspecialchars($portalToken) . '" class="cancel-link">Cancel</a></form></div></div></body></html>';
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Accept quote ' . htmlspecialchars($quoteRow['invoice_number']) . '?</h1><div class="confirm-box"><p style="margin:0; color:#90a0bb;">' . htmlspecialchars(invoxaResolveCurrency($quoteRow['currency'] ?? '', $settings)) . ' ' . number_format((float) $quoteRow['amount'], 2) . '. Accepting turns this into a real invoice — ' . htmlspecialchars($businessName) . ' will be notified right away.</p><form method="POST" class="confirm-actions"><input type="hidden" name="confirm_accept_quote" value="' . (int) $quoteId . '"><button type="submit" class="accept-btn">Accept Quote</button><a href="?portal=' . htmlspecialchars($portalToken) . '" class="cancel-link">Cancel</a></form></div></div></body></html>';
         exit;
     }
-    $invRes = $mysqli->prepare("SELECT invoice_number, invoice_date, due_date, amount, paid_amount, status FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND status != 'draft' ORDER BY invoice_date DESC");
+    $invRes = $mysqli->prepare("SELECT invoice_number, invoice_date, due_date, amount, currency, paid_amount, status FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND status != 'draft' ORDER BY invoice_date DESC");
     $invRes->bind_param("s", $portalClient['client_key']);
     $invRes->execute();
     $portalInvoices = $invRes->get_result();
@@ -583,6 +590,7 @@ if (isset($_GET['portal'])) {
     $rowsHtml = '';
     $today = date('Y-m-d');
     while ($inv = $portalInvoices->fetch_assoc()) {
+        $rowCcy = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
         $paidAmt = (float) ($inv['paid_amount'] ?? 0);
         $amt = (float) $inv['amount'];
         $unpaid = !in_array($inv['status'], ['paid', 'void'], true) && $paidAmt < $amt;
@@ -591,7 +599,7 @@ if (isset($_GET['portal'])) {
         } elseif ($inv['status'] === 'paid') {
             $statusHtml = '<span class="status status-paid">Paid</span>';
         } elseif ($paidAmt > 0) {
-            $statusHtml = '<span class="status status-outstanding">Partially Paid (' . htmlspecialchars($currencyCode) . ' ' . number_format($paidAmt, 2) . ' of ' . number_format($amt, 2) . ')</span>';
+            $statusHtml = '<span class="status status-outstanding">Partially Paid (' . htmlspecialchars($rowCcy) . ' ' . number_format($paidAmt, 2) . ' of ' . number_format($amt, 2) . ')</span>';
         } elseif (!empty($inv['due_date']) && $inv['due_date'] < $today) {
             $statusHtml = '<span class="status status-overdue">Overdue</span>';
         } else {
@@ -600,13 +608,13 @@ if (isset($_GET['portal'])) {
         $payCell = ($paymentsOn && $unpaid)
             ? '<a href="?pay=' . rawurlencode($inv['invoice_number']) . '" class="pay-btn">Pay Now</a>'
             : '';
-        $rowsHtml .= '<tr><td>' . htmlspecialchars($inv['invoice_number']) . '</td><td>' . htmlspecialchars(substr($inv['invoice_date'], 0, 10)) . '</td><td>' . htmlspecialchars($inv['due_date'] ?? '') . '</td><td>' . htmlspecialchars($currencyCode) . ' ' . number_format($amt, 2) . '</td><td>' . $statusHtml . '</td><td>' . $payCell . '</td></tr>';
+        $rowsHtml .= '<tr><td>' . htmlspecialchars($inv['invoice_number']) . '</td><td>' . htmlspecialchars(substr($inv['invoice_date'], 0, 10)) . '</td><td>' . htmlspecialchars($inv['due_date'] ?? '') . '</td><td>' . htmlspecialchars($rowCcy) . ' ' . number_format($amt, 2) . '</td><td>' . $statusHtml . '</td><td>' . $payCell . '</td></tr>';
     }
     $tableOrEmpty = $rowsHtml !== ''
         ? '<table><thead><tr><th>Invoice</th><th>Date</th><th>Due</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>' . $rowsHtml . '</tbody></table>'
         : '<div class="empty">No invoices yet.</div>';
 
-    $quoteRes = $mysqli->prepare("SELECT id, invoice_number, invoice_date, amount, quote_expires_at FROM invoxa_invoices WHERE client_key = ? AND is_quote = 1 ORDER BY invoice_date DESC");
+    $quoteRes = $mysqli->prepare("SELECT id, invoice_number, invoice_date, amount, currency, quote_expires_at FROM invoxa_invoices WHERE client_key = ? AND is_quote = 1 ORDER BY invoice_date DESC");
     $quoteRes->bind_param("s", $portalClient['client_key']);
     $quoteRes->execute();
     $portalQuotes = $quoteRes->get_result();
@@ -617,7 +625,7 @@ if (isset($_GET['portal'])) {
             ? '<span class="status status-overdue">Expired</span>'
             : '<a href="?portal=' . rawurlencode($portalToken) . '&accept_quote=' . (int) $q['id'] . '" class="accept-btn">Accept Quote</a>';
         $expiresCell = !empty($q['quote_expires_at']) ? htmlspecialchars($q['quote_expires_at']) : '—';
-        $quoteRowsHtml .= '<tr><td>' . htmlspecialchars($q['invoice_number']) . '</td><td>' . htmlspecialchars(substr($q['invoice_date'], 0, 10)) . '</td><td>' . htmlspecialchars($currencyCode) . ' ' . number_format((float) $q['amount'], 2) . '</td><td>' . $expiresCell . '</td><td>' . $actionCell . '</td></tr>';
+        $quoteRowsHtml .= '<tr><td>' . htmlspecialchars($q['invoice_number']) . '</td><td>' . htmlspecialchars(substr($q['invoice_date'], 0, 10)) . '</td><td>' . htmlspecialchars(invoxaResolveCurrency($q['currency'] ?? '', $settings)) . ' ' . number_format((float) $q['amount'], 2) . '</td><td>' . $expiresCell . '</td><td>' . $actionCell . '</td></tr>';
     }
     $quotesSectionHtml = $quoteRowsHtml !== ''
         ? '<h2>Open Quotes</h2><table><thead><tr><th>Quote</th><th>Date</th><th>Amount</th><th>Valid Until</th><th></th></tr></thead><tbody>' . $quoteRowsHtml . '</tbody></table>'
@@ -638,7 +646,7 @@ $__businessName = $settings['business_name'] ?? 'Invoxa';
 if (isset($_GET['pay'])) {
     header('Content-Type: text/html; charset=utf-8');
     $invNum = (string) $_GET['pay'];
-    $stmt = $mysqli->prepare("SELECT id, amount, paid_amount, status FROM invoxa_invoices WHERE invoice_number = ? AND is_quote = 0");
+    $stmt = $mysqli->prepare("SELECT id, amount, currency, paid_amount, status FROM invoxa_invoices WHERE invoice_number = ? AND is_quote = 0");
     $stmt->bind_param("s", $invNum);
     $stmt->execute();
     $payInv = $stmt->get_result()->fetch_assoc();
@@ -670,7 +678,7 @@ if (isset($_GET['pay'])) {
         echo invoxaSimplePage($__businessName, 'Payment temporarily unavailable', 'Something isn\'t configured correctly on our end. Please contact ' . htmlspecialchars($__businessName) . ' directly.');
         exit;
     }
-    $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
+    $currencyCode = invoxaResolveCurrency($payInv['currency'] ?? '', $settings);
     $description = 'Invoice ' . $invNum . ' — ' . $__businessName;
     $requested = in_array($_GET['gateway'] ?? '', ['stripe', 'paypal'], true) ? $_GET['gateway'] : null;
     $chosenGateway = null;
@@ -1443,12 +1451,14 @@ function invoxaAuthenticateApiRequest($mysqli): ?array
 // Fixed 4-account chart (plus one Expense account per expenseCategories()
 // entry), not user-configurable — single-admin, no multi-entity
 // bookkeeping. Every entry balances, making this genuinely importable.
-function buildAccountingJournal($mysqli, string $startDate, string $testFilter): array
+function buildAccountingJournal($mysqli, array $settings, string $startDate, string $testFilter): array
 {
     $categories = expenseCategories();
     $rows = [];
+    $defaultCcy = $mysqli->real_escape_string(invoxaResolveCurrency('', $settings));
+    $ccyFilter = "AND (currency = '' OR currency = '$defaultCcy')";
 
-    $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, amount FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startDate' $testFilter ORDER BY invoice_date ASC");
+    $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, amount FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startDate' $ccyFilter $testFilter ORDER BY invoice_date ASC");
     while ($r = $res->fetch_assoc()) {
         $date = substr($r['invoice_date'], 0, 10);
         $memo = "Invoice {$r['invoice_number']} — {$r['client_name']}";
@@ -1457,7 +1467,7 @@ function buildAccountingJournal($mysqli, string $startDate, string $testFilter):
         $rows[] = ['date' => $date, 'account' => 'Sales Income', 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => $r['invoice_number']];
     }
 
-    $res = $mysqli->query("SELECT invoice_number, client_name, paid_at, paid_amount FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND paid_amount > 0 AND paid_at >= '$startDate' $testFilter ORDER BY paid_at ASC");
+    $res = $mysqli->query("SELECT invoice_number, client_name, paid_at, paid_amount FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND paid_amount > 0 AND paid_at >= '$startDate' $ccyFilter $testFilter ORDER BY paid_at ASC");
     while ($r = $res->fetch_assoc()) {
         $date = substr($r['paid_at'], 0, 10);
         $memo = "Payment received for invoice {$r['invoice_number']} — {$r['client_name']}";
@@ -1533,7 +1543,7 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
 
     $brandColor = $settings['brand_color'] ?? '#4a90e2';
     $footerText = $settings['footer_text'] ?? '';
-    $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
+    $currencyCode = invoxaResolveCurrency($client['currency'] ?? '', $settings);
     $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
     $invoiceTemplate = $settings['invoice_template'] ?? 'detailed';
@@ -1623,8 +1633,8 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
     }
 
     $status = $emailSent ? 'sent' : 'failed';
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssssdsss", $invNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $status, $htmlContent, $relPath);
+    $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssdssss", $invNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $currencyCode, $status, $htmlContent, $relPath);
     $stmt->execute();
 
     $actionType = $emailSent ? 'email_sent' : 'email_failed';
@@ -1700,7 +1710,7 @@ function recordInvoicePayment($mysqli, array $settings, int $invoiceId, float $a
         }
     }
 
-    $invRow = $mysqli->query("SELECT amount, invoice_number, status, client_name FROM invoxa_invoices WHERE id = " . (int) $invoiceId)->fetch_assoc();
+    $invRow = $mysqli->query("SELECT amount, currency, invoice_number, status, client_name FROM invoxa_invoices WHERE id = " . (int) $invoiceId)->fetch_assoc();
     if (!$invRow) {
         return ['success' => false, 'error' => 'Invoice not found', 'duplicate' => false];
     }
@@ -1740,7 +1750,7 @@ function recordInvoicePayment($mysqli, array $settings, int $invoiceId, float $a
         . ($note !== '' ? " — {$note}" : '');
     invoxaLogAction($mysqli, $invoiceId, $invNum, $actionType, $notes);
 
-    $currencyCode = $settings['currency'] ?? 'USD';
+    $currencyCode = invoxaResolveCurrency($invRow['currency'] ?? '', $settings);
     notifyChannel($mysqli, $settings, 'notify_on_payment', ($isPartial ? "\xF0\x9F\x92\xB0 Partial payment received" : "\xE2\x9C\x85 Invoice paid in full") . " — {$invNum} ({$invRow['client_name']}){$sourceLabel}: {$currencyCode} " . number_format($amount, 2));
 
     return ['success' => true, 'duplicate' => false, 'is_partial' => $isPartial, 'total_paid' => $totalPaid, 'invoice_amount' => $invAmount, 'invoice_number' => $invNum];
@@ -1763,7 +1773,7 @@ function recordInvoiceRefund($mysqli, array $settings, int $invoiceId, float $re
         return ['success' => true, 'duplicate' => true];
     }
 
-    $invRow = $mysqli->query("SELECT amount, invoice_number, status, client_name FROM invoxa_invoices WHERE id = " . (int) $invoiceId)->fetch_assoc();
+    $invRow = $mysqli->query("SELECT amount, currency, invoice_number, status, client_name FROM invoxa_invoices WHERE id = " . (int) $invoiceId)->fetch_assoc();
     if (!$invRow) {
         return ['success' => false, 'error' => 'Invoice not found', 'duplicate' => false];
     }
@@ -1795,7 +1805,7 @@ function recordInvoiceRefund($mysqli, array $settings, int $invoiceId, float $re
     $notes = "Refund issued: $" . number_format($refundAmount, 2) . " (total paid now: $" . number_format($totalPaid, 2) . " of $" . number_format($invAmount, 2) . ")" . $sourceLabel;
     invoxaLogAction($mysqli, $invoiceId, $invRow['invoice_number'], 'refund_issued', $notes);
 
-    $currencyCode = $settings['currency'] ?? 'USD';
+    $currencyCode = invoxaResolveCurrency($invRow['currency'] ?? '', $settings);
     notifyChannel($mysqli, $settings, 'notify_on_refund', "\xE2\x86\xA9\xEF\xB8\x8F Refund issued — {$invRow['invoice_number']} ({$invRow['client_name']}){$sourceLabel}: {$currencyCode} " . number_format($refundAmount, 2));
 
     return ['success' => true, 'duplicate' => false, 'total_paid' => $totalPaid, 'invoice_number' => $invRow['invoice_number']];
@@ -1895,13 +1905,13 @@ function sendOverdueReminders($mysqli, array $settings, string $emailPassword): 
 
     $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
-    $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
 
     require_once PHPMAILER_DIR . 'PHPMailer.php';
     require_once PHPMAILER_DIR . 'SMTP.php';
     require_once PHPMAILER_DIR . 'Exception.php';
 
     while ($inv = $res->fetch_assoc()) {
+        $currencyCode = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
         $outstanding = (float) $inv['amount'] - (float) ($inv['paid_amount'] ?? 0);
         $daysOverdue = (int) floor((time() - strtotime($inv['due_date'])) / 86400);
         $vars = [
@@ -2036,7 +2046,7 @@ function applyLateFees($mysqli, array $settings, string $emailPassword): array
             : "Late fee invoice {$result['invNum']} generated for " . number_format($feeAmount, 2) . " but email failed: " . $result['error'];
         invoxaLogAction($mysqli, $inv['id'], $inv['invoice_number'], 'late_fee_charged', $notes);
 
-        $currencyCode = $settings['currency'] ?? 'USD';
+        $currencyCode = invoxaResolveCurrency($client['currency'] ?? '', $settings);
         notifyChannel($mysqli, $settings, 'notify_on_late_fee', "\xE2\x9A\xA0\xEF\xB8\x8F Late fee charged — {$inv['invoice_number']} ({$client['client_name']}): {$currencyCode} " . number_format($feeAmount, 2));
 
         if ($result['success'])
@@ -2074,9 +2084,11 @@ function pruneAuditActions($mysqli, array $settings): int
 // fragment endpoint, so the AJAX refresh can't drift from a full page load.
 function renderInvoiceRows(array $invoices): string
 {
+    global $settings;
     ob_start();
     foreach ($invoices as $inv):
         $isOverdue = (!in_array($inv['status'], ['paid', 'void'], true) && strtotime($inv['due_date']) < time());
+        $rowCcy = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
         ?>
         <tr>
             <td><input type="checkbox" class="invoice-select-cb" value="<?= $inv['id'] ?>"
@@ -2094,11 +2106,11 @@ function renderInvoiceRows(array $invoices): string
                 <?php if ($inv['status'] !== 'paid' && $inv['paid_amount'] > 0): ?>
                     <div
                         style="font-size:0.75rem; color:var(--text-secondary); text-decoration:line-through;">
-                        $<?= number_format($inv['amount'], 2) ?></div>
+                        <?= htmlspecialchars($rowCcy) ?> $<?= number_format($inv['amount'], 2) ?></div>
                     <div style="color:var(--warning); font-weight:600;">
-                        $<?= number_format($inv['amount'] - $inv['paid_amount'], 2) ?></div>
+                        <?= htmlspecialchars($rowCcy) ?> $<?= number_format($inv['amount'] - $inv['paid_amount'], 2) ?></div>
                 <?php else: ?>
-                    $<?= number_format($inv['amount'], 2) ?>
+                    <?= htmlspecialchars($rowCcy) ?> $<?= number_format($inv['amount'], 2) ?>
                 <?php endif; ?>
             </td>
             <td>
@@ -2197,8 +2209,10 @@ function clientInitials(string $name): string
 // Same idea for the Clients table.
 function renderClientRows(array $clients): string
 {
+    global $settings;
     ob_start();
     foreach ($clients as $c):
+        $rowCcy = invoxaResolveCurrency($c['currency'] ?? '', $settings);
         ?>
         <tr style="cursor:pointer;"
             onclick="openCrm(<?= htmlspecialchars(json_encode(['id' => $c['id'], 'client_name' => $c['client_name'], 'crm_notes' => $c['crm_notes'] ?? ''])) ?>)">
@@ -2210,7 +2224,7 @@ function renderClientRows(array $clients): string
                 </div>
             </td>
             <td><?= htmlspecialchars($c['email']) ?></td>
-            <td>$<?= number_format($c['monthly_rate'], 2) ?>
+            <td><?= htmlspecialchars($rowCcy) ?> $<?= number_format($c['monthly_rate'], 2) ?>
                 <div style="color:var(--text-secondary); font-size:0.75rem; text-transform:capitalize;">
                     <?= htmlspecialchars($c['billing_frequency'] ?? 'monthly') ?></div>
             </td>
@@ -2230,11 +2244,11 @@ function renderClientRows(array $clients): string
                 <?php endif; ?>
             </td>
             <td><?= $c['inv_count'] ?></td>
-            <td>$<?= number_format($c['total_billed'] ?? 0, 2) ?></td>
-            <td style="color: var(--success);">$<?= number_format($c['total_paid'] ?? 0, 2) ?></td>
+            <td><?= htmlspecialchars($rowCcy) ?> $<?= number_format($c['total_billed'] ?? 0, 2) ?></td>
+            <td style="color: var(--success);"><?= htmlspecialchars($rowCcy) ?> $<?= number_format($c['total_paid'] ?? 0, 2) ?></td>
             <td
                 style="color: <?= (($c['total_billed'] - $c['total_paid']) > 0) ? 'var(--warning)' : 'inherit' ?>">
-                $<?= number_format(max(0, $c['total_billed'] - $c['total_paid']), 2) ?></td>
+                <?= htmlspecialchars($rowCcy) ?> $<?= number_format(max(0, $c['total_billed'] - $c['total_paid']), 2) ?></td>
             <td style="white-space: nowrap;">
                 <button class="btn small"
                     onclick="event.stopPropagation(); openClientModal(<?= htmlspecialchars(json_encode($c)) ?>)"><i
@@ -2252,16 +2266,18 @@ function renderClientRows(array $clients): string
 // original inline block used a while() over the live query rather than an array.
 function renderQuoteRows($qRes): string
 {
+    global $settings;
     ob_start();
     while ($q = $qRes->fetch_assoc()):
         $__quoteExpired = !empty($q['quote_expires_at']) && $q['quote_expires_at'] < date('Y-m-d');
+        $rowCcy = invoxaResolveCurrency($q['currency'] ?? '', $settings);
         ?>
         <tr>
             <td><input type="checkbox" class="quote-select-cb" value="<?= $q['id'] ?>" data-expired="<?= $__quoteExpired ? '1' : '0' ?>" onchange="updateQuoteBulkBar()"></td>
             <td><strong><?= htmlspecialchars($q['invoice_number']) ?></strong></td>
             <td><?= htmlspecialchars($q['client_name']) ?></td>
             <td><?= htmlspecialchars(substr($q['invoice_date'], 0, 10)) ?></td>
-            <td>$<?= number_format($q['amount'], 2) ?></td>
+            <td><?= htmlspecialchars($rowCcy) ?> $<?= number_format($q['amount'], 2) ?></td>
             <td><span class="badge"
                     style="background:rgba(139,92,246,0.15); color:#a78bfa;">Quote</span></td>
             <td>
@@ -2363,8 +2379,12 @@ function renderRecurringExpenseRows(array $recurringExpenses, bool $licenseValid
 
 // Dashboard's alert strips + top stat cards — the parts that can change from
 // actions taken elsewhere without the Dashboard tab being reloaded.
-function renderDashboardStats(array $settings, array $failedInvoices, array $overdueInvoices, float $total_invoiced, float $total_monthly, float $total_paid, int $client_count): string
+function renderDashboardStats(array $settings, array $failedInvoices, array $overdueInvoices, array $total_invoiced_by_ccy, array $total_monthly_by_ccy, array $total_paid_by_ccy, int $client_count): string
 {
+    $outstanding_by_ccy = $total_invoiced_by_ccy;
+    foreach ($total_paid_by_ccy as $ccy => $amount) {
+        $outstanding_by_ccy[$ccy] = ($outstanding_by_ccy[$ccy] ?? 0) - $amount;
+    }
     ob_start();
     ?>
     <?php if (count($failedInvoices) > 0): ?>
@@ -2380,8 +2400,8 @@ function renderDashboardStats(array $settings, array $failedInvoices, array $ove
     <?php endif; ?>
     <?php if (count($overdueInvoices) > 0): ?>
         <div class="alert-strip"><i class="fa-solid fa-circle-exclamation"></i>
-            <div><strong><?= count($overdueInvoices) ?> Overdue Invoices!</strong> You have <?= htmlspecialchars($settings['currency'] ?? 'USD') ?>
-                $<?= number_format(array_sum(array_column($overdueInvoices, 'amount')), 2) ?> in outstanding overdue
+            <div><strong><?= count($overdueInvoices) ?> Overdue Invoices!</strong> You have
+                <?= invoxaFormatMoneyByCurrency(invoxaGroupAmountsByCurrency($overdueInvoices, 'amount', $settings)) ?> in outstanding overdue
                 payments.</div><button class="btn small"
                 style="margin-left: auto; border-color: var(--danger); color: var(--danger);"
                 onclick="nav('invoices'); document.getElementById('invoiceStatusFilter').value = 'overdue'; filterInvoicesByStatus('overdue');">View
@@ -2394,14 +2414,14 @@ function renderDashboardStats(array $settings, array $failedInvoices, array $ove
                 <div class="stat-title">Total Invoiced (All Time)</div>
                 <div class="stat-icon"><i class="fa-solid fa-sack-dollar"></i></div>
             </div>
-            <div class="stat-value"><?= htmlspecialchars($settings['currency'] ?? 'USD') ?> $<?= number_format($total_invoiced, 2) ?></div>
+            <div class="stat-value"><?= invoxaFormatMoneyByCurrency($total_invoiced_by_ccy) ?></div>
         </div>
         <div class="stat-card">
             <div class="stat-card-top">
                 <div class="stat-title">This Month</div>
                 <div class="stat-icon success"><i class="fa-solid fa-calendar-check"></i></div>
             </div>
-            <div class="stat-value" style="color: var(--success)"><?= htmlspecialchars($settings['currency'] ?? 'USD') ?> $<?= number_format($total_monthly, 2) ?>
+            <div class="stat-value" style="color: var(--success)"><?= invoxaFormatMoneyByCurrency($total_monthly_by_ccy) ?>
             </div>
         </div>
         <div class="stat-card">
@@ -2409,8 +2429,7 @@ function renderDashboardStats(array $settings, array $failedInvoices, array $ove
                 <div class="stat-title">Total Outstanding</div>
                 <div class="stat-icon warning"><i class="fa-solid fa-hourglass-half"></i></div>
             </div>
-            <div class="stat-value" style="color: var(--warning)"><?= htmlspecialchars($settings['currency'] ?? 'USD') ?>
-                $<?= number_format($total_invoiced - $total_paid, 2) ?></div>
+            <div class="stat-value" style="color: var(--warning)"><?= invoxaFormatMoneyByCurrency($outstanding_by_ccy) ?></div>
         </div>
         <div class="stat-card">
             <div class="stat-card-top">
@@ -2474,10 +2493,21 @@ function renderStatsSection(): string
     $most_active_clients, $stats_invoice_status, $stats_revenue_trend, $stats_expense_ty_total, $stats_net_income_ty,
     $stats_expense_categories, $stats_expense_monthly, $stats_db_size_bytes, $stats_invoices_dir_size_bytes,
     $stats_backups_dir_size_bytes, $stats_webhook_unmatched_total, $stats_webhook_unmatched_30d,
-    $stats_php_version, $stats_mysql_version;
+    $stats_php_version, $stats_mysql_version, $stats_default_ccy, $stats_has_other_currency;
     ob_start();
     ?>
     <h2 class="page-title">Data Statistics &amp; Forecasting</h2>
+    <?php if ($stats_has_other_currency): ?>
+        <div class="card" style="border-left:3px solid var(--warning); margin: 0 1.5rem 1.75rem;">
+            <div class="card-body" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
+                <i class="fa-solid fa-circle-info" style="color:var(--warning); font-size:1.1rem;"></i>
+                <div><strong>These figures are in <?= htmlspecialchars($stats_default_ccy) ?> only.</strong>
+                    <span style="color:var(--text-secondary); font-size:0.85rem; display:block; margin-top:0.15rem;">
+                        You have invoices/clients in another currency — they're excluded from every total, chart, and export on this page rather than being blended in. See the Invoices/Clients tabs for those.</span>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
     <?php if (!$licenseValid): ?>
         <div class="card" style="border-left:3px solid var(--warning); margin: 0 1.5rem 1.75rem;">
             <div class="card-body" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
@@ -4113,7 +4143,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 60.00);
             $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $invId")->fetch_assoc()['invoice_number'];
             recordInvoicePayment($mysqli, $settings, $invId, 60.00, 'test', 'manual');
-            $journal = buildAccountingJournal($mysqli, date('Y-m-d', strtotime('-1 day')), '');
+            $journal = buildAccountingJournal($mysqli, $settings, date('Y-m-d', strtotime('-1 day')), '');
             $ours = array_values(array_filter($journal, fn($r) => $r['ref'] === $invNum));
             invoxaAssertEquals(4, count($ours), 'expected 2 rows for the invoice and 2 for its payment');
             $debitTotal = array_sum(array_column($ours, 'debit'));
@@ -4565,14 +4595,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // Clamped 0-100, same as the adhoc invoice discount/tax inputs.
             $discountPct = max(0, min(100, (float) ($_POST['discount_pct'] ?? 0)));
             $taxRate = max(0, min(100, (float) ($_POST['tax_rate'] ?? 0)));
+            $currency = invoxaNormalizeCurrencyCode($_POST['currency'] ?? '');
             $act = (int) ($_POST['is_active'] ?? 0);
             $test = (int) ($_POST['is_test'] ?? 0);
             if ($id > 0) {
-                $stmt = $mysqli->prepare("UPDATE invoxa_clients SET client_name=?, email=?, phone=?, address=?, account_name=?, account_number=?, monthly_rate=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, is_active=?, is_test=? WHERE id=?");
-                $stmt->bind_param("ssssssdisddiii", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $act, $test, $id);
+                $stmt = $mysqli->prepare("UPDATE invoxa_clients SET client_name=?, email=?, phone=?, address=?, account_name=?, account_number=?, monthly_rate=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, currency=?, is_active=?, is_test=? WHERE id=?");
+                $stmt->bind_param("ssssssdisddsiii", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $id);
             } else {
-                $stmt = $mysqli->prepare("INSERT INTO invoxa_clients (client_name, email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, discount_pct, tax_rate, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("ssssssdisddiis", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $act, $test, $key);
+                $stmt = $mysqli->prepare("INSERT INTO invoxa_clients (client_name, email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, discount_pct, tax_rate, currency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("ssssssdisddsiis", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $key);
             }
             $stmt->execute();
             echo json_encode(['success' => true]);
@@ -4893,7 +4924,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $invNum = generateInvoiceNumber($mysqli, $client['client_key'], $client['client_name'], $settings);
             $brandColor = $settings['brand_color'] ?? '#4a90e2';
             $footerText = $settings['footer_text'] ?? '';
-            $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
+            $currencyCode = invoxaResolveCurrency($client['currency'] ?? '', $settings);
             $html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'), vatNumber: $settings['vat_number'] ?? '', recipientPhone: $client['phone'] ?? '', recipientAddress: $client['address'] ?? '', customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null, businessName: $settings['business_name'] ?? '');
             echo json_encode(['success' => true, 'html' => $html, 'invoice_number' => $invNum]);
             exit;
@@ -4924,7 +4955,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $invNum = generateInvoiceNumber($mysqli, $client['client_key'], $client['client_name'], $settings);
             $brandColor = $settings['brand_color'] ?? '#4a90e2';
             $footerText = $settings['footer_text'] ?? '';
-            $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
+            $currencyCode = invoxaResolveCurrency($client['currency'] ?? '', $settings);
             $html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'), vatNumber: $settings['vat_number'] ?? '', recipientPhone: $client['phone'] ?? '', recipientAddress: $client['address'] ?? '', customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null, businessName: $settings['business_name'] ?? '');
             try {
                 $pdf = generateInvoicePdf($html);
@@ -4981,7 +5012,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             global $settings;
             $brandColor = $settings['brand_color'] ?? '#4a90e2';
             $footerText = $settings['footer_text'] ?? '';
-            $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
+            $currencyCode = invoxaResolveCurrency($client['currency'] ?? '', $settings);
             $htmlContent = generateInvoiceHTML(
                 $client['client_name'],
                 $date,
@@ -5016,8 +5047,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $htmlFile = "$invoiceDir/$quoteNum.html";
             @file_put_contents($htmlFile, $htmlContent);
             $relPath = "invoices/$folderName/$quoteNum.html";
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, html_content, file_path, is_quote, quote_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 1, ?)");
-            $stmt->bind_param("ssssssdsss", $quoteNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $htmlContent, $relPath, $quoteExpiresAt);
+            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path, is_quote, quote_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 1, ?)");
+            $stmt->bind_param("ssssssdssss", $quoteNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $currencyCode, $htmlContent, $relPath, $quoteExpiresAt);
             $stmt->execute();
             $memo = trim($_POST['memo'] ?? '');
             if ($memo !== '') {
@@ -5229,7 +5260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             require_once PHPMAILER_DIR . 'Exception.php';
             $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
             $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
-            $currencyCode = $settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD');
+            $currencyCode = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
             $mail = new PHPMailer\PHPMailer\PHPMailer(true);
             $emailSent = false;
             $errorMsg = '';
@@ -6435,7 +6466,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             while ($row = $res->fetch_assoc()) {
                 $clientMap[strtolower(str_replace(' ', '_', $row['client_name']))] = $row;
             }
-            $insertInvoice = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?) ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), html_content = VALUES(html_content), amount = VALUES(amount), client_key = VALUES(client_key), client_name = VALUES(client_name)");
+            $insertInvoice = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?) ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), html_content = VALUES(html_content), amount = VALUES(amount), currency = VALUES(currency), client_key = VALUES(client_key), client_name = VALUES(client_name)");
             $insertAction = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_number, action_type, notes, performed_by_user_id, performed_by_username) SELECT ?, 'synced', 'Imported via Web UI Sync', ?, ? WHERE NOT EXISTS (SELECT 1 FROM invoxa_actions WHERE invoice_number = ? AND action_type = 'synced')");
             foreach ($files as $filePath) {
                 $fullPath = "/usr/share/nginx/html/invoxa-invoices/" . preg_replace('#^invoices/#', '', $filePath);
@@ -6454,6 +6485,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
                 $html = file_get_contents($fullPath);
                 $amount = (float) preg_replace('/[^0-9.]/', '', extractField($html, 'Amount Due') ?? '0');
+                $currency = invoxaResolveCurrency($client['currency'] ?? '', $settings);
 
                 $filenameInvNum = pathinfo($filename, PATHINFO_FILENAME);
                 $internalInvNum = extractField($html, 'Invoice Number');
@@ -6468,7 +6500,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $invNum = $filenameInvNum;
 
                 try {
-                    $insertInvoice->bind_param("ssssssdss", $invNum, $client['client_key'], $client['client_name'], $client['email'], normaliseDateTime(extractField($html, 'Invoice Date')), normaliseDate(extractField($html, 'Invoice Due')), $amount, $html, $filePath);
+                    $insertInvoice->bind_param("ssssssdsss", $invNum, $client['client_key'], $client['client_name'], $client['email'], normaliseDateTime(extractField($html, 'Invoice Date')), normaliseDate(extractField($html, 'Invoice Due')), $amount, $currency, $html, $filePath);
                     $insertInvoice->execute();
                     if ($insertInvoice->affected_rows > 0) {
                         $insertAction->bind_param("siss", $invNum, $__actorUserId, $__actorUsername, $invNum);
@@ -6567,7 +6599,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $showTestOnlyRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
             $showTestOnly2 = ($showTestOnlyRes2 && $showTestOnlyRes2->num_rows > 0) ? ($showTestOnlyRes2->fetch_assoc()['setting_value'] === '1') : false;
             $tf2 = invoxaTestViewFilter($hideTest2, $showTestOnly2);
-            $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $tf2 ORDER BY invoice_date ASC");
+            $defaultCcyEsc2 = $mysqli->real_escape_string(invoxaResolveCurrency('', $settings));
+            $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' AND (currency = '' OR currency = '$defaultCcyEsc2') $tf2 ORDER BY invoice_date ASC");
             $rows = [];
             $totalInvoiced = 0;
             $totalPaid = 0;
@@ -6592,6 +6625,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $showTestOnlyRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
             $showTestOnly2 = ($showTestOnlyRes2 && $showTestOnlyRes2->num_rows > 0) ? ($showTestOnlyRes2->fetch_assoc()['setting_value'] === '1') : false;
             $tf2 = invoxaTestViewFilter($hideTest2, $showTestOnly2);
+            $defaultCcyEsc3 = $mysqli->real_escape_string(invoxaResolveCurrency('', $settings));
             $res = $mysqli->query("
                 SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month,
                        SUM(amount) as total_invoiced,
@@ -6599,7 +6633,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                        SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding,
                        SUM(CASE WHEN status NOT IN ('paid') THEN 1 ELSE 0 END) as unpaid_count
                 FROM invoxa_invoices
-                WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $tf2
+                WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' AND (currency = '' OR currency = '$defaultCcyEsc3') $tf2
                 GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
                 ORDER BY month ASC
             ");
@@ -6660,7 +6694,8 @@ if (isset($_GET['api'])) {
         $chartClients = [];
         while ($cr = $clientsRes->fetch_assoc())
             $chartClients[$cr['client_key']] = $cr['client_name'];
-        $q = "SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month, client_key, SUM(amount) as total FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') $chartInvoiceFilter GROUP BY month, client_key ORDER BY month ASC";
+        $chartDefaultCcyEsc = $mysqli->real_escape_string(invoxaResolveCurrency('', $settings));
+        $q = "SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month, client_key, SUM(amount) as total FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') AND (currency = '' OR currency = '$chartDefaultCcyEsc') $chartInvoiceFilter GROUP BY month, client_key ORDER BY month ASC";
         $byMonth = [];
         $res = $mysqli->query($q);
         while ($r = $res->fetch_assoc()) {
@@ -6757,10 +6792,12 @@ if (isset($_GET['export'])) {
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="invoices_export_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Invoice Number', 'Client Name', 'Email', 'Invoice Date', 'Due Date', 'Amount', 'Status', 'Paid Amount', 'Paid Date'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, due_date, amount, status, paid_amount, paid_at FROM invoxa_invoices WHERE 1 $testFilter ORDER BY invoice_date DESC");
-        while ($r = $res->fetch_assoc())
+        fputcsv($out, ['Invoice Number', 'Client Name', 'Email', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date'], ',', '"', "\\");
+        $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE 1 $testFilter ORDER BY invoice_date DESC");
+        while ($r = $res->fetch_assoc()) {
+            $r['currency'] = invoxaResolveCurrency($r['currency'], $settings);
             fputcsv($out, $r, ',', '"', "\\");
+        }
         fclose($out);
         exit;
     }
@@ -6823,13 +6860,16 @@ if (isset($_GET['export'])) {
         $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1), $now);
         $startStr = $taxYearStart->format('Y-m-d');
         $taxYearLabel = $taxYearStart->format('Y') . '-' . $now->format('Y');
+        $taxYearDefaultCcyEsc = $mysqli->real_escape_string(invoxaResolveCurrency('', $settings));
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="invoices_tax_year_' . $taxYearLabel . '_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Invoice Number', 'Client Name', 'Invoice Date', 'Due Date', 'Amount', 'Status', 'Paid Amount', 'Paid Date'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter ORDER BY invoice_date ASC");
-        while ($r = $res->fetch_assoc())
+        fputcsv($out, ['Invoice Number', 'Client Name', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date'], ',', '"', "\\");
+        $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' AND (currency = '' OR currency = '$taxYearDefaultCcyEsc') $testFilter ORDER BY invoice_date ASC");
+        while ($r = $res->fetch_assoc()) {
+            $r['currency'] = invoxaResolveCurrency($r['currency'], $settings);
             fputcsv($out, $r, ',', '"', "\\");
+        }
         fclose($out);
         exit;
     }
@@ -6839,10 +6879,12 @@ if (isset($_GET['export'])) {
         $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1), $now);
         $startStr = $taxYearStart->format('Y-m-d');
         $taxYearLabel = $taxYearStart->format('Y') . '-' . $now->format('Y');
+        $defaultCcy = invoxaResolveCurrency('', $settings);
+        $defaultCcyEsc = $mysqli->real_escape_string($defaultCcy);
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="invoices_monthly_summary_' . $taxYearLabel . '_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Month', 'Total Invoiced', 'Total Paid', 'Outstanding', 'Payment Status', 'Expenses', 'Net Income'], ',', '"', "\\");
+        fputcsv($out, ["Month (amounts in $defaultCcy — other-currency invoices excluded)", 'Total Invoiced', 'Total Paid', 'Outstanding', 'Payment Status', 'Expenses', 'Net Income'], ',', '"', "\\");
         // Get monthly aggregates
         $res = $mysqli->query("
             SELECT
@@ -6855,6 +6897,7 @@ if (isset($_GET['export'])) {
             WHERE is_quote = 0
               AND status != 'void'
               AND invoice_date >= '$startStr'
+              AND (currency = '' OR currency = '$defaultCcyEsc')
               $testFilter
             GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
             ORDER BY month ASC
@@ -6894,9 +6937,10 @@ if (isset($_GET['export'])) {
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="clients_export_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Client Name', 'Email', 'Phone', 'Address', 'Rate', 'Billing Frequency', 'Invoices', 'Total Billed', 'Total Paid', 'Outstanding'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT c.client_name, c.email, c.phone, c.address, c.monthly_rate, c.billing_frequency, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM invoxa_clients c LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') WHERE 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
+        fputcsv($out, ['Client Name', 'Email', 'Phone', 'Address', 'Rate', 'Currency', 'Billing Frequency', 'Invoices', 'Total Billed', 'Total Paid', 'Outstanding'], ',', '"', "\\");
+        $res = $mysqli->query("SELECT c.client_name, c.email, c.phone, c.address, c.monthly_rate, c.currency, c.billing_frequency, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM invoxa_clients c LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') WHERE 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
         while ($r = $res->fetch_assoc()) {
+            $r['currency'] = invoxaResolveCurrency($r['currency'], $settings);
             $r['outstanding'] = max(0, $r['total_billed'] - $r['total_paid']);
             fputcsv($out, $r, ',', '"', "\\");
         }
@@ -6926,16 +6970,18 @@ if (isset($_GET['export'])) {
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="quotes_export_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Quote Number', 'Client Name', 'Email', 'Quote Date', 'Amount', 'Expires'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, amount, quote_expires_at FROM invoxa_invoices WHERE is_quote = 1 $testFilter ORDER BY invoice_date DESC");
-        while ($r = $res->fetch_assoc())
+        fputcsv($out, ['Quote Number', 'Client Name', 'Email', 'Quote Date', 'Amount', 'Currency', 'Expires'], ',', '"', "\\");
+        $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, amount, currency, quote_expires_at FROM invoxa_invoices WHERE is_quote = 1 $testFilter ORDER BY invoice_date DESC");
+        while ($r = $res->fetch_assoc()) {
+            $r['currency'] = invoxaResolveCurrency($r['currency'], $settings);
             fputcsv($out, $r, ',', '"', "\\");
+        }
         fclose($out);
         exit;
     }
     if ($_GET['export'] === 'accounting_journal') {
         $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1));
-        $journal = buildAccountingJournal($mysqli, $taxYearStart->format('Y-m-d'), $testFilter);
+        $journal = buildAccountingJournal($mysqli, $settings, $taxYearStart->format('Y-m-d'), $testFilter);
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="accounting_journal_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
@@ -6960,7 +7006,7 @@ if (isset($_GET['export'])) {
         // its docblock); relies on PHP 8's stable usort() to keep pairs adjacent
         // after the date sort, so it's safe to walk two at a time here.
         $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1));
-        $journal = buildAccountingJournal($mysqli, $taxYearStart->format('Y-m-d'), $testFilter);
+        $journal = buildAccountingJournal($mysqli, $settings, $taxYearStart->format('Y-m-d'), $testFilter);
         header('Content-Type: application/octet-stream');
         header('Content-Disposition: attachment; filename="accounting_journal_' . date('Ymd') . '.iif"');
         $out = fopen('php://output', 'w');
@@ -7013,9 +7059,27 @@ $remindersEnabled = ($settings['reminders_enabled'] ?? '0') === '1';
 $lateFeesEnabled = ($settings['late_fee_enabled'] ?? '0') === '1';
 $recurringBypassGuard = ($settings['recurring_bypass_guard'] ?? '0') === '1';
 
-$total_invoiced = $mysqli->query("SELECT SUM(amount) as s FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') $testFilter")->fetch_assoc()['s'] ?? 0;
-$total_paid = $mysqli->query("SELECT SUM(paid_amount) as s FROM invoxa_invoices WHERE paid_amount > 0 $testFilter")->fetch_assoc()['s'] ?? 0;
-$total_monthly = $mysqli->query("SELECT SUM(amount) as s FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') AND MONTH(invoice_date) = MONTH(CURRENT_DATE()) AND YEAR(invoice_date) = YEAR(CURRENT_DATE()) $testFilter")->fetch_assoc()['s'] ?? 0;
+$total_invoiced_by_ccy = [];
+$res = $mysqli->query("SELECT currency, SUM(amount) as s FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') $testFilter GROUP BY currency");
+while ($r = $res->fetch_assoc()) {
+    $ccy = invoxaResolveCurrency($r['currency'], $settings);
+    $total_invoiced_by_ccy[$ccy] = ($total_invoiced_by_ccy[$ccy] ?? 0) + (float) $r['s'];
+}
+$total_paid_by_ccy = [];
+$res = $mysqli->query("SELECT currency, SUM(paid_amount) as s FROM invoxa_invoices WHERE paid_amount > 0 $testFilter GROUP BY currency");
+while ($r = $res->fetch_assoc()) {
+    $ccy = invoxaResolveCurrency($r['currency'], $settings);
+    $total_paid_by_ccy[$ccy] = ($total_paid_by_ccy[$ccy] ?? 0) + (float) $r['s'];
+}
+$total_monthly_by_ccy = [];
+$res = $mysqli->query("SELECT currency, SUM(amount) as s FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') AND MONTH(invoice_date) = MONTH(CURRENT_DATE()) AND YEAR(invoice_date) = YEAR(CURRENT_DATE()) $testFilter GROUP BY currency");
+while ($r = $res->fetch_assoc()) {
+    $ccy = invoxaResolveCurrency($r['currency'], $settings);
+    $total_monthly_by_ccy[$ccy] = ($total_monthly_by_ccy[$ccy] ?? 0) + (float) $r['s'];
+}
+$total_invoiced = array_sum($total_invoiced_by_ccy);
+$total_paid = array_sum($total_paid_by_ccy);
+$total_monthly = array_sum($total_monthly_by_ccy);
 $unpaid_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE status IN ('sent', 'pending') $testFilter")->fetch_assoc()['c'] ?? 0;
 $client_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_clients WHERE is_active = 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly))->fetch_assoc()['c'] ?? 0;
 $quote_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE is_quote = 1")->fetch_assoc()['c'] ?? 0;
@@ -7096,13 +7160,20 @@ $stats_outstanding_revenue = 0;
 $stats_mrr = 0;
 $stats_avg_invoice = 0;
 
-$res_rev = $mysqli->query("SELECT SUM(amount - COALESCE(paid_amount, 0)) as outstanding FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND is_quote = 0 $testFilter");
+$stats_default_ccy = invoxaResolveCurrency('', $settings);
+$stats_default_ccy_esc = $mysqli->real_escape_string($stats_default_ccy);
+$ccyFilterInv = "AND (currency = '' OR currency = '$stats_default_ccy_esc')";
+$ccyFilterInvI = "AND (i.currency = '' OR i.currency = '$stats_default_ccy_esc')";
+$ccyFilterClient = "AND (currency = '' OR currency = '$stats_default_ccy_esc')";
+$stats_has_other_currency = ($mysqli->query("SELECT 1 FROM invoxa_invoices WHERE currency != '' AND currency != '$stats_default_ccy_esc' LIMIT 1")->num_rows ?? 0) > 0;
+
+$res_rev = $mysqli->query("SELECT SUM(amount - COALESCE(paid_amount, 0)) as outstanding FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND is_quote = 0 $ccyFilterInv $testFilter");
 $stats_outstanding_revenue = $res_rev->fetch_assoc()['outstanding'] ?? 0;
 
 $res_overdue = $mysqli->query("SELECT COUNT(*) as cnt FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND due_date < CURDATE() AND is_quote = 0 $testFilter");
 $stats_overdue_count = $res_overdue->fetch_assoc()['cnt'] ?? 0;
 
-$res_paid = $mysqli->query("SELECT SUM(paid_amount) as paid, AVG(paid_amount) as avg_val FROM invoxa_invoices WHERE paid_amount > 0 AND is_quote = 0 $testFilter");
+$res_paid = $mysqli->query("SELECT SUM(paid_amount) as paid, AVG(paid_amount) as avg_val FROM invoxa_invoices WHERE paid_amount > 0 AND is_quote = 0 $ccyFilterInv $testFilter");
 $row_paid = $res_paid->fetch_assoc();
 $stats_all_time_revenue = $row_paid['paid'] ?? 0;
 $stats_avg_invoice = $row_paid['avg_val'] ?? 0;
@@ -7117,7 +7188,7 @@ $res_ty = $mysqli->query("
            SUM(COALESCE(paid_amount, 0)) as total_paid,
            SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding
     FROM invoxa_invoices
-    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter
+    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $ccyFilterInv $testFilter
 ");
 $row_ty = $res_ty->fetch_assoc();
 $stats_ty_invoiced = $row_ty['total_invoiced'] ?? 0;
@@ -7125,7 +7196,7 @@ $stats_ty_paid = $row_ty['total_paid'] ?? 0;
 $stats_ty_outstanding = $row_ty['outstanding'] ?? 0;
 
 
-$res_mrr = $mysqli->query("SELECT SUM(monthly_rate) as mrr FROM invoxa_clients WHERE is_active = 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly));
+$res_mrr = $mysqli->query("SELECT SUM(monthly_rate) as mrr FROM invoxa_clients WHERE is_active = 1 $ccyFilterClient " . invoxaTestViewClientFilter($hideTest, $showTestOnly));
 $stats_mrr = $res_mrr->fetch_assoc()['mrr'] ?? 0;
 
 $stats_12m_projected = ($stats_mrr * 12) + $stats_outstanding_revenue;
@@ -7136,7 +7207,7 @@ $res_top = $mysqli->query("
     SELECT c.client_name, SUM(i.paid_amount) as total_revenue
     FROM invoxa_invoices i
     JOIN invoxa_clients c ON i.client_key = c.client_key
-    WHERE i.paid_amount > 0 AND i.is_quote = 0 " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
+    WHERE i.paid_amount > 0 AND i.is_quote = 0 $ccyFilterInvI " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
     GROUP BY c.client_name
     ORDER BY total_revenue DESC
     LIMIT 5
@@ -7166,14 +7237,14 @@ $stats_client_ratio = ($stats_inactive_clients > 0) ? round($stats_active_client
 
 // Void Summary (all-time) — invoiced amount excluded from every other total
 // via the void status (see computeInvoiceTotals()/status filters above).
-$res_void = $mysqli->query("SELECT COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE status = 'void' AND is_quote = 0 $testFilter");
+$res_void = $mysqli->query("SELECT COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE status = 'void' AND is_quote = 0 $ccyFilterInv $testFilter");
 $row_void = $res_void->fetch_assoc();
 $stats_void_count = (int) ($row_void['c'] ?? 0);
 $stats_void_amount = $row_void['total'] ?? 0;
 
 // Quote Pipeline — quotes still open (not yet converted, not voided). Once a
 // quote converts, is_quote flips to 0 and it drops out of this count.
-$res_pipeline = $mysqli->query("SELECT COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 1 AND status != 'void' $testFilter");
+$res_pipeline = $mysqli->query("SELECT COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 1 AND status != 'void' $ccyFilterInv $testFilter");
 $row_pipeline = $res_pipeline->fetch_assoc();
 $stats_quote_pipeline_count = (int) ($row_pipeline['c'] ?? 0);
 $stats_quote_pipeline_value = $row_pipeline['total'] ?? 0;
@@ -7193,7 +7264,7 @@ $res_aging = $mysqli->query("
         SUM(CASE WHEN due_date < DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) as c_90_plus,
         SUM(CASE WHEN due_date < DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN amount - COALESCE(paid_amount, 0) ELSE 0 END) as a_90_plus
     FROM invoxa_invoices
-    WHERE is_quote = 0 AND status NOT IN ('paid', 'void') $testFilter
+    WHERE is_quote = 0 AND status NOT IN ('paid', 'void') $ccyFilterInv $testFilter
 ");
 $row_aging = $res_aging->fetch_assoc() ?: [];
 $stats_aging = [
@@ -7252,7 +7323,7 @@ $res_ty_monthly = $mysqli->query("
            SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding,
            SUM(CASE WHEN status NOT IN ('paid') THEN 1 ELSE 0 END) as unpaid_count
     FROM invoxa_invoices
-    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter
+    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $ccyFilterInv $testFilter
     GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
     ORDER BY month ASC
 ");
@@ -7299,7 +7370,7 @@ if ($res_active) {
 $stats_invoice_status = [];
 $statusLabels = ['paid' => 'Paid', 'sent' => 'Sent', 'pending' => 'Pending', 'draft' => 'Draft', 'failed' => 'Failed', 'void' => 'Void'];
 $statusColors = ['paid' => '#10b981', 'sent' => '#3b82f6', 'pending' => '#f59e0b', 'draft' => '#94a3b8', 'failed' => '#ef4444', 'void' => '#6b7280'];
-$res_status = $mysqli->query("SELECT status, COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 0 $testFilter GROUP BY status");
+$res_status = $mysqli->query("SELECT status, COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 0 $ccyFilterInv $testFilter GROUP BY status");
 $statusCounts = [];
 if ($res_status) {
     while ($r = $res_status->fetch_assoc())
@@ -7317,7 +7388,7 @@ $res_trend = $mysqli->query("
            SUM(amount) as total_invoiced,
            SUM(COALESCE(paid_amount, 0)) as total_paid
     FROM invoxa_invoices
-    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH) $testFilter
+    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH) $ccyFilterInv $testFilter
     GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
     ORDER BY month ASC
 ");
@@ -7424,7 +7495,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
     } elseif ($which === 'expenses') {
         echo renderExpenseRows($expenses);
     } elseif ($which === 'dashboard_stats') {
-        echo renderDashboardStats($settings, $failedInvoices, $overdueInvoices, (float) $total_invoiced, (float) $total_monthly, (float) $total_paid, (int) $client_count);
+        echo renderDashboardStats($settings, $failedInvoices, $overdueInvoices, $total_invoiced_by_ccy, $total_monthly_by_ccy, $total_paid_by_ccy, (int) $client_count);
     } elseif ($which === 'activity') {
         echo renderActivityRows($actions);
     } elseif ($which === 'stats_section') {
@@ -9096,7 +9167,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
             </h2>
             <div class="section-scroll">
                 <div id="dashboardStatsWrap">
-                    <?= renderDashboardStats($settings, $failedInvoices, $overdueInvoices, (float) $total_invoiced, (float) $total_monthly, (float) $total_paid, (int) $client_count) ?>
+                    <?= renderDashboardStats($settings, $failedInvoices, $overdueInvoices, $total_invoiced_by_ccy, $total_monthly_by_ccy, $total_paid_by_ccy, (int) $client_count) ?>
                 </div>
                 <div class="charts-grid">
                     <div class="card" style="margin-bottom:0;">
@@ -9180,16 +9251,16 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         <option value="invoices_pdf" title="Download a PDF of every invoice, zipped into one file">All
                             Invoices (PDF)</option>
                         <option value="tax_year"
-                            title="Preview and export all invoices for the current tax year, ordered by date">Tax
+                            title="Preview and export all invoices for the current tax year, ordered by date. Limited to the instance default currency (Settings > General) — invoices in another currency are excluded.">Tax
                             Year Invoices</option>
                         <option value="tax_year_monthly"
-                            title="Preview and export a monthly summary for the current tax year, showing paid/partial paid status">
+                            title="Preview and export a monthly summary for the current tax year, showing paid/partial paid status. Amounts are in the instance default currency (Settings > General) — invoices in another currency are excluded.">
                             Monthly Summary</option>
                         <option value="accounting_journal"
-                            title="Double-entry General Journal (invoices, payments, expenses) for the current tax year, as a plain CSV any bookkeeping tool can import">
+                            title="Double-entry General Journal (invoices, payments, expenses) for the current tax year, as a plain CSV any bookkeeping tool can import. Only includes invoices in the instance default currency (Settings > General) — a ledger can't mix currencies in one balance.">
                             Accounting Journal (CSV)</option>
                         <option value="accounting_iif"
-                            title="Same General Journal as an .iif file for QuickBooks Desktop's File > Utilities > Import > IIF Files">
+                            title="Same General Journal as an .iif file for QuickBooks Desktop's File > Utilities > Import > IIF Files. Only includes invoices in the instance default currency (Settings > General).">
                             QuickBooks (IIF)</option>
                     </select>
                     <button class="btn" style="background: var(--surface-hover); white-space: nowrap;"
@@ -9287,7 +9358,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                             <?php foreach ($clients as $c): ?>
                                 <option value="<?= $c['id'] ?>"
                                     data-outstanding="<?= round(max(0, ($c['total_billed'] ?? 0) - ($c['total_paid'] ?? 0)), 2) ?>"
-                                    data-terms="<?= (int) ($c['payment_terms_days'] ?? 21) ?>"><?= htmlspecialchars($c['client_name']) ?>
+                                    data-terms="<?= (int) ($c['payment_terms_days'] ?? 21) ?>"
+                                    data-currency="<?= htmlspecialchars(invoxaResolveCurrency($c['currency'] ?? '', $settings)) ?>"><?= htmlspecialchars($c['client_name']) ?>
                                     (<?= htmlspecialchars($c['email']) ?>)</option>
                             <?php endforeach; ?>
                         </select>
@@ -9300,7 +9372,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 <tr style="font-size:0.8rem; color:var(--text-secondary);">
                                     <th style="padding:0 0.5rem 0.4rem 0; width:110px; text-align:left;">Code</th>
                                     <th style="padding:0 0.5rem 0.4rem 0; text-align:left;">Description</th>
-                                    <th style="padding:0 0.5rem 0.4rem 0; width:110px; text-align:right;">Amount (<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>)
+                                    <th style="padding:0 0.5rem 0.4rem 0; width:110px; text-align:right;">Amount (<span id="adhocAmountCcy"><?= htmlspecialchars($settings['currency'] ?? 'USD') ?></span>)
                                     </th>
                                     <th style="width:32px;"></th>
                                 </tr>
@@ -9738,10 +9810,9 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 <h1>Roadmap</h1>
                                 <p>What's coming next — actively in development, not just a wishlist.</p>
                                 <ul>
-                                    <li><strong>Multi-currency per client/invoice</strong> — currency is currently one setting for the whole instance (Settings &gt; General); each client or invoice would carry its own instead, for anyone billing across more than one currency.</li>
-                                    <li><strong>Two-way accounting sync (Xero/QuickBooks API)</strong> — Data Management's exports (CSV, IIF) are a one-way handoff today; a live API sync would push and pull instead of a manual file import.</li>
+                                    <li><strong>Currency-grouped Stats &amp; accounting exports</strong> — since 2.11.0, each client/invoice can carry its own currency, but Statistics and the Accounting Journal/QuickBooks (IIF) exports still report on the instance default currency only, excluding invoices in any other currency rather than blending them into one misleading total. Grouping those totals by currency instead (so nothing gets excluded) is the natural next step.</li>
                                 </ul>
-                                <p>No fixed release dates yet, but real work is underway. If one of them would help you, or you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
+                                <p>No fixed release dates yet, but real work is underway. If that would help you, or you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
                             </div>
                         </div>
                     </div>
@@ -9982,8 +10053,15 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                 <h1>Clients &amp; Client Portal</h1>
                                 <h2>The client record</h2>
                                 <p>The Add/Edit Client form, in order: <strong>Client Name</strong> and
-                                    <strong>Email Address</strong>; <strong>Rate</strong> (per billing period, in
-                                    your instance currency) and <strong>Billing Frequency</strong>
+                                    <strong>Email Address</strong>; <strong>Rate</strong> (per billing period) and
+                                    <strong>Currency</strong> — a 3-letter code (USD, EUR, GBP, etc.) for that
+                                    client's invoices and quotes; leave it blank to use the instance default
+                                    (Settings &gt; General). Each invoice/quote snapshots the client's currency at
+                                    the moment it's created, so changing a client's currency later never rewrites
+                                    their past invoices. There's no automatic exchange-rate conversion — amounts in
+                                    a different currency are grouped separately rather than added together, and
+                                    Statistics/accounting exports currently report on the instance default currency
+                                    only (see Roadmap); <strong>Billing Frequency</strong>
                                     (weekly/monthly/quarterly/annually); <strong>Payment Terms (days)</strong>,
                                     which drives the default due date on that client's invoices when one isn't set
                                     manually; <strong>Discount %</strong> and <strong>Tax Rate %</strong>, both
@@ -10130,6 +10208,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                                     "how's the business doing right now" without drilling into Statistics.</p>
                                 <h2>Statistics</h2>
                                 <p><strong>Requires a license.</strong> The Dashboard above stays free either way.</p>
+                                <p>If any client is set to a currency other than the instance default (Settings &gt; General), Statistics and the Tax &amp; Compliance exports below report on the default currency only — invoices/clients in another currency are excluded from these totals and charts rather than being added together (see Clients &amp; Client Portal, and Roadmap). The Dashboard's own headline totals, and the Invoices/Clients/Quotes tabs, don't have this limitation — they show every currency, grouped rather than blended.</p>
                                 <p>Statistics is split into six focused tabs rather than one long scrolling page:
                                     <strong>Revenue</strong>, <strong>Forecasting</strong>, <strong>Clients</strong>,
                                     <strong>Tax &amp; Compliance</strong>, <strong>Activity</strong>, and
@@ -11978,8 +12057,15 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
 
                     <!-- Billing terms -->
                     <div class="client-form-grid" style="margin-top:0.5rem; padding-top:1rem; border-top:1px solid var(--border);">
-                        <div class="form-group"><label class="form-label">Rate (<?= htmlspecialchars($settings['currency'] ?? 'USD') ?> per billing period)</label><input type="number"
+                        <div class="form-group"><label class="form-label">Rate (per billing period)</label><input type="number"
                                 id="clientRate" class="form-control" step="0.01"></div>
+                        <div class="form-group"><label class="form-label">Currency</label><input type="text"
+                                id="clientCurrency" class="form-control" maxlength="3"
+                                style="text-transform:uppercase; max-width:100px;"
+                                placeholder="<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>">
+                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">3-letter
+                                code for this client's invoices/quotes. Leave blank to use the instance default (<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>).</p>
+                        </div>
                         <div class="form-group"><label class="form-label">Billing Frequency</label>
                             <select id="clientBillingFrequency" class="form-control">
                                 <option value="weekly">Weekly</option>
@@ -12256,7 +12342,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                         <label class="form-label">Payment History</label>
                         <div id="paidHistoryList" style="font-size:0.85rem; border:1px solid var(--border); border-radius:6px; padding:0.5rem 0.75rem;"></div>
                     </div>
-                    <div class="form-group"><label class="form-label">This Payment (<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>)</label><input type="number"
+                    <div class="form-group"><label class="form-label">This Payment (<span id="paidAmountCcy"><?= htmlspecialchars($settings['currency'] ?? 'USD') ?></span>)</label><input type="number"
                             step="0.01" min="0.01" id="paidAmount" class="form-control">
                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Defaults to the
                             remaining balance. Enter a smaller amount to log a partial/installment payment — it's
@@ -13054,6 +13140,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 document.getElementById('clientPhone').value = c ? (c.phone || '') : '';
                 document.getElementById('clientAddress').value = c ? (c.address || '') : '';
                 document.getElementById('clientRate').value = c ? c.monthly_rate : '0.00';
+                document.getElementById('clientCurrency').value = c ? (c.currency || '') : '';
                 document.getElementById('clientBillingFrequency').value = c ? c.billing_frequency : 'monthly';
                 document.getElementById('clientPaymentTerms').value = c ? c.payment_terms_days : '21';
                 document.getElementById('clientDiscountPct').value = c ? c.discount_pct : '0';
@@ -13114,6 +13201,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                     action: 'save_client', id: document.getElementById('clientId').value, client_name: document.getElementById('clientName').value,
                     email: document.getElementById('clientEmail').value, phone: document.getElementById('clientPhone').value,
                     address: document.getElementById('clientAddress').value, monthly_rate: document.getElementById('clientRate').value,
+                    currency: document.getElementById('clientCurrency').value,
                     billing_frequency: document.getElementById('clientBillingFrequency').value,
                     payment_terms_days: document.getElementById('clientPaymentTerms').value,
                     discount_pct: document.getElementById('clientDiscountPct').value || '0',
@@ -13397,6 +13485,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 if (!opt || !opt.value) {
                     balanceEl.style.display = 'none';
                     hintEl.textContent = '';
+                    document.getElementById('adhocAmountCcy').textContent = APP_CURRENCY;
                     return;
                 }
                 const outstanding = parseFloat(opt.dataset.outstanding || '0');
@@ -13409,6 +13498,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 const terms = parseInt(opt.dataset.terms || '21', 10);
                 const defaultDue = new Date(Date.now() + terms * 86400000);
                 hintEl.textContent = `Leave blank to use this client's terms (${terms} days — ${defaultDue.toLocaleDateString()})`;
+                document.getElementById('adhocAmountCcy').textContent = opt.dataset.currency || APP_CURRENCY;
             }
             async function previewAdhocInvoice() {
                 const cid = document.getElementById('adhocClient').value;
@@ -13676,6 +13766,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
                 document.getElementById('paidInvoiceNum').value = inv.invoice_number;
                 const remaining = Math.max(0, parseFloat(inv.amount) - parseFloat(inv.paid_amount || 0));
                 document.getElementById('paidAmount').value = remaining.toFixed(2);
+                document.getElementById('paidAmountCcy').textContent = inv.currency || APP_CURRENCY;
                 document.getElementById('paidNote').value = '';
                 document.getElementById('paidHistoryWrap').style.display = 'none';
                 document.getElementById('paidHistoryList').innerHTML = '';

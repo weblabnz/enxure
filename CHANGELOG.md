@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.0] - 2026-08-29
+
+### Added
+- **Multi-currency, per client/invoice.** Each client now carries its own Currency (3-letter code, e.g. USD/EUR/GBP) in the Add/Edit Client form, defaulting to blank ("use the instance default" from Settings &gt; General). Every invoice/quote snapshots its client's currency at creation time into its own row, so changing a client's currency later never rewrites past invoices. This covers ad hoc invoices, quotes, recurring billing, late fees, invoice PDFs, the Stripe/PayPal payment flow, payment/refund/late-fee notifications, and the Client Portal — all read and charge in the invoice's own currency rather than the instance-wide setting. There's no automatic exchange-rate conversion: the Dashboard's headline totals and the Invoices/Clients/Quotes tabs group amounts by currency instead of adding them together (so a mix of currencies never gets silently blended into one wrong number), and CSV exports gain a Currency column. Statistics and the Accounting Journal/QuickBooks (IIF) exports report on the instance default currency only for now, excluding other-currency invoices rather than mixing them in — see Roadmap for extending that to group by currency too.
+
 ## [2.10.3] - 2026-08-29
 
 ### Fixed
