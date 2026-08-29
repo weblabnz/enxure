@@ -5,8 +5,7 @@
 > insurance before money changes hands. Send this to buyers as part of the sale (e.g.
 > attached to the invoice); it isn't linked anywhere in the running app.
 
-**Licensor:** [Your Name — a registered business isn't required; trading as a sole
-trader under your own name is fine], New Zealand ("we", "us")
+**Licensor:** The Web Lab, New Zealand ("we", "us")
 **Contact:** contact-project+weblabnz-invoxa-inv@incoming.gitlab.com
 
 Invoxa's core software is free and open source, licensed to everyone under the GNU
