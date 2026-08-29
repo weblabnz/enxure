@@ -6,16 +6,17 @@
 Invoxa's core software is free and open source, licensed to everyone under the GNU
 Affero General Public License v3.0 — see `LICENSE`, also readable in-app under Docs >
 Reference. **This Agreement is separate from that license and covers only the paid
-license key**, which unlocks six specific features not required to run Invoxa itself:
+license key**, which unlocks seven specific features not required to run Invoxa itself:
 Stripe/PayPal payment collection, recurring billing automation, the Client Portal, the
-external API, Reporting & Statistics, and removing the "Powered by Invoxa" credit line
-from invoices and emails. By activating a license key in Settings > License, you
+external API, adding teammates beyond your own account (Settings > Users), Reporting &
+Statistics, and removing the "Powered by Invoxa" credit line from invoices and emails.
+By activating a license key in Settings > License, you
 ("Licensee") agree to these terms. This Agreement applies to any buyer, wherever
 they're located — New Zealand or overseas.
 
 ## 1. Grant of License
 
-We grant you a non-exclusive, non-transferable right to use the six paid features
+We grant you a non-exclusive, non-transferable right to use the seven paid features
 listed above, on the one domain your license key was issued for. This is a one-time
 purchase — no expiry, no subscription. Moving to a different domain requires a
 replacement key.
