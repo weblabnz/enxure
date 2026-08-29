@@ -9,8 +9,12 @@
                     <button type="button" class="subnav-item active" data-settings-target="general"
                         onclick="navSettings('general')"><i class="fa-solid fa-sliders"></i> General</button>
                     <?php endif; ?>
+                    <?php $__u = $mysqli->query("SELECT username, email, totp_secret, email_verified_at FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
+                    $__totpEnabled = !empty($__u['totp_secret']); ?>
                     <button type="button" class="subnav-item<?= $isAdmin ? '' : ' active' ?>" data-settings-target="account"
-                        onclick="navSettings('account')"><i class="fa-solid fa-lock"></i> Account</button>
+                        onclick="navSettings('account')"><i class="fa-solid fa-lock"></i> Account
+                        <span class="subnav-dot <?= $__totpEnabled ? 'on' : 'off' ?>"
+                            title="<?= $__totpEnabled ? 'Two-factor authentication enabled' : 'Two-factor authentication not enabled' ?>"></span></button>
                     <?php if ($isAdmin): ?>
                     <button type="button" class="subnav-item" data-settings-target="branding"
                         onclick="navSettings('branding')"><i class="fa-solid fa-paint-roller"></i> Branding</button>
@@ -178,8 +182,6 @@
                                 <div class="form-group">
                                     <label class="form-label"
                                         style="font-size:0.8rem; color:var(--text-secondary);">Username</label>
-                                    <?php $__u = $mysqli->query("SELECT username, email, totp_secret, email_verified_at FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
-                                    $__totpEnabled = !empty($__u['totp_secret']); ?>
                                     <input type="text" id="newUsername" class="form-control"
                                         value="<?= htmlspecialchars($__u['username'] ?? '') ?>">
                                 </div>

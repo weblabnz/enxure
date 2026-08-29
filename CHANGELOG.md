@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.12] - 2026-08-29
+
+### Added
+- Settings > Account now shows a status dot for Two-Factor Authentication, same as the existing dots on Email/Billing/Payments/API/Notifications/Users/License.
+
 ## [2.11.11] - 2026-08-29
 
 ### Fixed
