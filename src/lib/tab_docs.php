@@ -72,7 +72,6 @@
                                 <h1>Roadmap</h1>
                                 <p>What's coming next.</p>
                                 <ul>
-                                    <li><strong>Currency-grouped Stats &amp; accounting exports</strong> — Statistics and the Accounting Journal/QuickBooks (IIF) exports currently report on the instance default currency only, excluding other-currency invoices instead of grouping them in.</li>
                                     <li><strong>CSRF tokens</strong> — no explicit CSRF protection exists yet on state-changing actions; today's browsers' default same-site cookie behavior mitigates the classic attack, but proper tokens are the correct long-term fix (see Security Review in CODEBASE.md).</li>
                                     <li><strong>Session ID regeneration on login</strong> — the session ID isn't rotated after a successful login (session-fixation-shaped gap; no known exploit path currently, see Security Review in CODEBASE.md).</li>
                                 </ul>
@@ -326,9 +325,11 @@
                                     (Settings &gt; General). Each invoice/quote snapshots the client's currency at
                                     the moment it's created, so changing a client's currency later never rewrites
                                     their past invoices. There's no automatic exchange-rate conversion — amounts in
-                                    a different currency are grouped separately rather than added together, and
-                                    Statistics/accounting exports currently report on the instance default currency
-                                    only (see Roadmap); <strong>Billing Frequency</strong>
+                                    a different currency are grouped separately rather than added together,
+                                    including in Statistics and the accounting exports; only Statistics' charts,
+                                    Forecasting, and AR Aging still total in the instance default currency, since a
+                                    single chart axis or forecast can't meaningfully mix currencies;
+                                    <strong>Billing Frequency</strong>
                                     (weekly/monthly/quarterly/annually); <strong>Payment Terms (days)</strong>,
                                     which drives the default due date on that client's invoices when one isn't set
                                     manually; <strong>Discount %</strong> and <strong>Tax Rate %</strong>, both
@@ -475,7 +476,7 @@
                                     "how's the business doing right now" without drilling into Statistics.</p>
                                 <h2>Statistics</h2>
                                 <p><strong>Requires a license.</strong> The Dashboard above stays free either way.</p>
-                                <p>If any client is set to a currency other than the instance default (Settings &gt; General), Statistics and the Tax &amp; Compliance exports below report on the default currency only — invoices/clients in another currency are excluded from these totals and charts rather than being added together (see Clients &amp; Client Portal, and Roadmap). The Dashboard's own headline totals, and the Invoices/Clients/Quotes tabs, don't have this limitation — they show every currency, grouped rather than blended.</p>
+                                <p>If any client is set to a currency other than the instance default (Settings &gt; General), Statistics' totals, tables, and the Tax &amp; Compliance exports below show every currency, grouped rather than blended (e.g. "USD $500.00 + EUR $200.00") — same as the Dashboard's headline totals and the Invoices/Clients/Quotes tabs. The exceptions are Statistics' charts, the Forecasting tab, and AR Aging, which still total in the instance default currency only, since a single chart axis or forecast can't meaningfully mix currencies without an exchange rate (see Clients &amp; Client Portal).</p>
                                 <p>Statistics is split into six focused tabs rather than one long scrolling page:
                                     <strong>Revenue</strong>, <strong>Forecasting</strong>, <strong>Clients</strong>,
                                     <strong>Tax &amp; Compliance</strong>, <strong>Activity</strong>, and
