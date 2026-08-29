@@ -1,6 +1,6 @@
 # Invoxa — codebase layout
 
-Developer reference only — not bind-mounted into the app or shown in the in-app Docs viewer (same as DEPLOY.md/GIT.md there), but unlike those two this has no personal/instance-specific details, so it's tracked in git rather than gitignored. Extend this as the code organization work continues.
+Developer reference for how `invoxa.php` and `lib/` are organized. Not bind-mounted or shown in the in-app Docs viewer.
 
 ## Entry point
 
@@ -42,7 +42,7 @@ These are **not** required at the top of the file. Each is `require_once`'d at t
 | `lib/settings_page.php` | `invoxa.php`, at the Settings tab's position in the page body | The entire Settings tab's HTML (`<div id="sec-settings">`). Pure markup + inline `<?php ?>` expressions, no function definitions. |
 | `lib/backup_page.php` | `invoxa.php`, at the Data Management tab's position | The entire Backup & Restore / Data Management tab's HTML (`<div id="sec-backup">`). Same shape as `settings_page.php`. |
 
-**The rule of thumb when splitting more of this file:** if the code only defines functions, require it early (top of `invoxa.php`, alongside `clients.php`/`stats.php`/etc.) so it's available to both the AJAX dispatch and the page render. If it's top-level executable code or raw page markup that only runs once, require it in place at its original position instead — and double-check any `__DIR__`-relative paths inside it, since a file that moved from `invoxa.php`'s directory into `lib/` needs those adjusted (this bit us once already: `lib/auth_gate.php` briefly required `__DIR__ . '/lib/license.php'` instead of `__DIR__ . '/license.php'`).
+**The rule of thumb when splitting more of this file:** if the code only defines functions, require it early (top of `invoxa.php`, alongside `clients.php`/`stats.php`/etc.) so it's available to both the AJAX dispatch and the page render. If it's top-level executable code or raw page markup that only runs once, require it in place at its original position instead — and double-check any `__DIR__`-relative paths inside it, since a file that moved from `invoxa.php`'s directory into `lib/` needs those adjusted — the 2.11.5 fix was exactly this: `lib/auth_gate.php` required `__DIR__ . '/lib/license.php'` instead of `__DIR__ . '/license.php'`.
 
 ## Still inline in `invoxa.php`
 
