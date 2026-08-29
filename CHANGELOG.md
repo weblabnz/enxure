@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.10] - 2026-08-29
+
+### Fixed
+- Enabling Two-Factor Authentication never revealed the "Disable Two-Factor Authentication" panel afterward — it only appeared after a manual page reload, making 2FA look impossible to turn back off. Pre-existing, not introduced by the 2.11.3–2.11.9 changes.
+
 ## [2.11.9] - 2026-08-29
 
 ### Added

@@ -2070,10 +2070,10 @@
                 const json = await res.json();
                 btn.disabled = false;
                 if (json.success) {
-                    document.getElementById('totpSetupWrap').style.display = 'none';
-                    document.getElementById('totpStartBtn').style.display = 'none';
+                    document.getElementById('totpDisabledView').style.display = 'none';
                     document.getElementById('totpBackupCodesList').textContent = (json.backup_codes || []).join('\n');
                     document.getElementById('totpBackupCodesWrap').style.display = '';
+                    document.getElementById('totpEnabledView').style.display = '';
                     showToast('Two-factor authentication enabled!');
                 } else showToast(json.error || 'Invalid code', true);
             }
