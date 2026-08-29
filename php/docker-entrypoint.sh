@@ -3,8 +3,8 @@ set -e
 
 # Ensures php-fpm (running as www-data) can write to the bind-mounted
 # invoices/backups folders and the shared crontab volume.
-mkdir -p /usr/share/nginx/html/invoxa-invoices /usr/share/nginx/html/invoxa-backups /etc/invoxa-crontab
-chown -R www-data:www-data /usr/share/nginx/html/invoxa-invoices /usr/share/nginx/html/invoxa-backups /etc/invoxa-crontab
+mkdir -p /usr/share/nginx/html/invoxa-invoices /usr/share/nginx/html/invoxa-backups /usr/share/nginx/html/docs/screenshots /etc/invoxa-crontab
+chown -R www-data:www-data /usr/share/nginx/html/invoxa-invoices /usr/share/nginx/html/invoxa-backups /usr/share/nginx/html/docs/screenshots /etc/invoxa-crontab
 
 # If CRON_SECRET isn't set in .env, generate a unique one on first boot and
 # persist it so it survives restarts and no manual setup step is required.

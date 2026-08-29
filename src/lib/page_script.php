@@ -187,6 +187,7 @@
             });
 
             function nav(section, fromClick = false) {
+                if (!document.getElementById('sec-' + section)) section = 'dashboard';
                 if (fromClick) {
                     document.querySelector('.sidebar').classList.remove('open');
                     document.getElementById('sidebarBackdrop').classList.remove('active');
@@ -208,7 +209,6 @@
                 if (fromClick && (section === 'invoices' || section === 'clients' || section === 'quotes' || section === 'expenses')) refreshTable(section);
                 if (fromClick && section === 'dashboard') refreshDashboard();
                 if (fromClick && section === 'stats') refreshStatsSection();
-                if (fromClick && section === 'sync') refreshSync();
                 if (fromClick && section === 'audit') refreshAuditSection();
                 // simple-datatables miscalculates column widths for any table built or
                 // resized while its tab was hidden (display:none gives a zero-width
@@ -266,6 +266,7 @@
                 document.querySelectorAll('#sec-backup .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.backupTarget === target));
                 document.querySelectorAll('#sec-backup .subnav-pane').forEach(el => el.classList.toggle('active', el.id === 'backup-pane-' + target));
                 localStorage.setItem('backupSubTab', target);
+                if (target === 'sync') refreshSync();
             }
             const storedBackupTab = localStorage.getItem('backupSubTab');
             if (storedBackupTab && document.getElementById('backup-pane-' + storedBackupTab)) navBackup(storedBackupTab);
@@ -541,11 +542,15 @@
                 }
             }
             async function refreshSync() {
+                const paneEl = document.getElementById('backup-pane-sync');
+                paneEl.classList.add('table-refreshing');
                 try {
                     const html = await fetch('?api=table_html&which=sync_section').then(r => r.text());
-                    document.getElementById('sec-sync').innerHTML = html;
+                    paneEl.innerHTML = html;
                 } catch (e) {
                     // Silent by design, same reasoning as refreshTable() above.
+                } finally {
+                    paneEl.classList.remove('table-refreshing');
                 }
             }
             async function refreshAuditSection() {
@@ -2001,22 +2006,22 @@
                         borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3, fill: false
                     });
                 });
-                // Total line, filled with a soft gradient glow so the headline
-                // cumulative figure reads at a glance against the per-client lines.
-                const revenueCanvas = document.getElementById('revenueChart');
-                const revenueCtx = revenueCanvas.getContext('2d');
-                const totalGlow = revenueCtx.createLinearGradient(0, 0, 0, revenueCanvas.clientHeight || 420);
-                totalGlow.addColorStop(0, 'rgba(79, 124, 255, 0.35)');
-                totalGlow.addColorStop(1, 'rgba(79, 124, 255, 0)');
                 datasets.push({
                     label: 'Total (All Clients)',
                     data: displayData.map(d => d.total ?? 0),
                     borderColor: '#ffffff',
-                    backgroundColor: totalGlow,
+                    backgroundColor: (context) => {
+                        const { ctx, chartArea } = context.chart;
+                        if (!chartArea) return null;
+                        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                        gradient.addColorStop(0, 'rgba(79, 124, 255, 0.35)');
+                        gradient.addColorStop(1, 'rgba(79, 124, 255, 0)');
+                        return gradient;
+                    },
                     borderWidth: 2.5, borderDash: [6, 3], pointRadius: 2, pointHoverRadius: 5, tension: 0.3, fill: true
                 });
                 if (chartInstance) chartInstance.destroy();
-                chartInstance = new Chart(revenueCtx, {
+                chartInstance = new Chart(document.getElementById('revenueChart').getContext('2d'), {
                     type: 'line',
                     data: { labels, datasets },
                     options: {
@@ -2485,6 +2490,55 @@
             function selectAllTests(checked) {
                 document.querySelectorAll('.test-suite-checkbox, .test-suite-group-checkbox').forEach(cb => cb.checked = checked);
                 if (checked) resetTestVisibility(); // "Select All" also un-does any pill filter — checked-but-hidden would be confusing
+            }
+            function selectAllScreenshots(checked) {
+                document.querySelectorAll('.screenshot-page-checkbox').forEach(cb => cb.checked = checked);
+            }
+            async function captureScreenshots() {
+                if (!(location.protocol === 'https:' || location.hostname === 'localhost')) {
+                    return showToast('Screen capture needs HTTPS (or localhost) — this page is served over plain HTTP.', true);
+                }
+                const keys = Array.from(document.querySelectorAll('.screenshot-page-checkbox:checked')).map(cb => cb.value);
+                if (!keys.length) return showToast('Select at least one page first', true);
+                const targets = window.__screenshotManifest.filter(m => keys.includes(m.key));
+
+                let stream;
+                try {
+                    stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'browser' }, preferCurrentTab: true });
+                } catch (e) {
+                    return showToast('Screen sharing was cancelled or denied.', true);
+                }
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                await video.play();
+
+                const btn = document.getElementById('captureScreenshotsBtn');
+                const origHtml = btn.innerHTML;
+                btn.disabled = true;
+                let done = 0, failed = 0;
+                for (const target of targets) {
+                    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Capturing ${target.label}... (${done + 1}/${targets.length})`;
+                    window.nav(target.nav, true);
+                    if (target.afterNavJs) new Function(target.afterNavJs)();
+                    await new Promise(r => setTimeout(r, 900));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                    const formData = new FormData();
+                    formData.append('action', 'save_screenshot');
+                    formData.append('key', target.key);
+                    formData.append('image', blob, target.key + '.png');
+                    const res = await fetch('', { method: 'POST', body: formData });
+                    const json = await res.json();
+                    if (json.success) done++; else { failed++; showToast(`Failed to save ${target.label}: ${json.error}`, true); }
+                }
+
+                stream.getTracks().forEach(t => t.stop());
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+                if (done) showToast(`Captured ${done} screenshot${done === 1 ? '' : 's'} to docs/screenshots/${failed ? ` (${failed} failed)` : ''}`, failed > 0 && done === 0);
             }
             function toggleTestGroup(groupCheckbox) {
                 const group = groupCheckbox.dataset.group;

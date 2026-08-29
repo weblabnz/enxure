@@ -245,7 +245,7 @@
                             <p style="color:var(--text-secondary); max-width:420px; margin:0 auto 1rem;">The database
                                 record exists, but its file is missing on disk — this instance's database and files
                                 have drifted out of sync.</p>
-                            <button class="btn primary" onclick="closeModal('viewModal'); nav('sync', true);"><i
+                            <button class="btn primary" onclick="closeModal('viewModal'); nav('backup', true); navBackup('sync');"><i
                                     class="fa-solid fa-rotate"></i> Go to Sync</button>
                         </div>
                     </div>

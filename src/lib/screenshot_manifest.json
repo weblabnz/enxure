@@ -1,0 +1,10 @@
+[
+    { "key": "dashboard", "label": "Dashboard", "file": "invoxa-dashboard.webp", "nav": "dashboard" },
+    { "key": "invoices", "label": "Invoices", "file": "invoxa-invoices.webp", "nav": "invoices" },
+    { "key": "adhoc", "label": "Ad Hoc Invoice", "file": "invoxa-adhoc.webp", "nav": "billing", "afterNavJs": "resetAdhocMode()" },
+    { "key": "clients", "label": "Clients", "file": "invoxa-clients.webp", "nav": "clients" },
+    { "key": "settings", "label": "Settings", "file": "invoxa-settings.webp", "nav": "settings", "afterNavJs": "navSettings('general')" },
+    { "key": "datamanagement", "label": "Data Management", "file": "invoxa-datamanagement.webp", "nav": "backup", "afterNavJs": "navBackup('backup')" },
+    { "key": "auditlog", "label": "Audit Log", "file": "invoxa-auditlog.webp", "nav": "audit" },
+    { "key": "documentation", "label": "Documentation", "file": "invoxa-documentation.webp", "nav": "docs" }
+]

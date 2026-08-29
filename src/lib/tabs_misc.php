@@ -8,8 +8,3 @@
             <?= renderAuditSection($actions) ?>
         </div>
 
-        <!-- SYNC -->
-        <div id="sec-sync" class="section">
-            <?= renderSyncSection($missingFiles, $knownClientFolders, $missingDiskData) ?>
-        </div>
-

@@ -64,16 +64,14 @@
                 aria-label="Expand Statistics menu"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
         <div class="nav-subnav-slot" data-for="stats"></div>
-        <div class="nav-item tool-item" data-target="sync" onclick="nav('sync', true)"><i
-                class="fa-solid fa-rotate"></i> Sync <span class="badge" title="Files needing sync"
-                style="margin-left:auto; background:<?= (count($missingFiles) + count($missingDiskData)) > 0 ? 'var(--warning)' : 'var(--surface-hover)' ?>; color:<?= (count($missingFiles) + count($missingDiskData)) > 0 ? 'white' : 'var(--text-primary)' ?>;"><?= count($missingFiles) + count($missingDiskData) ?></span>
-        </div>
         <div class="nav-item tool-item" data-target="audit" onclick="nav('audit', true)"><i
                 class="fa-solid fa-clock-rotate-left"></i>
             Audit Log</div>
         <?php if ($isAdmin): ?>
         <div class="nav-item tool-item" data-target="backup" onclick="nav('backup', true)"><i
                 class="fa-solid fa-database"></i> Data Management
+            <?php if ((count($missingFiles) + count($missingDiskData)) > 0): ?><span class="badge" title="Files needing sync"
+                    style="margin-left:auto; background:var(--warning); color:white;"><?= count($missingFiles) + count($missingDiskData) ?></span><?php endif; ?>
             <button type="button" class="nav-subnav-toggle" onclick="event.stopPropagation(); toggleNavSubnav('backup')"
                 aria-label="Expand Data Management menu"><i class="fa-solid fa-chevron-down"></i></button>
         </div>

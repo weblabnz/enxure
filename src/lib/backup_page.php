@@ -11,12 +11,16 @@
                         onclick="navBackup('backup')"><i class="fa-solid fa-database"></i> Backup &amp; Restore</button>
                     <button type="button" class="subnav-item" data-backup-target="offsite"
                         onclick="navBackup('offsite')"><i class="fa-solid fa-cloud-arrow-up"></i> Offsite Push</button>
-                    <button type="button" class="subnav-item" data-backup-target="demo"
-                        onclick="navBackup('demo')"><i class="fa-solid fa-wand-magic-sparkles"></i> Demo Data</button>
+                    <button type="button" class="subnav-item" data-backup-target="sync"
+                        onclick="navBackup('sync')"><i class="fa-solid fa-rotate"></i> Sync</button>
                     <button type="button" class="subnav-item" data-backup-target="audit"
                         onclick="navBackup('audit')"><i class="fa-solid fa-broom"></i> Audit Log Retention</button>
+                    <button type="button" class="subnav-item" data-backup-target="demo"
+                        onclick="navBackup('demo')"><i class="fa-solid fa-wand-magic-sparkles"></i> Demo Data</button>
                     <button type="button" class="subnav-item" data-backup-target="testsuite"
                         onclick="navBackup('testsuite')"><i class="fa-solid fa-vial"></i> Test Suite</button>
+                    <button type="button" class="subnav-item" data-backup-target="screenshots"
+                        onclick="navBackup('screenshots')"><i class="fa-solid fa-camera"></i> Screenshots</button>
                     <button type="button" class="subnav-item danger" data-backup-target="repair"
                         onclick="navBackup('repair')"><i class="fa-solid fa-wrench"></i> Data Repair</button>
                     <button type="button" class="subnav-item danger" data-backup-target="danger"
@@ -124,6 +128,11 @@
                         </div>
                     </div>
 
+                    <!-- Sync -->
+                    <div class="subnav-pane" id="backup-pane-sync">
+                        <?= renderSyncSection($missingFiles, $knownClientFolders, $missingDiskData) ?>
+                    </div>
+
                     <!-- Demo Data -->
                     <div class="subnav-pane" id="backup-pane-demo">
                         <div class="card">
@@ -217,6 +226,41 @@
                                         </tbody>
                                     </table>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Screenshots -->
+                    <div class="subnav-pane" id="backup-pane-screenshots">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-camera"
+                                        style="color:var(--accent); margin-right:0.5rem;"></i>Screenshots</h3>
+                            </div>
+                            <div class="card-body">
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                                    Captures each selected page from this tab and overwrites its file in
+                                    <code>docs/screenshots/</code>. Resize the window first — it captures exactly
+                                    what's on screen. Needs HTTPS (or <code>localhost</code>); one share-this-tab
+                                    prompt covers every page.
+                                </p>
+                                <div style="margin-bottom:1rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                                    <button class="btn primary" type="button" id="captureScreenshotsBtn" onclick="captureScreenshots()"><i
+                                            class="fa-solid fa-camera"></i> Capture Screenshots</button>
+                                    <button class="btn small" type="button" onclick="selectAllScreenshots(true)">Select All</button>
+                                    <button class="btn small" type="button" onclick="selectAllScreenshots(false)">Select None</button>
+                                </div>
+                                <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                                    <?php $__screenshotManifest = json_decode(file_get_contents(__DIR__ . '/screenshot_manifest.json'), true) ?: []; ?>
+                                    <?php foreach ($__screenshotManifest as $__shot): ?>
+                                        <label style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                                            <input type="checkbox" class="screenshot-page-checkbox" value="<?= htmlspecialchars($__shot['key']) ?>" checked>
+                                            <span><?= htmlspecialchars($__shot['label']) ?></span>
+                                            <span style="margin-left:auto; color:var(--text-secondary); font-size:0.8rem;"><?= htmlspecialchars($__shot['file']) ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <script>window.__screenshotManifest = <?= json_encode($__screenshotManifest) ?>;</script>
                             </div>
                         </div>
                     </div>

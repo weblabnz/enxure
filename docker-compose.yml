@@ -67,6 +67,7 @@ services:
       - ./INSTALL.md:/usr/share/nginx/html/docs/INSTALL.md:ro
       - ./CHANGELOG.md:/usr/share/nginx/html/docs/CHANGELOG.md:ro
       - ./LICENSE:/usr/share/nginx/html/docs/LICENSE:ro
+      - ./docs/screenshots:/usr/share/nginx/html/docs/screenshots
     networks:
       - invoxa-net
     healthcheck:

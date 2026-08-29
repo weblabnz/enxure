@@ -2,6 +2,18 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.15] - 2026-08-29
+
+### Added
+- Settings > Data Management > Screenshots: recaptures the README's screenshots from your own browser tab and overwrites the matching file in `docs/screenshots/` in place — tick the pages you want, click Capture, and it switches through them and uploads a frame of each. Uses the browser's native Screen Capture API (one permission prompt covers every page) and PHP's GD to encode to WebP server-side, so it needed no new runtime dependency — `php/Dockerfile` now builds `gd` with `--with-webp` (`libwebp-dev`), and `docs/screenshots` is now a read-write mount on the `php` service. Admin-only, same as the rest of Data Management.
+
+### Changed
+- Sync moved from its own top-level sidebar item into Data Management as a subnav page (it's the same maintainer-housekeeping category as Data Repair, Backup & Restore, and now Screenshots) — its "files needing sync" count badge moved onto the Data Management nav item itself. Data Management's other subnav items are reordered by function: Backup & Restore, Offsite Push, Sync, Audit Log Retention, Demo Data, Test Suite, Screenshots, then Data Repair and Factory Reset unchanged at the end.
+
+### Fixed
+- Sync's Refresh button gave no feedback while it re-checked — now dims the pane and shows the same spinner used by the Invoices/Clients/Quotes/Expenses table refreshes.
+- The dashboard revenue chart's gradient fill (added in 2.11.14) was computed once from the canvas's on-screen size before Chart.js had laid it out, so it sometimes didn't cover the full chart until a page reload. Switched to Chart.js's scriptable-color pattern, recomputed from the chart's actual layout on every render and resize.
+
 ## [2.11.14] - 2026-08-29
 
 ### Fixed

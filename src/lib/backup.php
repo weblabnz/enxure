@@ -3,11 +3,14 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
 {
     ob_start();
     ?>
-    <h2 class="page-title">Filesystem Sync
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+        Reconciles the database against the HTML invoice files on disk — a file with no matching row, or a
+        row whose file has gone missing.
+    </p>
+    <div style="margin-bottom:1rem;">
         <button class="btn" onclick="refreshSync()" title="Recheck sync status"><i
                 class="fa-solid fa-rotate"></i> Refresh</button>
-    </h2>
-    <div class="section-scroll">
+    </div>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
         <div class="card" style="margin-bottom: 0;">
             <div class="card-header">
@@ -103,9 +106,42 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
             </table>
         </div>
     </div>
-    </div>
     <?php
     return ob_get_clean();
+}
+
+function invoxaHandleSaveScreenshot(): void
+{
+    $manifest = json_decode(file_get_contents(__DIR__ . '/screenshot_manifest.json'), true) ?: [];
+    $entry = null;
+    foreach ($manifest as $m) {
+        if ($m['key'] === ($_POST['key'] ?? '')) {
+            $entry = $m;
+            break;
+        }
+    }
+    if (!$entry) {
+        throw new Exception('Unknown screenshot key.');
+    }
+    if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
+        throw new Exception('No image uploaded, or the upload failed.');
+    }
+    $img = @imagecreatefromstring(file_get_contents($_FILES['image']['tmp_name']));
+    if (!$img) {
+        throw new Exception('Could not read the captured image.');
+    }
+    $destDir = DOCS_DIR . 'screenshots/';
+    if (!is_dir($destDir) || !is_writable($destDir)) {
+        imagedestroy($img);
+        throw new Exception('docs/screenshots is not writable from this container — check the docker-compose.yml mount.');
+    }
+    $ok = imagewebp($img, $destDir . $entry['file'], 82);
+    imagedestroy($img);
+    if (!$ok) {
+        throw new Exception('WebP encoding failed — GD may not have been built with libwebp support.');
+    }
+    echo json_encode(['success' => true]);
+    exit;
 }
 
 // The Audit Log tab — same reasoning as renderStatsSection() above (no
