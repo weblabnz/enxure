@@ -63,7 +63,7 @@
                         <span style="margin-left:auto; display:inline-flex; align-items:center; gap:0.4rem;">
                             <?php if (!$licenseValid): ?><i class="fa-solid fa-lock" title="Adding more than one user requires a license"
                                     style="color:var(--text-secondary); font-size:0.8rem;"></i><?php endif; ?>
-                            <span class="subnav-dot on" style="margin-left:0;" title="<?= $__userCount ?> user<?= $__userCount === 1 ? '' : 's' ?>"></span>
+                            <span class="subnav-dot <?= $__userCount > 1 ? 'on' : 'off' ?>" style="margin-left:0;" title="<?= $__userCount ?> user<?= $__userCount === 1 ? '' : 's' ?>"></span>
                         </span></button>
                     <button type="button" class="subnav-item" data-settings-target="license"
                         onclick="navSettings('license')"><i class="fa-solid fa-key"></i> License

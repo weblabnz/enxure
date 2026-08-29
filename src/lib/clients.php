@@ -81,10 +81,13 @@ function renderClientRows(array $clients): string
 function invoxaHandleSaveClient($mysqli): void
 {
 $id = (int) ($_POST['id'] ?? 0);
-$key = strtolower(substr(preg_replace('/[^a-zA-Z0-9]/', '', $_POST['client_name']), 0, 3));
+$name = trim($_POST['client_name'] ?? '');
+if ($name === '') {
+    throw new Exception('Client name is required.');
+}
+$key = strtolower(substr(preg_replace('/[^a-zA-Z0-9]/', '', $name), 0, 3));
 if (!$key)
     $key = substr(md5(time()), 0, 3);
-$name = $_POST['client_name'];
 $email = $_POST['email'];
 $phone = $_POST['phone'] ?? '';
 $address = $_POST['address'] ?? '';

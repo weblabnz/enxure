@@ -516,6 +516,38 @@
             to { transform: rotate(360deg); }
         }
 
+        .skeleton {
+            display: inline-block;
+            width: 70px;
+            max-width: 100%;
+            height: 0.85em;
+            border-radius: 4px;
+            vertical-align: middle;
+            background: linear-gradient(90deg, var(--surface-hover) 25%, var(--border) 37%, var(--surface-hover) 63%);
+            background-size: 400% 100%;
+            animation: skeleton-shimmer 1.4s ease infinite;
+        }
+
+        @keyframes skeleton-shimmer {
+            0% { background-position: 100% 50%; }
+            100% { background-position: 0 50%; }
+        }
+
+        .stat-card.stats-loading .stat-value {
+            color: transparent;
+            position: relative;
+        }
+
+        .stat-card.stats-loading .stat-value::before {
+            content: "";
+            position: absolute;
+            inset: 0.1em 20% 0.1em 0;
+            border-radius: 4px;
+            background: linear-gradient(90deg, var(--surface-hover) 25%, var(--border) 37%, var(--surface-hover) 63%);
+            background-size: 400% 100%;
+            animation: skeleton-shimmer 1.4s ease infinite;
+        }
+
         .client-avatar {
             display: inline-flex;
             align-items: center;
@@ -1144,27 +1176,40 @@
             position: fixed;
             bottom: 2rem;
             right: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
             background: var(--success);
             color: white;
             padding: 0.9rem 1.4rem;
             border-radius: var(--radius-md);
             font-weight: 500;
-            transform: translateY(20px);
+            transform: translateY(20px) scale(0.95);
             opacity: 0;
             visibility: hidden;
-            transition: all 0.3s ease;
+            transition: transform 0.35s cubic-bezier(.34,1.56,.64,1), opacity 0.25s ease, visibility 0.35s;
             z-index: 2000;
             box-shadow: var(--shadow-lg);
         }
 
         .toast.show {
-            transform: translateY(0);
+            transform: translateY(0) scale(1);
             opacity: 1;
             visibility: visible;
         }
 
         .toast.error {
             background: var(--danger);
+        }
+
+        .toast-icon {
+            font-size: 1.05rem;
+            transform: scale(0);
+            transition: transform 0.35s cubic-bezier(.34,1.56,.64,1) 0.08s;
+        }
+
+        .toast.show .toast-icon {
+            transform: scale(1);
         }
 
         .brand-wordmark {

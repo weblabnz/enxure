@@ -201,7 +201,7 @@
                 localStorage.setItem('activeTab', section);
                 // The automatic nav(storedTab) call at page load just draws the chart
                 // from server-rendered data; an actual click triggers a full refresh below.
-                if (section === 'dashboard' && !fromClick) initChart();
+                if (section === 'dashboard' && !fromClick) { initChart(); animateStatCards(); }
                 if (section === 'backup') loadBackupList();
                 // Re-fetch the tab's content in the background, but only on an actual
                 // click — the page-load nav(storedTab) call already has fresh data.
@@ -505,6 +505,7 @@
             // The canvases themselves are left alone — renderChart() just redraws into
             // the existing ones, so no Chart.js instances need destroying/recreating.
             async function refreshDashboard() {
+                document.querySelectorAll('#dashboardStatsWrap .stat-card').forEach(el => el.classList.add('stats-loading'));
                 try {
                     const [statsHtml, activityHtml] = await Promise.all([
                         fetch('?api=table_html&which=dashboard_stats').then(r => r.text()),
@@ -513,6 +514,7 @@
                     document.getElementById('dashboardStatsWrap').innerHTML = statsHtml;
                     document.getElementById('activityTbody').innerHTML = activityHtml;
                     initChart(true);
+                    animateStatCards();
                 } catch (e) {
                     // Silent by design, same reasoning as refreshTable() above.
                 }
@@ -581,8 +583,37 @@
             });
             function showToast(msg, isError = false) {
                 const t = document.getElementById('toast');
-                t.textContent = msg; t.className = 'toast show' + (isError ? ' error' : '');
+                document.getElementById('toastMsg').textContent = msg;
+                document.getElementById('toastIcon').className = 'fa-solid toast-icon ' + (isError ? 'fa-circle-exclamation' : 'fa-circle-check');
+                t.className = 'toast show' + (isError ? ' error' : '');
                 setTimeout(() => t.className = 'toast', 3000);
+            }
+
+            function animateCountUp(el) {
+                const finalText = el.textContent;
+                const matches = [...finalText.matchAll(/[\d,]+\.?\d*/g)];
+                if (!matches.length) return;
+                const duration = 1800;
+                const start = performance.now();
+                function frame(now) {
+                    const t = Math.min(1, (now - start) / duration);
+                    const eased = 1 - Math.pow(1 - t, 3);
+                    let result = '', lastIndex = 0;
+                    matches.forEach(m => {
+                        const numStr = m[0];
+                        const decimals = numStr.includes('.') ? numStr.split('.')[1].length : 0;
+                        const current = parseFloat(numStr.replace(/,/g, '')) * eased;
+                        result += finalText.slice(lastIndex, m.index) + current.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+                        lastIndex = m.index + numStr.length;
+                    });
+                    el.textContent = result + finalText.slice(lastIndex);
+                    if (t < 1) requestAnimationFrame(frame); else el.textContent = finalText;
+                }
+                requestAnimationFrame(frame);
+            }
+
+            function animateStatCards() {
+                document.querySelectorAll('#dashboardStatsWrap .stat-value').forEach(animateCountUp);
             }
 
             // Client CRUD
@@ -650,6 +681,7 @@
                 navigator.clipboard ? navigator.clipboard.writeText(input.value).then(() => showToast('Link copied!')) : document.execCommand('copy');
             }
             async function saveClient() {
+                if (!document.getElementById('clientName').value.trim()) return showToast('Client name is required', true);
                 const btn = document.getElementById('saveClientBtn'); btn.disabled = true;
                 const data = new URLSearchParams({
                     action: 'save_client', id: document.getElementById('clientId').value, client_name: document.getElementById('clientName').value,
@@ -766,6 +798,8 @@
                 }
             }
             async function saveExpense() {
+                if (!document.getElementById('expenseVendor').value.trim()) return showToast('Vendor is required', true);
+                if (!(parseFloat(document.getElementById('expenseAmount').value) > 0)) return showToast('Amount must be greater than 0', true);
                 const btn = document.getElementById('saveExpenseBtn'); btn.disabled = true;
                 const formData = new FormData();
                 formData.append('action', 'save_expense');
@@ -812,6 +846,8 @@
                 document.getElementById('recurringExpenseModal').classList.add('active');
             }
             async function saveRecurringExpense() {
+                if (!document.getElementById('recurringExpenseVendor').value.trim()) return showToast('Vendor is required', true);
+                if (!(parseFloat(document.getElementById('recurringExpenseAmount').value) > 0)) return showToast('Amount must be greater than 0', true);
                 const btn = document.getElementById('saveRecurringExpenseBtn'); btn.disabled = true;
                 const data = new URLSearchParams({
                     action: 'save_recurring_expense',
@@ -1965,16 +2001,22 @@
                         borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3, fill: false
                     });
                 });
-                // Total line
+                // Total line, filled with a soft gradient glow so the headline
+                // cumulative figure reads at a glance against the per-client lines.
+                const revenueCanvas = document.getElementById('revenueChart');
+                const revenueCtx = revenueCanvas.getContext('2d');
+                const totalGlow = revenueCtx.createLinearGradient(0, 0, 0, revenueCanvas.clientHeight || 420);
+                totalGlow.addColorStop(0, 'rgba(79, 124, 255, 0.35)');
+                totalGlow.addColorStop(1, 'rgba(79, 124, 255, 0)');
                 datasets.push({
                     label: 'Total (All Clients)',
                     data: displayData.map(d => d.total ?? 0),
                     borderColor: '#ffffff',
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                    borderWidth: 2.5, borderDash: [6, 3], pointRadius: 2, pointHoverRadius: 5, tension: 0.3, fill: false
+                    backgroundColor: totalGlow,
+                    borderWidth: 2.5, borderDash: [6, 3], pointRadius: 2, pointHoverRadius: 5, tension: 0.3, fill: true
                 });
                 if (chartInstance) chartInstance.destroy();
-                chartInstance = new Chart(document.getElementById('revenueChart').getContext('2d'), {
+                chartInstance = new Chart(revenueCtx, {
                     type: 'line',
                     data: { labels, datasets },
                     options: {
@@ -2247,8 +2289,8 @@
                 _crmClientId = c.id;
                 document.getElementById('crmDrawerTitle').innerHTML = '<i class="fa-solid fa-user" style="color:var(--accent); margin-right:0.5rem;"></i>' + c.client_name;
                 document.getElementById('crmNotes').value = '';
-                document.getElementById('crmStats').innerHTML = '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:1rem;text-align:center;"><div style="color:var(--text-secondary);font-size:0.75rem;margin-bottom:0.25rem;">Loading...</div></div>';
-                document.getElementById('crmRecentInvoices').innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem;">Loading...</div>';
+                document.getElementById('crmStats').innerHTML = '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:1rem;text-align:center;"><span class="skeleton" style="width:90px;"></span></div>';
+                document.getElementById('crmRecentInvoices').innerHTML = '<div><span class="skeleton" style="width:140px;"></span></div>';
                 document.getElementById('crmDrawer').style.right = '0';
                 document.getElementById('crmOverlay').style.display = 'block';
                 fetchCrmData(c.id);

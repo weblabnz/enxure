@@ -541,7 +541,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
     });
     $run('Core Logic', 'invoxaResolveCurrency', 'client currency wins, blank falls back to the instance default', 'A non-blank currency (however it\'s cased) is returned uppercased; a blank one falls back to Settings > General\'s currency — the same fallback processInvoice()/save_quote/renderInvoiceRows() all use.', function () use ($settings) {
         invoxaAssertEquals('EUR', invoxaResolveCurrency('eur', $settings));
-        invoxaAssertEquals(strtoupper($settings['currency'] ?? 'USD'), invoxaResolveCurrency('', $settings));
+        invoxaAssertEquals(strtoupper($settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD')), invoxaResolveCurrency('', $settings));
     });
     $run('Core Logic', 'invoxaNormalizeCurrencyCode', 'strips non-letters, uppercases, caps at 3 characters', 'The Add/Edit Client Currency field goes through the same normalization Settings > General\'s Currency Code already used — stray digits/symbols stripped before the 3-letter cap.', function () {
         invoxaAssertEquals('EUR', invoxaNormalizeCurrencyCode(' eur '));
@@ -578,7 +578,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
         try {
             $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
-            invoxaAssertEquals(strtoupper($settings['currency'] ?? 'USD'), invoxaResolveCurrency($client['currency'] ?? '', $settings));
+            invoxaAssertEquals(strtoupper($settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD')), invoxaResolveCurrency($client['currency'] ?? '', $settings));
         } finally {
             invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
         }

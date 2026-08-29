@@ -2,6 +2,18 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.14] - 2026-08-29
+
+### Fixed
+- Settings > Users nav dot was hardcoded green regardless of how many users existed — now green only when more than one user does, matching the on/off pattern every other subnav dot already follows, since a single user isn't the multi-user ability the dot is meant to signal.
+- Two Test Suite cases ("client currency wins, blank falls back to the instance default" and "blank currency resolves to the instance default") failed on any instance where `APP_CURRENCY` differs from USD and Settings > General's currency hasn't been explicitly saved yet — their expected value only accounted for `$settings['currency']` falling back to a hardcoded `'USD'`, not `invoxaResolveCurrency()`'s actual fallback to the `APP_CURRENCY` env var. Test expectations now mirror that real fallback chain.
+- Add Client accepted a blank Client Name, silently falling back to a random 3-character client key. Add Expense and Add Recurring Expense accepted a blank Vendor and a zero/blank Amount. All three are now validated both server-side (the real guard) and client-side (immediate feedback), matching the pattern Add User already used.
+
+### Added
+- Dashboard stat cards (Total Invoiced, This Month, Outstanding, Active Clients) count up from 0 on load and on refresh instead of appearing instantly, with a skeleton shimmer placeholder while a refresh is in flight; the same shimmer replaces the "Next Auto-Run" label and the CRM drawer's bare "Loading..." text.
+- The dashboard's Total (All Clients) revenue line now fills down to a soft gradient glow instead of sitting flat and unfilled.
+- Toasts now pop in with a bouncy scale/slide and a check/exclamation icon instead of appearing as a flat text bar.
+
 ## [2.11.13] - 2026-08-29
 
 ### Added

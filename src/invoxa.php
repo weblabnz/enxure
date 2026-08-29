@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.13');
+define('APP_VERSION', '2.11.14');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -1025,6 +1025,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $category = array_key_exists($_POST['category'] ?? '', expenseCategories()) ? $_POST['category'] : 'other';
             $amount = (float) ($_POST['amount'] ?? 0);
             $description = trim($_POST['description'] ?? '');
+            if ($vendor === '') {
+                throw new Exception('Vendor is required.');
+            }
+            if ($amount <= 0) {
+                throw new Exception('Amount must be greater than 0.');
+            }
 
             if ($id > 0) {
                 $stmt = $mysqli->prepare("UPDATE invoxa_expenses SET expense_date=?, vendor=?, category=?, amount=?, description=? WHERE id=?");
@@ -1160,6 +1166,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $amount = (float) ($_POST['amount'] ?? 0);
             $description = trim($_POST['description'] ?? '');
             $frequency = in_array($_POST['frequency'] ?? '', ['weekly', 'monthly', 'quarterly', 'annually'], true) ? $_POST['frequency'] : 'monthly';
+            if ($vendor === '') {
+                throw new Exception('Vendor is required.');
+            }
+            if ($amount <= 0) {
+                throw new Exception('Amount must be greater than 0.');
+            }
             if ($id > 0) {
                 $stmt = $mysqli->prepare("UPDATE invoxa_recurring_expenses SET vendor=?, category=?, amount=?, description=?, frequency=? WHERE id=?");
                 $stmt->bind_param("sssdsi", $vendor, $category, $amount, $description, $frequency, $id);
@@ -2302,13 +2314,9 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
         <?php require_once __DIR__ . '/lib/tab_quotes.php'; ?>
         <?php require_once __DIR__ . '/lib/tabs_misc.php'; ?>
         <?php require_once __DIR__ . '/lib/tab_docs.php'; ?>
-
         <?php require_once __DIR__ . '/lib/settings_page.php'; ?>
-
         <?php require_once __DIR__ . '/lib/backup_page.php'; ?>
-
         <?php require_once __DIR__ . '/lib/page_modals.php'; ?>
-
         <?php require_once __DIR__ . '/lib/page_script.php'; ?>
 </body>
 

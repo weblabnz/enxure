@@ -3,7 +3,7 @@
             <h2 class="page-title">Dashboard
                 <div style="color:var(--text-secondary); font-size:0.9rem; font-weight:400;">
                     <i class="fa-solid fa-clock-rotate-left" style="margin-right:0.25rem;"></i>Next Auto-Run: <span
-                        id="nextCronRunDashboard" style="color:var(--accent); font-weight:600;">Loading...</span>
+                        id="nextCronRunDashboard" style="color:var(--accent); font-weight:600;"><span class="skeleton"></span></span>
                 </div>
             </h2>
             <div class="section-scroll">

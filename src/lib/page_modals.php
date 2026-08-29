@@ -12,7 +12,7 @@
                     <!-- Identity -->
                     <div class="client-form-grid">
                         <div class="form-group"><label class="form-label">Client Name</label><input type="text"
-                                id="clientName" class="form-control"></div>
+                                id="clientName" class="form-control" required></div>
                         <div class="form-group"><label class="form-label">Email Address</label><input type="email"
                                 id="clientEmail" class="form-control"></div>
                         <div class="form-group"><label class="form-label">Phone</label><input type="text"
@@ -140,7 +140,7 @@
                         </div>
                     </div>
                     <div class="form-group"><label class="form-label">Vendor</label><input type="text"
-                            id="expenseVendor" class="form-control" placeholder=""></div>
+                            id="expenseVendor" class="form-control" placeholder="" required></div>
                     <div class="form-group"><label class="form-label">Category</label>
                         <select id="expenseCategory" class="form-control">
                             <?php foreach (expenseCategories() as $__catKey => $__catLabel): ?>
@@ -149,7 +149,7 @@
                         </select>
                     </div>
                     <div class="form-group"><label class="form-label">Amount (<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>)</label>
-                        <input type="number" id="expenseAmount" class="form-control" step="0.01" min="0"></div>
+                        <input type="number" id="expenseAmount" class="form-control" step="0.01" min="0.01" required></div>
                     <div class="form-group"><label class="form-label">Description <span
                                 style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
                         <textarea id="expenseDescription" class="form-control" rows="2"></textarea>
@@ -184,7 +184,7 @@
                 <div class="modal-body">
                     <input type="hidden" id="recurringExpenseId">
                     <div class="form-group"><label class="form-label">Vendor</label><input type="text"
-                            id="recurringExpenseVendor" class="form-control" placeholder=""></div>
+                            id="recurringExpenseVendor" class="form-control" placeholder="" required></div>
                     <div class="form-group"><label class="form-label">Category</label>
                         <select id="recurringExpenseCategory" class="form-control">
                             <?php foreach (expenseCategories() as $__catKey => $__catLabel): ?>
@@ -194,7 +194,7 @@
                     </div>
                     <div style="display:flex; gap:1rem;">
                         <div class="form-group" style="flex:1;"><label class="form-label">Amount (<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>)</label>
-                            <input type="number" id="recurringExpenseAmount" class="form-control" step="0.01" min="0"></div>
+                            <input type="number" id="recurringExpenseAmount" class="form-control" step="0.01" min="0.01" required></div>
                         <div class="form-group" style="flex:1;"><label class="form-label">Frequency</label>
                             <select id="recurringExpenseFrequency" class="form-control">
                                 <option value="weekly">Weekly</option>
@@ -425,7 +425,7 @@
             </div>
         </div>
 
-        <div id="toast" class="toast">Action completed successfully</div>
+        <div id="toast" class="toast"><i id="toastIcon" class="fa-solid fa-circle-check toast-icon"></i><span id="toastMsg">Action completed successfully</span></div>
 
         <!-- Shown once, briefly, right after a login/signup redirect (?login=1) —
              see the justLoggedIn JS below. Not a toast (those are for action
