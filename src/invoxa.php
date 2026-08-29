@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.15');
+define('APP_VERSION', '2.11.16');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -1949,28 +1949,37 @@ foreach ($clients as $c) {
 }
 
 // Compute Stats
-$stats_all_time_revenue = 0;
 $stats_outstanding_revenue = 0;
 $stats_mrr = 0;
-$stats_avg_invoice = 0;
 
 $stats_default_ccy = invoxaResolveCurrency('', $settings);
 $stats_default_ccy_esc = $mysqli->real_escape_string($stats_default_ccy);
 $ccyFilterInv = "AND (currency = '' OR currency = '$stats_default_ccy_esc')";
-$ccyFilterInvI = "AND (i.currency = '' OR i.currency = '$stats_default_ccy_esc')";
 $ccyFilterClient = "AND (currency = '' OR currency = '$stats_default_ccy_esc')";
 $stats_has_other_currency = ($mysqli->query("SELECT 1 FROM invoxa_invoices WHERE currency != '' AND currency != '$stats_default_ccy_esc' LIMIT 1")->num_rows ?? 0) > 0;
 
 $res_rev = $mysqli->query("SELECT SUM(amount - COALESCE(paid_amount, 0)) as outstanding FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND is_quote = 0 $ccyFilterInv $testFilter");
 $stats_outstanding_revenue = $res_rev->fetch_assoc()['outstanding'] ?? 0;
+$res_rev_all = $mysqli->query("SELECT currency, SUM(amount - COALESCE(paid_amount, 0)) as s FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND is_quote = 0 $testFilter GROUP BY currency");
+$rows_rev_all = [];
+while ($r = $res_rev_all->fetch_assoc())
+    $rows_rev_all[] = $r;
+$stats_outstanding_revenue_by_ccy = invoxaGroupAmountsByCurrency($rows_rev_all, 's', $settings);
 
 $res_overdue = $mysqli->query("SELECT COUNT(*) as cnt FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND due_date < CURDATE() AND is_quote = 0 $testFilter");
 $stats_overdue_count = $res_overdue->fetch_assoc()['cnt'] ?? 0;
 
-$res_paid = $mysqli->query("SELECT SUM(paid_amount) as paid, AVG(paid_amount) as avg_val FROM invoxa_invoices WHERE paid_amount > 0 AND is_quote = 0 $ccyFilterInv $testFilter");
-$row_paid = $res_paid->fetch_assoc();
-$stats_all_time_revenue = $row_paid['paid'] ?? 0;
-$stats_avg_invoice = $row_paid['avg_val'] ?? 0;
+$res_paid_all = $mysqli->query("SELECT currency, SUM(paid_amount) as paid, COUNT(*) as cnt FROM invoxa_invoices WHERE paid_amount > 0 AND is_quote = 0 $testFilter GROUP BY currency");
+$rows_paid_all = [];
+while ($r = $res_paid_all->fetch_assoc())
+    $rows_paid_all[] = $r;
+$paidGrouped = invoxaGroupRowsByCurrency($rows_paid_all, ['paid', 'cnt'], $settings);
+$stats_all_time_revenue_by_ccy = [];
+$stats_avg_invoice_by_ccy = [];
+foreach ($paidGrouped as $ccy => $g) {
+    $stats_all_time_revenue_by_ccy[$ccy] = $g['paid'];
+    $stats_avg_invoice_by_ccy[$ccy] = $g['cnt'] > 0 ? $g['paid'] / $g['cnt'] : 0;
+}
 
 $now = new DateTime();
 $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1), $now);
@@ -1989,28 +1998,61 @@ $stats_ty_invoiced = $row_ty['total_invoiced'] ?? 0;
 $stats_ty_paid = $row_ty['total_paid'] ?? 0;
 $stats_ty_outstanding = $row_ty['outstanding'] ?? 0;
 
+$res_ty_all = $mysqli->query("
+    SELECT currency,
+           SUM(amount) as total_invoiced,
+           SUM(COALESCE(paid_amount, 0)) as total_paid,
+           SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding
+    FROM invoxa_invoices
+    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter
+    GROUP BY currency
+");
+$rows_ty_all = [];
+while ($r = $res_ty_all->fetch_assoc())
+    $rows_ty_all[] = $r;
+$tyGrouped = invoxaGroupRowsByCurrency($rows_ty_all, ['total_invoiced', 'total_paid', 'outstanding'], $settings);
+$stats_ty_invoiced_by_ccy = array_map(fn($g) => $g['total_invoiced'], $tyGrouped);
+$stats_ty_paid_by_ccy = array_map(fn($g) => $g['total_paid'], $tyGrouped);
+$stats_ty_outstanding_by_ccy = array_map(fn($g) => $g['outstanding'], $tyGrouped);
 
 $res_mrr = $mysqli->query("SELECT SUM(monthly_rate) as mrr FROM invoxa_clients WHERE is_active = 1 $ccyFilterClient " . invoxaTestViewClientFilter($hideTest, $showTestOnly));
 $stats_mrr = $res_mrr->fetch_assoc()['mrr'] ?? 0;
+$res_mrr_all = $mysqli->query("SELECT currency, SUM(monthly_rate) as s FROM invoxa_clients WHERE is_active = 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly) . " GROUP BY currency");
+$rows_mrr_all = [];
+while ($r = $res_mrr_all->fetch_assoc())
+    $rows_mrr_all[] = $r;
+$stats_mrr_by_ccy = invoxaGroupAmountsByCurrency($rows_mrr_all, 's', $settings);
 
 $stats_12m_projected = ($stats_mrr * 12) + $stats_outstanding_revenue;
 
-// Top clients
+// Top clients — grouped by (client, currency) rather than filtered to the
+// default currency, so a client billed in another currency still shows up
+// (with its own currency breakdown) instead of dropping out of the ranking.
 $top_clients = [];
+$topClientsAgg = [];
 $res_top = $mysqli->query("
-    SELECT c.client_name, SUM(i.paid_amount) as total_revenue
+    SELECT c.client_name, i.currency, SUM(i.paid_amount) as total_revenue
     FROM invoxa_invoices i
     JOIN invoxa_clients c ON i.client_key = c.client_key
-    WHERE i.paid_amount > 0 AND i.is_quote = 0 $ccyFilterInvI " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
-    GROUP BY c.client_name
-    ORDER BY total_revenue DESC
-    LIMIT 5
+    WHERE i.paid_amount > 0 AND i.is_quote = 0 " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
+    GROUP BY c.client_name, i.currency
 ");
 if ($res_top) {
     while ($r = $res_top->fetch_assoc()) {
-        $top_clients[] = $r;
+        $ccy = invoxaResolveCurrency($r['currency'], $settings);
+        $name = $r['client_name'];
+        if (!isset($topClientsAgg[$name])) {
+            $topClientsAgg[$name] = ['client_name' => $name, 'by_ccy' => []];
+        }
+        $topClientsAgg[$name]['by_ccy'][$ccy] = ($topClientsAgg[$name]['by_ccy'][$ccy] ?? 0) + (float) $r['total_revenue'];
     }
 }
+foreach ($topClientsAgg as &$tc) {
+    $tc['total_revenue'] = array_sum($tc['by_ccy']);
+}
+unset($tc);
+usort($topClientsAgg, fn($a, $b) => $b['total_revenue'] <=> $a['total_revenue']);
+$top_clients = array_slice(array_values($topClientsAgg), 0, 5);
 
 // Payment Velocity (last 3 months only)
 $res_vel = $mysqli->query("
@@ -2031,17 +2073,25 @@ $stats_client_ratio = ($stats_inactive_clients > 0) ? round($stats_active_client
 
 // Void Summary (all-time) — invoiced amount excluded from every other total
 // via the void status (see computeInvoiceTotals()/status filters above).
-$res_void = $mysqli->query("SELECT COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE status = 'void' AND is_quote = 0 $ccyFilterInv $testFilter");
-$row_void = $res_void->fetch_assoc();
-$stats_void_count = (int) ($row_void['c'] ?? 0);
-$stats_void_amount = $row_void['total'] ?? 0;
+// Grouped by currency rather than filtered to the default one, so a voided
+// invoice in another currency still counts and shows in its own bucket.
+$res_void = $mysqli->query("SELECT currency, COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE status = 'void' AND is_quote = 0 $testFilter GROUP BY currency");
+$rows_void = [];
+while ($r = $res_void->fetch_assoc())
+    $rows_void[] = $r;
+$voidGrouped = invoxaGroupRowsByCurrency($rows_void, ['c', 'total'], $settings);
+$stats_void_count = (int) array_sum(array_map(fn($g) => $g['c'], $voidGrouped));
+$stats_void_amount_by_ccy = array_map(fn($g) => $g['total'], $voidGrouped);
 
 // Quote Pipeline — quotes still open (not yet converted, not voided). Once a
 // quote converts, is_quote flips to 0 and it drops out of this count.
-$res_pipeline = $mysqli->query("SELECT COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 1 AND status != 'void' $ccyFilterInv $testFilter");
-$row_pipeline = $res_pipeline->fetch_assoc();
-$stats_quote_pipeline_count = (int) ($row_pipeline['c'] ?? 0);
-$stats_quote_pipeline_value = $row_pipeline['total'] ?? 0;
+$res_pipeline = $mysqli->query("SELECT currency, COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 1 AND status != 'void' $testFilter GROUP BY currency");
+$rows_pipeline = [];
+while ($r = $res_pipeline->fetch_assoc())
+    $rows_pipeline[] = $r;
+$pipelineGrouped = invoxaGroupRowsByCurrency($rows_pipeline, ['c', 'total'], $settings);
+$stats_quote_pipeline_count = (int) array_sum(array_map(fn($g) => $g['c'], $pipelineGrouped));
+$stats_quote_pipeline_value_by_ccy = array_map(fn($g) => $g['total'], $pipelineGrouped);
 
 // AR Aging — standard "how overdue is what's outstanding" breakdown, bucketed
 // by days past due date. "Current" means not yet due.
@@ -2108,22 +2158,62 @@ $stats_email_success_rate = $stats_email_total > 0 ? round($stats_email_sent / $
 
 // Tax Year monthly breakdown — same query the "Monthly Summary" CSV export
 // uses (see ?export=tax_year_monthly), surfaced inline here instead of only
-// as a download.
+// as a download. The chart below plots the default currency only (a single
+// axis can't meaningfully mix currencies); the table shows every currency
+// via each row's by_ccy breakdown.
 $stats_ty_monthly = [];
 $res_ty_monthly = $mysqli->query("
     SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month,
            SUM(amount) as total_invoiced,
            SUM(COALESCE(paid_amount, 0)) as total_paid,
-           SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding,
-           SUM(CASE WHEN status NOT IN ('paid') THEN 1 ELSE 0 END) as unpaid_count
+           SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding
     FROM invoxa_invoices
     WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $ccyFilterInv $testFilter
     GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
     ORDER BY month ASC
 ");
+$tyMonthlyDefault = [];
 if ($res_ty_monthly) {
     while ($r = $res_ty_monthly->fetch_assoc())
-        $stats_ty_monthly[] = $r;
+        $tyMonthlyDefault[$r['month']] = $r;
+}
+$res_ty_monthly_all = $mysqli->query("
+    SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month, currency,
+           SUM(amount) as total_invoiced,
+           SUM(COALESCE(paid_amount, 0)) as total_paid,
+           SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding,
+           SUM(CASE WHEN status NOT IN ('paid') THEN 1 ELSE 0 END) as unpaid_count
+    FROM invoxa_invoices
+    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter
+    GROUP BY DATE_FORMAT(invoice_date, '%Y-%m'), currency
+");
+$tyMonthlyByCcy = [];
+$tyMonthlyUnpaid = [];
+if ($res_ty_monthly_all) {
+    while ($r = $res_ty_monthly_all->fetch_assoc()) {
+        $ccy = invoxaResolveCurrency($r['currency'], $settings);
+        $m = $r['month'];
+        if (!isset($tyMonthlyByCcy[$m])) {
+            $tyMonthlyByCcy[$m] = ['invoiced' => [], 'paid' => [], 'outstanding' => []];
+        }
+        $tyMonthlyByCcy[$m]['invoiced'][$ccy] = ($tyMonthlyByCcy[$m]['invoiced'][$ccy] ?? 0) + (float) $r['total_invoiced'];
+        $tyMonthlyByCcy[$m]['paid'][$ccy] = ($tyMonthlyByCcy[$m]['paid'][$ccy] ?? 0) + (float) $r['total_paid'];
+        $tyMonthlyByCcy[$m]['outstanding'][$ccy] = ($tyMonthlyByCcy[$m]['outstanding'][$ccy] ?? 0) + (float) $r['outstanding'];
+        $tyMonthlyUnpaid[$m] = ($tyMonthlyUnpaid[$m] ?? 0) + (int) $r['unpaid_count'];
+    }
+}
+$tyMonths = array_unique(array_merge(array_keys($tyMonthlyDefault), array_keys($tyMonthlyByCcy)));
+sort($tyMonths);
+foreach ($tyMonths as $m) {
+    $d = $tyMonthlyDefault[$m] ?? ['total_invoiced' => 0, 'total_paid' => 0, 'outstanding' => 0];
+    $stats_ty_monthly[] = [
+        'month' => $m,
+        'total_invoiced' => (float) $d['total_invoiced'],
+        'total_paid' => (float) $d['total_paid'],
+        'outstanding' => (float) $d['outstanding'],
+        'unpaid_count' => (int) ($tyMonthlyUnpaid[$m] ?? 0),
+        'by_ccy' => $tyMonthlyByCcy[$m] ?? ['invoiced' => [], 'paid' => [], 'outstanding' => []],
+    ];
 }
 // How far through the current tax year "today" is, for a simple progress bar.
 $taxYearEnd = (clone $taxYearStart)->modify('+1 year')->modify('-1 second');

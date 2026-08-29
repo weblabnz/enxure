@@ -2751,7 +2751,11 @@
 
             // ── Tax Year / Monthly Summary Preview Modals ─────────────────────────
             let _csvCurrentData = null; // { type: 'detail'|'monthly', rows, cols, keys }
-            function _fmt(n) { return '$' + parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+            function _fmt(n) {
+                if (n === null || n === undefined) return '—';
+                if (typeof n === 'string' && isNaN(Number(n))) return n;
+                return '$' + parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
 
             function _csvEscape(v) {
                 const s = (v == null ? '' : String(v));
@@ -2778,7 +2782,7 @@
                 const cards = [
                     { label: 'Total Invoiced', value: _fmt(data.total_invoiced), color: 'var(--accent)' },
                     { label: 'Total Paid', value: _fmt(data.total_paid), color: 'var(--success)' },
-                    { label: 'Outstanding', value: _fmt(data.outstanding), color: data.outstanding > 0 ? 'var(--warning)' : 'var(--success)' },
+                    { label: 'Outstanding', value: _fmt(data.outstanding), color: (typeof data.outstanding !== 'number' || data.outstanding > 0) ? 'var(--warning)' : 'var(--success)' },
                 ];
                 // Only present once expenses exist for the period — keeps the stat row
                 // exactly as before for anyone who's never logged an expense.
@@ -2828,8 +2832,8 @@
                     document.getElementById('csvPreviewSubtitle').textContent = `Tax Year: ${data.label} (ordered by invoice date)`;
                     _renderCsvStats(data);
 
-                    const cols = ['Invoice #', 'Client', 'Invoice Date', 'Due Date', 'Amount', 'Status', 'Paid Amount', 'Paid Date'];
-                    const keys = ['invoice_number', 'client_name', 'invoice_date', 'due_date', 'amount', 'status', 'paid_amount', 'paid_at'];
+                    const cols = ['Invoice #', 'Client', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date'];
+                    const keys = ['invoice_number', 'client_name', 'invoice_date', 'due_date', 'amount', 'currency', 'status', 'paid_amount', 'paid_at'];
 
                     // Store flat CSV rows for clipboard
                     _csvCurrentData = {
@@ -2886,19 +2890,20 @@
                     document.getElementById('csvPreviewSubtitle').textContent = `Tax Year: ${data.label} — monthly totals`;
                     _renderCsvStats(data);
 
-                    const cols = ['Month', 'Total Invoiced', 'Total Paid', 'Outstanding', 'Payment Status', 'Expenses', 'Net Income'];
+                    const cols = ['Month', 'Currency', 'Total Invoiced', 'Total Paid', 'Outstanding', 'Payment Status', 'Expenses', 'Net Income'];
 
                     // Store flat CSV rows for clipboard
                     _csvCurrentData = {
                         cols,
                         rows: data.rows.map(r => [
                             r.month_label,
+                            r.currency,
                             parseFloat(r.total_invoiced).toFixed(2),
                             parseFloat(r.total_paid).toFixed(2),
                             parseFloat(r.outstanding).toFixed(2),
                             r.pay_status,
-                            parseFloat(r.month_expenses).toFixed(2),
-                            parseFloat(r.month_net_income).toFixed(2)
+                            r.month_net_income === null ? '' : parseFloat(r.month_expenses).toFixed(2),
+                            r.month_net_income === null ? '' : parseFloat(r.month_net_income).toFixed(2)
                         ])
                     };
 
@@ -2910,12 +2915,13 @@
                         const bg = i % 2 === 0 ? '' : 'background:rgba(255,255,255,0.025);';
                         return `<tr style="${bg}">
                             <td style="${tdStyle}; font-weight:600;">${r.month_label}</td>
+                            <td style="${tdStyle}">${r.currency}</td>
                             <td style="${tdStyle}">${_fmt(r.total_invoiced)}</td>
                             <td style="${tdStyle}; color:var(--success);">${_fmt(r.total_paid)}</td>
                             <td style="${tdStyle}; color:${parseFloat(r.outstanding) > 0 ? 'var(--warning)' : 'var(--success)'}">${_fmt(r.outstanding)}</td>
                             <td style="${tdStyle}"><span style="${_statusBadgeStyle(r.pay_status)}">${r.pay_status}</span></td>
-                            <td style="${tdStyle}; color:var(--danger);">${_fmt(r.month_expenses)}</td>
-                            <td style="${tdStyle}; color:${parseFloat(r.month_net_income) >= 0 ? 'var(--success)' : 'var(--danger)'}">${_fmt(r.month_net_income)}</td>
+                            <td style="${tdStyle}; color:var(--danger);">${r.month_net_income === null ? '—' : _fmt(r.month_expenses)}</td>
+                            <td style="${tdStyle}; color:${r.month_net_income === null ? 'var(--text-secondary)' : (r.month_net_income >= 0 ? 'var(--success)' : 'var(--danger)')}">${_fmt(r.month_net_income)}</td>
                         </tr>`;
                     }).join('');
 

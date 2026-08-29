@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.16] - 2026-08-30
+
+### Fixed
+- Statistics, the Top 5 Clients table, and the Tax Year / Monthly Summary / Accounting Journal / QuickBooks (IIF) exports silently excluded any invoice, payment, or client in a currency other than the instance default instead of accounting for it. They're now grouped in: Stats cards and tables show every currency (e.g. "USD $500.00 + EUR $200.00"), the Monthly Summary CSV emits one row per month per currency, and the Accounting Journal/IIF exports post other-currency entries to a currency-suffixed account (e.g. "Accounts Receivable (EUR)") so debits and credits still balance within their own currency instead of blending into the default-currency ledger. Stats' charts, the 12-Month Forecasting tab, and AR Aging still total in the default currency only, since a single chart axis or forecast can't meaningfully mix currencies without an exchange rate — the page's banner now says so accurately instead of claiming the whole page was default-currency-only.
+
 ## [2.11.15] - 2026-08-29
 
 ### Added

@@ -78,10 +78,11 @@ function renderStatsSection(): string
 {
     global $licenseValid;
     global $taxYearLabel, $stats_ty_invoiced, $stats_ty_paid, $stats_ty_outstanding,
-    $stats_all_time_revenue, $stats_outstanding_revenue, $stats_overdue_count, $stats_mrr, $stats_avg_invoice,
+    $stats_ty_invoiced_by_ccy, $stats_ty_paid_by_ccy, $stats_ty_outstanding_by_ccy,
+    $stats_all_time_revenue_by_ccy, $stats_outstanding_revenue, $stats_outstanding_revenue_by_ccy, $stats_overdue_count, $stats_mrr, $stats_mrr_by_ccy, $stats_avg_invoice_by_ccy,
     $stats_12m_projected, $stats_avg_days, $stats_active_clients, $stats_inactive_clients, $stats_client_ratio,
     $top_clients, $stats_db_rows, $backup_count, $latest_backup, $all_tables_info,
-    $stats_void_count, $stats_void_amount, $stats_quote_pipeline_count, $stats_quote_pipeline_value, $stats_aging,
+    $stats_void_count, $stats_void_amount_by_ccy, $stats_quote_pipeline_count, $stats_quote_pipeline_value_by_ccy, $stats_aging,
     $stats_new_clients_month, $stats_billing_freq, $clients_needing_attention,
     $stats_email_sent, $stats_email_failed, $stats_email_total, $stats_email_success_rate,
     $stats_ty_monthly, $stats_tax_year_days_total, $stats_tax_year_days_elapsed, $stats_tax_year_progress_pct,
@@ -97,9 +98,9 @@ function renderStatsSection(): string
         <div class="card" style="border-left:3px solid var(--warning); margin: 0 1.5rem 1.75rem;">
             <div class="card-body" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
                 <i class="fa-solid fa-circle-info" style="color:var(--warning); font-size:1.1rem;"></i>
-                <div><strong>These figures are in <?= htmlspecialchars($stats_default_ccy) ?> only.</strong>
+                <div><strong>Charts, Forecasting &amp; AR Aging total in <?= htmlspecialchars($stats_default_ccy) ?> only.</strong>
                     <span style="color:var(--text-secondary); font-size:0.85rem; display:block; margin-top:0.15rem;">
-                        You have invoices/clients in another currency — they're excluded from every total, chart, and export on this page rather than being blended in. See the Invoices/Clients tabs for those.</span>
+                        Every other total, table, and export on this page groups in every currency instead.</span>
                 </div>
             </div>
         </div>
@@ -152,16 +153,16 @@ function renderStatsSection(): string
                         <div class="stats-grid" style="margin-bottom: 0;">
                             <div class="stat-card" style="border-top: 3px solid #3b82f6;">
                                 <div class="label">Total Invoiced</div>
-                                <div class="value">$<?= number_format($stats_ty_invoiced, 2) ?></div>
+                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_invoiced_by_ccy) ?></div>
                             </div>
                             <div class="stat-card" style="border-top: 3px solid #10b981;">
                                 <div class="label">Total Paid</div>
-                                <div class="value">$<?= number_format($stats_ty_paid, 2) ?></div>
+                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_paid_by_ccy) ?></div>
                             </div>
                             <div class="stat-card"
                                 style="border-top: 3px solid <?= $stats_ty_outstanding > 0 ? '#f59e0b' : '#10b981' ?>;">
                                 <div class="label">Outstanding</div>
-                                <div class="value">$<?= number_format($stats_ty_outstanding, 2) ?></div>
+                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_outstanding_by_ccy) ?></div>
                             </div>
                         </div>
                     </div>
@@ -192,11 +193,11 @@ function renderStatsSection(): string
                         <div class="stats-grid" style="margin-bottom: 0;">
                             <div class="stat-card" style="border-top: 3px solid #10b981;">
                                 <div class="label">All-Time Revenue</div>
-                                <div class="value">$<?= number_format($stats_all_time_revenue, 2) ?></div>
+                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_all_time_revenue_by_ccy) ?></div>
                             </div>
                             <div class="stat-card" style="border-top: 3px solid #ef4444;">
                                 <div class="label">Outstanding Receivables</div>
-                                <div class="value">$<?= number_format($stats_outstanding_revenue, 2) ?> <span
+                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_outstanding_revenue_by_ccy) ?> <span
                                         style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_overdue_count ?>
                                         overdue)</span></div>
                             </div>
@@ -204,11 +205,11 @@ function renderStatsSection(): string
                                 <div class="label">Monthly Recurring (<span class="has-tooltip"
                                         data-tip="Monthly Recurring Revenue — total fixed monthly fees from active clients">MRR</span>)
                                 </div>
-                                <div class="value">$<?= number_format($stats_mrr, 2) ?></div>
+                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_mrr_by_ccy) ?></div>
                             </div>
                             <div class="stat-card" style="border-top: 3px solid #3b82f6;">
                                 <div class="label">Average Invoice Value</div>
-                                <div class="value">$<?= number_format($stats_avg_invoice, 2) ?></div>
+                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_avg_invoice_by_ccy) ?></div>
                             </div>
                         </div>
                     </div>
@@ -222,13 +223,13 @@ function renderStatsSection(): string
                         <div class="stats-grid" style="margin-bottom: 0;">
                             <div class="stat-card" style="border-top: 3px solid #8b5cf6;">
                                 <div class="label">Open Quote Pipeline</div>
-                                <div class="value">$<?= number_format($stats_quote_pipeline_value, 2) ?> <span
+                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_quote_pipeline_value_by_ccy) ?> <span
                                         style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_quote_pipeline_count ?>
                                         open)</span></div>
                             </div>
                             <div class="stat-card" style="border-top: 3px solid var(--text-secondary);">
                                 <div class="label">Voided (All-Time)</div>
-                                <div class="value">$<?= number_format($stats_void_amount, 2) ?> <span
+                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_void_amount_by_ccy) ?> <span
                                         style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_void_count ?>
                                         invoice<?= $stats_void_count === 1 ? '' : 's' ?>)</span></div>
                             </div>
@@ -440,7 +441,7 @@ function renderStatsSection(): string
                                                     <?= htmlspecialchars($tc['client_name']) ?>
                                                 </td>
                                                 <td style="padding: 1rem; text-align: right; font-weight: 600; color: #10b981;">
-                                                    $<?= number_format($tc['total_revenue'], 2) ?>
+                                                    <?= invoxaFormatMoneyByCurrency($tc['by_ccy']) ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -604,9 +605,9 @@ function renderStatsSection(): string
                                     <?php foreach ($stats_ty_monthly as $tym): ?>
                                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                                             <td style="padding: 1rem;"><?= htmlspecialchars($tym['month']) ?></td>
-                                            <td style="padding: 1rem; text-align: right;">$<?= number_format($tym['total_invoiced'], 2) ?></td>
-                                            <td style="padding: 1rem; text-align: right; color:#10b981;">$<?= number_format($tym['total_paid'], 2) ?></td>
-                                            <td style="padding: 1rem; text-align: right; color:var(--warning);">$<?= number_format($tym['outstanding'], 2) ?></td>
+                                            <td style="padding: 1rem; text-align: right;"><?= invoxaFormatMoneyByCurrency($tym['by_ccy']['invoiced']) ?></td>
+                                            <td style="padding: 1rem; text-align: right; color:#10b981;"><?= invoxaFormatMoneyByCurrency($tym['by_ccy']['paid']) ?></td>
+                                            <td style="padding: 1rem; text-align: right; color:var(--warning);"><?= invoxaFormatMoneyByCurrency($tym['by_ccy']['outstanding']) ?></td>
                                             <td style="padding: 1rem; text-align: right;"><?= (int) $tym['unpaid_count'] ?></td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -931,20 +932,32 @@ $hideTest2 = ($hideTestRes2 && $hideTestRes2->num_rows > 0) ? ($hideTestRes2->fe
 $showTestOnlyRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
 $showTestOnly2 = ($showTestOnlyRes2 && $showTestOnlyRes2->num_rows > 0) ? ($showTestOnlyRes2->fetch_assoc()['setting_value'] === '1') : false;
 $tf2 = invoxaTestViewFilter($hideTest2, $showTestOnly2);
-$defaultCcyEsc2 = $mysqli->real_escape_string(invoxaResolveCurrency('', $settings));
-$res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' AND (currency = '' OR currency = '$defaultCcyEsc2') $tf2 ORDER BY invoice_date ASC");
+$defaultCcy2 = invoxaResolveCurrency('', $settings);
+$res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $tf2 ORDER BY invoice_date ASC");
 $rows = [];
-$totalInvoiced = 0;
-$totalPaid = 0;
+$invoicedByCcy = [];
+$paidByCcy = [];
+$defaultPaid = 0.0;
 while ($r = $res->fetch_assoc()) {
+    $ccy = invoxaResolveCurrency($r['currency'], $settings);
+    $r['currency'] = $ccy;
     $rows[] = $r;
-    $totalInvoiced += (float) $r['amount'];
-    $totalPaid += (float) $r['paid_amount'];
+    $invoicedByCcy[$ccy] = ($invoicedByCcy[$ccy] ?? 0) + (float) $r['amount'];
+    $paidByCcy[$ccy] = ($paidByCcy[$ccy] ?? 0) + (float) $r['paid_amount'];
+    if ($ccy === $defaultCcy2) {
+        $defaultPaid += (float) $r['paid_amount'];
+    }
+}
+$outstandingByCcy = [];
+foreach ($invoicedByCcy as $ccy => $inv) {
+    $outstandingByCcy[$ccy] = $inv - ($paidByCcy[$ccy] ?? 0);
 }
 // Cash-basis net income (paid revenue minus expenses over the same tax-year
 // window) — unlike Total Invoiced above, this excludes unpaid billings.
+// Kept in the default currency only, since expenses have no currency field
+// to convert other-currency revenue against.
 $totalExpenses = (float) ($mysqli->query("SELECT SUM(amount) as s FROM invoxa_expenses WHERE expense_date >= '$startStr'")->fetch_assoc()['s'] ?? 0);
-echo json_encode(['success' => true, 'rows' => $rows, 'label' => $taxYearLabel, 'start' => $startStr, 'total_invoiced' => $totalInvoiced, 'total_paid' => $totalPaid, 'outstanding' => $totalInvoiced - $totalPaid, 'total_expenses' => $totalExpenses, 'net_income' => $totalPaid - $totalExpenses]);
+echo json_encode(['success' => true, 'rows' => $rows, 'label' => $taxYearLabel, 'start' => $startStr, 'total_invoiced' => invoxaStatDisplay($invoicedByCcy), 'total_paid' => invoxaStatDisplay($paidByCcy), 'outstanding' => invoxaStatDisplay($outstandingByCcy), 'total_expenses' => $totalExpenses, 'net_income' => $defaultPaid - $totalExpenses]);
 exit;
 }
 
@@ -959,52 +972,80 @@ $hideTest2 = ($hideTestRes2 && $hideTestRes2->num_rows > 0) ? ($hideTestRes2->fe
 $showTestOnlyRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
 $showTestOnly2 = ($showTestOnlyRes2 && $showTestOnlyRes2->num_rows > 0) ? ($showTestOnlyRes2->fetch_assoc()['setting_value'] === '1') : false;
 $tf2 = invoxaTestViewFilter($hideTest2, $showTestOnly2);
-$defaultCcyEsc3 = $mysqli->real_escape_string(invoxaResolveCurrency('', $settings));
+$defaultCcy3 = invoxaResolveCurrency('', $settings);
+// One row per month per currency — no exclusion, so an other-currency month
+// still shows up instead of being dropped from the summary.
 $res = $mysqli->query("
-    SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month,
+    SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month, currency,
            SUM(amount) as total_invoiced,
            SUM(COALESCE(paid_amount, 0)) as total_paid,
            SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding,
            SUM(CASE WHEN status NOT IN ('paid') THEN 1 ELSE 0 END) as unpaid_count
     FROM invoxa_invoices
-    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' AND (currency = '' OR currency = '$defaultCcyEsc3') $tf2
-    GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
+    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $tf2
+    GROUP BY DATE_FORMAT(invoice_date, '%Y-%m'), currency
     ORDER BY month ASC
 ");
+$byMonthCcy = [];
+while ($r = $res->fetch_assoc()) {
+    $ccy = invoxaResolveCurrency($r['currency'], $settings);
+    $key = $r['month'] . '|' . $ccy;
+    if (!isset($byMonthCcy[$key])) {
+        $byMonthCcy[$key] = ['month' => $r['month'], 'currency' => $ccy, 'total_invoiced' => 0.0, 'total_paid' => 0.0, 'outstanding' => 0.0, 'unpaid_count' => 0];
+    }
+    $byMonthCcy[$key]['total_invoiced'] += (float) $r['total_invoiced'];
+    $byMonthCcy[$key]['total_paid'] += (float) $r['total_paid'];
+    $byMonthCcy[$key]['outstanding'] += (float) $r['outstanding'];
+    $byMonthCcy[$key]['unpaid_count'] += (int) $r['unpaid_count'];
+}
 $expensesByMonth = [];
 $expRes = $mysqli->query("SELECT DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(amount) as total FROM invoxa_expenses WHERE expense_date >= '$startStr' GROUP BY DATE_FORMAT(expense_date, '%Y-%m')");
 while ($er = $expRes->fetch_assoc())
     $expensesByMonth[$er['month']] = (float) $er['total'];
 
+// Expenses have no currency field, so they (and the Net Income they feed
+// into) are only ever attributed to each month's default-currency row.
 $rows = [];
-$totalInvoiced = 0;
-$totalPaid = 0;
-$totalExpenses = 0;
-while ($r = $res->fetch_assoc()) {
+$invoicedByCcy = [];
+$paidByCcy = [];
+$defaultPaidTotal = 0.0;
+$totalExpenses = 0.0;
+$defaultCcyMonthsSeen = [];
+foreach ($byMonthCcy as $r) {
     $dt2 = DateTime::createFromFormat('Y-m', $r['month']);
     $r['month_label'] = $dt2 ? $dt2->format('F Y') : $r['month'];
-    $outstanding = round((float) $r['outstanding'], 2);
+    $outstanding = round($r['outstanding'], 2);
     if ($r['unpaid_count'] > 0 && $outstanding > 0)
         $r['pay_status'] = 'Partial Paid';
     elseif ($outstanding <= 0)
         $r['pay_status'] = 'Paid';
     else
         $r['pay_status'] = 'Unpaid';
-    $monthExpenses = $expensesByMonth[$r['month']] ?? 0.0;
-    unset($expensesByMonth[$r['month']]);
+    $isDefaultCcy = $r['currency'] === $defaultCcy3;
+    $monthExpenses = $isDefaultCcy ? ($expensesByMonth[$r['month']] ?? 0.0) : 0.0;
     $r['month_expenses'] = $monthExpenses;
-    $r['month_net_income'] = (float) $r['total_paid'] - $monthExpenses;
-    $totalInvoiced += (float) $r['total_invoiced'];
-    $totalPaid += (float) $r['total_paid'];
-    $totalExpenses += $monthExpenses;
+    $r['month_net_income'] = $isDefaultCcy ? ($r['total_paid'] - $monthExpenses) : null;
+    $invoicedByCcy[$r['currency']] = ($invoicedByCcy[$r['currency']] ?? 0) + $r['total_invoiced'];
+    $paidByCcy[$r['currency']] = ($paidByCcy[$r['currency']] ?? 0) + $r['total_paid'];
+    if ($isDefaultCcy) {
+        $defaultPaidTotal += $r['total_paid'];
+        $totalExpenses += $monthExpenses;
+        $defaultCcyMonthsSeen[$r['month']] = true;
+    }
     $rows[] = $r;
 }
-// Months with expenses but no invoices that month still belong in the
-// tax-year total even though they never generated a $res row above.
+// Months with expenses but no default-currency invoices that month still
+// belong in the tax-year total even though they never generated a row above.
 foreach ($expensesByMonth as $leftoverMonth => $leftoverAmount) {
-    $totalExpenses += $leftoverAmount;
+    if (!isset($defaultCcyMonthsSeen[$leftoverMonth])) {
+        $totalExpenses += $leftoverAmount;
+    }
 }
-echo json_encode(['success' => true, 'rows' => $rows, 'label' => $taxYearLabel, 'start' => $startStr, 'total_invoiced' => $totalInvoiced, 'total_paid' => $totalPaid, 'outstanding' => $totalInvoiced - $totalPaid, 'total_expenses' => $totalExpenses, 'net_income' => $totalPaid - $totalExpenses]);
+$outstandingByCcy = [];
+foreach ($invoicedByCcy as $ccy => $inv) {
+    $outstandingByCcy[$ccy] = $inv - ($paidByCcy[$ccy] ?? 0);
+}
+echo json_encode(['success' => true, 'rows' => $rows, 'label' => $taxYearLabel, 'start' => $startStr, 'total_invoiced' => invoxaStatDisplay($invoicedByCcy), 'total_paid' => invoxaStatDisplay($paidByCcy), 'outstanding' => invoxaStatDisplay($outstandingByCcy), 'total_expenses' => $totalExpenses, 'net_income' => $defaultPaidTotal - $totalExpenses]);
 exit;
 }
 

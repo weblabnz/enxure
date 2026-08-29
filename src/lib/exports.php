@@ -5,36 +5,45 @@
 // Builds a simple double-entry General Journal from invoices, payments,
 // and logged expenses — for handing to an accountant or importing into a
 // bookkeeping tool. One row per side of each entry (Date, Account, Debit,
-// Credit, Memo, Reference):
+// Credit, Memo, Reference, Currency):
 //   - Invoice issued:      Dr Accounts Receivable / Cr Sales Income
 //   - Payment received:    Dr Cash & Bank / Cr Accounts Receivable
 //   - Expense logged:      Dr <category> Expense / Cr Cash & Bank
 // Fixed 4-account chart (plus one Expense account per expenseCategories()
 // entry), not user-configurable — single-admin, no multi-entity
-// bookkeeping. Every entry balances, making this genuinely importable.
+// bookkeeping. Every entry balances within its own currency: an
+// other-currency invoice/payment posts to accounts suffixed " (CCY)" rather
+// than blending into the default-currency Accounts Receivable/Sales Income/
+// Cash & Bank balances (expenses have no currency field, so always post to
+// the plain default-currency accounts).
 function buildAccountingJournal($mysqli, array $settings, string $startDate, string $testFilter): array
 {
     $categories = expenseCategories();
     $rows = [];
-    $defaultCcy = $mysqli->real_escape_string(invoxaResolveCurrency('', $settings));
-    $ccyFilter = "AND (currency = '' OR currency = '$defaultCcy')";
+    $defaultCcy = invoxaResolveCurrency('', $settings);
+    $ccyAccount = function (string $account, string $recordCurrency) use ($settings, $defaultCcy): string {
+        $ccy = invoxaResolveCurrency($recordCurrency, $settings);
+        return $ccy === $defaultCcy ? $account : "$account ($ccy)";
+    };
 
-    $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, amount FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startDate' $ccyFilter $testFilter ORDER BY invoice_date ASC");
+    $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, amount, currency FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startDate' $testFilter ORDER BY invoice_date ASC");
     while ($r = $res->fetch_assoc()) {
         $date = substr($r['invoice_date'], 0, 10);
         $memo = "Invoice {$r['invoice_number']} — {$r['client_name']}";
         $amount = round((float) $r['amount'], 2);
-        $rows[] = ['date' => $date, 'account' => 'Accounts Receivable', 'debit' => $amount, 'credit' => 0, 'memo' => $memo, 'ref' => $r['invoice_number']];
-        $rows[] = ['date' => $date, 'account' => 'Sales Income', 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => $r['invoice_number']];
+        $ccy = invoxaResolveCurrency($r['currency'] ?? '', $settings);
+        $rows[] = ['date' => $date, 'account' => $ccyAccount('Accounts Receivable', $r['currency']), 'debit' => $amount, 'credit' => 0, 'memo' => $memo, 'ref' => $r['invoice_number'], 'currency' => $ccy];
+        $rows[] = ['date' => $date, 'account' => $ccyAccount('Sales Income', $r['currency']), 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => $r['invoice_number'], 'currency' => $ccy];
     }
 
-    $res = $mysqli->query("SELECT invoice_number, client_name, paid_at, paid_amount FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND paid_amount > 0 AND paid_at >= '$startDate' $ccyFilter $testFilter ORDER BY paid_at ASC");
+    $res = $mysqli->query("SELECT invoice_number, client_name, paid_at, paid_amount, currency FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND paid_amount > 0 AND paid_at >= '$startDate' $testFilter ORDER BY paid_at ASC");
     while ($r = $res->fetch_assoc()) {
         $date = substr($r['paid_at'], 0, 10);
         $memo = "Payment received for invoice {$r['invoice_number']} — {$r['client_name']}";
         $amount = round((float) $r['paid_amount'], 2);
-        $rows[] = ['date' => $date, 'account' => 'Cash & Bank', 'debit' => $amount, 'credit' => 0, 'memo' => $memo, 'ref' => $r['invoice_number']];
-        $rows[] = ['date' => $date, 'account' => 'Accounts Receivable', 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => $r['invoice_number']];
+        $ccy = invoxaResolveCurrency($r['currency'] ?? '', $settings);
+        $rows[] = ['date' => $date, 'account' => $ccyAccount('Cash & Bank', $r['currency']), 'debit' => $amount, 'credit' => 0, 'memo' => $memo, 'ref' => $r['invoice_number'], 'currency' => $ccy];
+        $rows[] = ['date' => $date, 'account' => $ccyAccount('Accounts Receivable', $r['currency']), 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => $r['invoice_number'], 'currency' => $ccy];
     }
 
     $res = $mysqli->query("SELECT id, expense_date, vendor, category, amount FROM invoxa_expenses WHERE expense_date >= '$startDate' ORDER BY expense_date ASC");
@@ -43,8 +52,8 @@ function buildAccountingJournal($mysqli, array $settings, string $startDate, str
         $account = ($categories[$r['category']] ?? ucfirst($r['category'])) . ' Expense';
         $memo = trim($r['vendor'] . ($r['vendor'] !== '' ? ' — ' : '') . 'Expense #' . $r['id']);
         $amount = round((float) $r['amount'], 2);
-        $rows[] = ['date' => $date, 'account' => $account, 'debit' => $amount, 'credit' => 0, 'memo' => $memo, 'ref' => 'EXP-' . $r['id']];
-        $rows[] = ['date' => $date, 'account' => 'Cash & Bank', 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => 'EXP-' . $r['id']];
+        $rows[] = ['date' => $date, 'account' => $account, 'debit' => $amount, 'credit' => 0, 'memo' => $memo, 'ref' => 'EXP-' . $r['id'], 'currency' => $defaultCcy];
+        $rows[] = ['date' => $date, 'account' => 'Cash & Bank', 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => 'EXP-' . $r['id'], 'currency' => $defaultCcy];
     }
 
     usort($rows, fn($a, $b) => $a['date'] <=> $b['date']);
@@ -198,12 +207,11 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
         $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1), $now);
         $startStr = $taxYearStart->format('Y-m-d');
         $taxYearLabel = $taxYearStart->format('Y') . '-' . $now->format('Y');
-        $taxYearDefaultCcyEsc = $mysqli->real_escape_string(invoxaResolveCurrency('', $settings));
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="invoices_tax_year_' . $taxYearLabel . '_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
         fputcsv($out, ['Invoice Number', 'Client Name', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' AND (currency = '' OR currency = '$taxYearDefaultCcyEsc') $testFilter ORDER BY invoice_date ASC");
+        $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter ORDER BY invoice_date ASC");
         while ($r = $res->fetch_assoc()) {
             $r['currency'] = invoxaResolveCurrency($r['currency'], $settings);
             fputcsv($out, $r, ',', '"', "\\");
@@ -218,15 +226,16 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
         $startStr = $taxYearStart->format('Y-m-d');
         $taxYearLabel = $taxYearStart->format('Y') . '-' . $now->format('Y');
         $defaultCcy = invoxaResolveCurrency('', $settings);
-        $defaultCcyEsc = $mysqli->real_escape_string($defaultCcy);
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="invoices_monthly_summary_' . $taxYearLabel . '_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ["Month (amounts in $defaultCcy — other-currency invoices excluded)", 'Total Invoiced', 'Total Paid', 'Outstanding', 'Payment Status', 'Expenses', 'Net Income'], ',', '"', "\\");
-        // Get monthly aggregates
+        fputcsv($out, ['Month', 'Currency', 'Total Invoiced', 'Total Paid', 'Outstanding', 'Payment Status', 'Expenses', 'Net Income'], ',', '"', "\\");
+        // One row per month per currency — no exclusion, so an other-currency
+        // month still shows up instead of being dropped from the summary.
         $res = $mysqli->query("
             SELECT
                 DATE_FORMAT(invoice_date, '%Y-%m') as month,
+                currency,
                 SUM(amount) as total_invoiced,
                 SUM(COALESCE(paid_amount, 0)) as total_paid,
                 SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding,
@@ -235,21 +244,32 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
             WHERE is_quote = 0
               AND status != 'void'
               AND invoice_date >= '$startStr'
-              AND (currency = '' OR currency = '$defaultCcyEsc')
               $testFilter
-            GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
+            GROUP BY DATE_FORMAT(invoice_date, '%Y-%m'), currency
             ORDER BY month ASC
         ");
+        $rowsByMonthCcy = [];
+        while ($r = $res->fetch_assoc()) {
+            $ccy = invoxaResolveCurrency($r['currency'], $settings);
+            $key = $r['month'] . '|' . $ccy;
+            if (!isset($rowsByMonthCcy[$key])) {
+                $rowsByMonthCcy[$key] = ['month' => $r['month'], 'currency' => $ccy, 'total_invoiced' => 0.0, 'total_paid' => 0.0, 'outstanding' => 0.0, 'unpaid_count' => 0];
+            }
+            $rowsByMonthCcy[$key]['total_invoiced'] += (float) $r['total_invoiced'];
+            $rowsByMonthCcy[$key]['total_paid'] += (float) $r['total_paid'];
+            $rowsByMonthCcy[$key]['outstanding'] += (float) $r['outstanding'];
+            $rowsByMonthCcy[$key]['unpaid_count'] += (int) $r['unpaid_count'];
+        }
+        // Expenses have no currency field, so they're only meaningful (and only
+        // subtracted into Net Income) against the default-currency row for that month.
         $expensesByMonthCsv = [];
         $expResCsv = $mysqli->query("SELECT DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(amount) as total FROM invoxa_expenses WHERE expense_date >= '$startStr' GROUP BY DATE_FORMAT(expense_date, '%Y-%m')");
         while ($er = $expResCsv->fetch_assoc())
             $expensesByMonthCsv[$er['month']] = (float) $er['total'];
-        while ($r = $res->fetch_assoc()) {
-            // Format month as readable e.g. April 2026
+        foreach ($rowsByMonthCcy as $r) {
             $dt = DateTime::createFromFormat('Y-m', $r['month']);
             $monthLabel = $dt ? $dt->format('F Y') : $r['month'];
-            $outstanding = round((float) $r['outstanding'], 2);
-            // Determine payment status
+            $outstanding = round($r['outstanding'], 2);
             if ($r['unpaid_count'] > 0 && $outstanding > 0) {
                 $payStatus = 'Partial Paid';
             } elseif ($outstanding <= 0) {
@@ -257,15 +277,17 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
             } else {
                 $payStatus = 'Unpaid';
             }
-            $monthExpensesCsv = $expensesByMonthCsv[$r['month']] ?? 0.0;
+            $isDefaultCcy = $r['currency'] === $defaultCcy;
+            $monthExpensesCsv = $isDefaultCcy ? ($expensesByMonthCsv[$r['month']] ?? 0.0) : 0.0;
             fputcsv($out, [
                 $monthLabel,
-                number_format((float) $r['total_invoiced'], 2),
-                number_format((float) $r['total_paid'], 2),
+                $r['currency'],
+                number_format($r['total_invoiced'], 2),
+                number_format($r['total_paid'], 2),
                 number_format($outstanding, 2),
                 $payStatus,
-                number_format($monthExpensesCsv, 2),
-                number_format((float) $r['total_paid'] - $monthExpensesCsv, 2)
+                $isDefaultCcy ? number_format($monthExpensesCsv, 2) : '',
+                $isDefaultCcy ? number_format($r['total_paid'] - $monthExpensesCsv, 2) : '',
             ], ',', '"', "\\");
         }
         fclose($out);
@@ -323,7 +345,7 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="accounting_journal_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Date', 'Account', 'Debit', 'Credit', 'Memo', 'Reference'], ',', '"', "\\");
+        fputcsv($out, ['Date', 'Account', 'Debit', 'Credit', 'Memo', 'Reference', 'Currency'], ',', '"', "\\");
         foreach ($journal as $row) {
             fputcsv($out, [
                 $row['date'],
@@ -332,6 +354,7 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
                 $row['credit'] > 0 ? number_format($row['credit'], 2) : '',
                 $row['memo'],
                 $row['ref'],
+                $row['currency'],
             ], ',', '"', "\\");
         }
         fclose($out);

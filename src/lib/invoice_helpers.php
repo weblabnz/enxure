@@ -88,6 +88,37 @@ function invoxaFormatMoneyByCurrency(array $byCcy): string
     return implode(' + ', $parts);
 }
 
+// Like invoxaGroupAmountsByCurrency() but merges several summed columns from
+// an already currency-grouped SQL result (SELECT currency, SUM(...) AS foo,
+// SUM(...) AS bar ... GROUP BY currency) into one array per resolved
+// currency, so e.g. a raw '' row and an explicit 'USD' row both fold into
+// the same 'USD' bucket instead of staying split.
+function invoxaGroupRowsByCurrency(array $rows, array $sumKeys, array $settings): array
+{
+    $out = [];
+    foreach ($rows as $row) {
+        $ccy = invoxaResolveCurrency($row['currency'] ?? '', $settings);
+        if (!isset($out[$ccy])) {
+            $out[$ccy] = array_fill_keys($sumKeys, 0.0);
+        }
+        foreach ($sumKeys as $key) {
+            $out[$ccy][$key] += (float) ($row[$key] ?? 0);
+        }
+    }
+    return $out;
+}
+
+// For the CSV/IIF export preview banners, which show a single number: stay a
+// plain float in the common single-currency case (unchanged look), fall back
+// to the "CCY $x + CCY $y" grouped string only once a second currency shows up.
+function invoxaStatDisplay(array $byCcy)
+{
+    if (count($byCcy) <= 1) {
+        return round(array_sum($byCcy), 2);
+    }
+    return invoxaFormatMoneyByCurrency($byCcy);
+}
+
 // Computes subtotal/discount/tax/total from line items and a single
 // invoice-level discount % and tax % (not per line item). Discount is taken
 // off the subtotal first, then tax applied to what's left. Mutates
