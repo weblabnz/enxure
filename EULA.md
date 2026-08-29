@@ -1,6 +1,6 @@
 # Invoxa — Paid License Terms
 
-**Licensor:** The Web Lab, New Zealand ("we", "us")
+**Licensor:** The Web Lab (gitlab.com/weblabnz), New Zealand ("we", "us")
 **Contact:** contact-project+weblabnz-invoxa-inv@incoming.gitlab.com
 
 Invoxa's core software is free and open source, licensed to everyone under the GNU
