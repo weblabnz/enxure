@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.4] - 2026-08-29
+
+### Changed
+- Code organization: `invoxa.php`'s auth system (session bootstrap, login/signup/2FA/password-reset flow), 2FA/backup-code/API-token logic, the public `?apiv1=` API dispatch, Settings, and Backup & Restore (including Demo Data, the Test Suite, Audit Log Retention, Offsite Push, and Data Repair) — both their rendering and their AJAX action handlers — moved into new `lib/auth.php`, `lib/auth_gate.php`, `lib/api_v1.php`, `lib/settings.php`/`lib/settings_page.php`, and `lib/backup.php`/`lib/backup_page.php`. A relocation, not a rewrite — behavior is meant to be unchanged, run the internal Test Suite after upgrading to confirm. The page template is the only piece still in `invoxa.php` — that split is future work.
+
 ## [2.11.3] - 2026-08-29
 
 ### Changed
