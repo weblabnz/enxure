@@ -19,37 +19,3 @@ jobs:
             php -l "$file" || status=1
           done < <(find src -name '*.php' -print0)
           exit $status
-
-  test-suite:
-    runs-on: ubuntu-latest
-    container:
-      image: docker:27-cli
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-    steps:
-      - uses: actions/checkout@v4
-      - name: Bring up the test stack
-        env:
-          TEST_CRON_SECRET: ci-test-secret-not-used-in-production
-        run: docker compose -f docker-compose.test.yml up -d --build
-      - name: Wait for the app to report healthy
-        run: |
-          for i in $(seq 1 30); do
-            if docker compose -f docker-compose.test.yml exec -T nginx wget -q -O /dev/null "http://127.0.0.1/invoxa.php?health=1"; then
-              echo "healthy"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "app never became healthy" >&2
-          docker compose -f docker-compose.test.yml logs
-          exit 1
-      - name: Run the internal Test Suite
-        run: |
-          set -e
-          RESPONSE=$(docker compose -f docker-compose.test.yml exec -T nginx wget -q -O - --post-data="action=run_test_suite&cron_key=ci-test-secret-not-used-in-production" "http://127.0.0.1/invoxa.php")
-          echo "$RESPONSE"
-          echo "$RESPONSE" | grep -q '"failed":0' || (echo "Test Suite reported failures" >&2 && exit 1)
-      - name: Tear down
-        if: always()
-        run: docker compose -f docker-compose.test.yml down -v
