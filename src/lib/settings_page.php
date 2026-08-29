@@ -290,7 +290,7 @@
                                         <input type="password" id="totpDisablePassword" class="form-control"
                                             placeholder="Required to disable or regenerate backup codes">
                                     </div>
-                                    <button class="btn" id="totpRegenBtn" onclick="regenerateBackupCodes()"><i
+                                    <button class="btn" id="totpRegenBtn" style="margin-right:0.5rem;" onclick="regenerateBackupCodes()"><i
                                             class="fa-solid fa-rotate"></i> Regenerate Backup Codes</button>
                                     <button class="btn" id="totpDisableBtn" style="background:var(--danger); color:white; border:none;"
                                         onclick="disableTotp()"><i class="fa-solid fa-shield-halved"></i> Disable

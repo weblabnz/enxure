@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.11] - 2026-08-29
+
+### Fixed
+- No gap between the "Regenerate Backup Codes" and "Disable Two-Factor Authentication" buttons — only ever visible after the 2.11.10 fix made that panel reachable without a reload.
+
 ## [2.11.10] - 2026-08-29
 
 ### Fixed
