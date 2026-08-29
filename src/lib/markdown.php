@@ -135,3 +135,106 @@ function invoxaRenderMarkdown(string $md): string
 
     return '<div class="doc-content">' . implode("\n", $html) . '</div>';
 }
+
+function invoxaChangelogCategoryMeta(string $category): array
+{
+    switch (strtolower($category)) {
+        case 'added': return ['success', 'fa-plus'];
+        case 'changed': return ['accent', 'fa-arrows-rotate'];
+        case 'fixed': return ['warning', 'fa-wrench'];
+        case 'removed': return ['danger', 'fa-minus'];
+        default: return ['accent', 'fa-circle-dot'];
+    }
+}
+
+// Timeline layout tailored to CHANGELOG.md's own convention — `## [x.y.z] -
+// YYYY-MM-DD` release headings each followed by `### Added`/`Changed`/
+// `Fixed`/`Removed` bullet groups — rather than the generic renderer above.
+function invoxaRenderChangelog(string $md): string
+{
+    $lines = preg_split('/\r\n|\n/', $md);
+    $n = count($lines);
+    $i = 0;
+
+    $intro = [];
+    while ($i < $n && !preg_match('/^##\s+\[/', $lines[$i])) {
+        $intro[] = $lines[$i];
+        $i++;
+    }
+
+    $entries = [];
+    while ($i < $n) {
+        if (!preg_match('/^##\s+\[([^\]]+)\]\s*-\s*(\d{4}-\d{2}-\d{2})/', $lines[$i], $m)) {
+            $i++;
+            continue;
+        }
+        $version = $m[1];
+        $date = $m[2];
+        $i++;
+        $categories = [];
+        $curCat = null;
+        $notes = [];
+        while ($i < $n && !preg_match('/^##\s+\[/', $lines[$i])) {
+            $line = $lines[$i];
+            if (preg_match('/^###\s+(.*)$/', $line, $mm)) {
+                $curCat = trim($mm[1]);
+                $categories[$curCat] = $categories[$curCat] ?? [];
+            } elseif (preg_match('/^\s*[-*]\s+(.*)$/', $line, $mm)) {
+                if ($curCat === null) {
+                    $curCat = 'Notes';
+                    $categories[$curCat] = $categories[$curCat] ?? [];
+                }
+                $categories[$curCat][] = $mm[1];
+            } elseif (trim($line) !== '') {
+                $notes[] = $line;
+            }
+            $i++;
+        }
+        $entries[] = ['version' => $version, 'date' => $date, 'categories' => $categories, 'notes' => $notes];
+    }
+
+    $html = [invoxaRenderMarkdown(implode("\n", $intro))];
+
+    $visibleCount = 8;
+    $html[] = '<div class="changelog-timeline">';
+    foreach ($entries as $idx => $entry) {
+        $classes = 'changelog-entry' . ($idx === 0 ? ' is-latest' : '') . ($idx >= $visibleCount ? ' changelog-older' : '');
+        $html[] = '<div class="' . $classes . '">';
+        $html[] = '<div class="changelog-dot"></div>';
+        $html[] = '<div class="changelog-card">';
+        $html[] = '<div class="changelog-card-head">';
+        $html[] = '<span class="changelog-version">v' . htmlspecialchars($entry['version'], ENT_QUOTES, 'UTF-8') . '</span>';
+        if ($idx === 0) {
+            $html[] = '<span class="badge changelog-latest-badge">Latest</span>';
+        }
+        $dt = DateTime::createFromFormat('Y-m-d', $entry['date']);
+        $html[] = '<span class="changelog-date">' . ($dt ? $dt->format('M j, Y') : htmlspecialchars($entry['date'], ENT_QUOTES, 'UTF-8')) . '</span>';
+        $html[] = '</div>';
+        if ($entry['notes']) {
+            $html[] = '<p class="changelog-notes">' . invoxaMarkdownInline(implode(' ', $entry['notes'])) . '</p>';
+        }
+        foreach ($entry['categories'] as $cat => $items) {
+            [$color, $icon] = invoxaChangelogCategoryMeta($cat);
+            $html[] = '<div class="changelog-category changelog-category-' . $color . '">';
+            $html[] = '<div class="changelog-category-label"><i class="fa-solid ' . $icon . '"></i>' . htmlspecialchars($cat, ENT_QUOTES, 'UTF-8') . '</div>';
+            $html[] = '<ul>';
+            foreach ($items as $item) {
+                $html[] = '<li>' . invoxaMarkdownInline($item) . '</li>';
+            }
+            $html[] = '</ul>';
+            $html[] = '</div>';
+        }
+        $html[] = '</div>'; // .changelog-card
+        $html[] = '</div>'; // .changelog-entry
+    }
+    $html[] = '</div>'; // .changelog-timeline
+
+    $olderCount = count($entries) - $visibleCount;
+    if ($olderCount > 0) {
+        $html[] = '<div class="changelog-show-more">';
+        $html[] = '<button type="button" class="btn" data-show-label="Show ' . $olderCount . ' older release' . ($olderCount === 1 ? '' : 's') . '" onclick="toggleChangelogOlder(this)">Show ' . $olderCount . ' older release' . ($olderCount === 1 ? '' : 's') . '</button>';
+        $html[] = '</div>';
+    }
+
+    return implode("\n", $html);
+}

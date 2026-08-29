@@ -1172,6 +1172,245 @@
             border: 1px solid var(--border);
         }
 
+        .changelog-timeline {
+            position: relative;
+            margin: 1.25rem 0 0;
+            padding-left: 1.5rem;
+        }
+
+        .changelog-entry {
+            position: relative;
+            padding-bottom: 1.5rem;
+        }
+
+        .changelog-entry::before {
+            content: '';
+            position: absolute;
+            left: -1.05rem;
+            top: 0.4rem;
+            bottom: -1.5rem;
+            width: 2px;
+            background: var(--border);
+        }
+
+        .changelog-entry:last-child::before {
+            display: none;
+        }
+
+        .changelog-dot {
+            position: absolute;
+            left: -1.32rem;
+            top: 0.35rem;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--border);
+        }
+
+        .changelog-entry.is-latest .changelog-dot {
+            background: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-soft);
+        }
+
+        .changelog-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.25rem;
+        }
+
+        .changelog-entry.is-latest .changelog-card {
+            border-color: var(--accent);
+        }
+
+        .changelog-card-head {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .changelog-version {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+        }
+
+        .changelog-latest-badge {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .changelog-date {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-left: auto;
+        }
+
+        .changelog-notes {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.65;
+            margin: 0.5rem 0;
+        }
+
+        .changelog-category {
+            margin-top: 0.85rem;
+        }
+
+        .changelog-category-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 0.2rem 0.6rem;
+            border-radius: 9999px;
+        }
+
+        .changelog-category-success .changelog-category-label {
+            background: color-mix(in srgb, var(--success) 15%, transparent);
+            color: var(--success);
+        }
+
+        .changelog-category-accent .changelog-category-label {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .changelog-category-warning .changelog-category-label {
+            background: color-mix(in srgb, var(--warning) 15%, transparent);
+            color: var(--warning);
+        }
+
+        .changelog-category-danger .changelog-category-label {
+            background: color-mix(in srgb, var(--danger) 15%, transparent);
+            color: var(--danger);
+        }
+
+        .changelog-category ul {
+            margin: 0.5rem 0 0;
+            padding-left: 1.3rem;
+        }
+
+        .changelog-category li {
+            font-size: 0.87rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            margin: 0.3rem 0;
+        }
+
+        .changelog-older {
+            display: none;
+        }
+
+        .changelog-older.show {
+            display: block;
+        }
+
+        .changelog-show-more {
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+
+        .roadmap-legend-quick, .roadmap-legend-medium, .roadmap-legend-large {
+            font-weight: 600;
+        }
+
+        .roadmap-legend-quick { color: var(--success); }
+        .roadmap-legend-medium { color: var(--warning); }
+        .roadmap-legend-large { color: var(--danger); }
+
+        .roadmap-timeline {
+            position: relative;
+            margin: 1rem 0 0;
+            padding-left: 1.5rem;
+        }
+
+        .roadmap-entry {
+            position: relative;
+            padding-bottom: 0.6rem;
+        }
+
+        .roadmap-entry::before {
+            content: '';
+            position: absolute;
+            left: -1.05rem;
+            top: 0.4rem;
+            bottom: -0.6rem;
+            width: 2px;
+            background: var(--border);
+        }
+
+        .roadmap-entry:last-child::before {
+            display: none;
+        }
+
+        .roadmap-dot {
+            position: absolute;
+            left: -1.32rem;
+            top: 0.35rem;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--border);
+        }
+
+        .roadmap-entry.roadmap-quick .roadmap-dot { background: var(--success); }
+        .roadmap-entry.roadmap-medium .roadmap-dot { background: var(--warning); }
+        .roadmap-entry.roadmap-large .roadmap-dot { background: var(--danger); }
+
+        .roadmap-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 0.65rem 1rem;
+        }
+
+        .roadmap-card-head {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .roadmap-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .roadmap-effort {
+            margin-left: auto;
+        }
+
+        .roadmap-effort.roadmap-quick {
+            background: color-mix(in srgb, var(--success) 15%, transparent);
+            color: var(--success);
+        }
+
+        .roadmap-effort.roadmap-medium {
+            background: color-mix(in srgb, var(--warning) 15%, transparent);
+            color: var(--warning);
+        }
+
+        .roadmap-effort.roadmap-large {
+            background: color-mix(in srgb, var(--danger) 15%, transparent);
+            color: var(--danger);
+        }
+
+        .roadmap-desc {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin: 0;
+        }
+
         .toast {
             position: fixed;
             bottom: 2rem;

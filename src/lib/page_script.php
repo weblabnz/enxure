@@ -262,6 +262,13 @@
                 document.getElementById('docsNoResults').style.display = anyVisible ? 'none' : '';
             }
 
+            function toggleChangelogOlder(btn) {
+                const older = document.querySelectorAll('.changelog-older');
+                const willShow = !older[0]?.classList.contains('show');
+                older.forEach(el => el.classList.toggle('show', willShow));
+                btn.textContent = willShow ? 'Show fewer releases' : btn.dataset.showLabel;
+            }
+
             function navBackup(target) {
                 document.querySelectorAll('#sec-backup .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.backupTarget === target));
                 document.querySelectorAll('#sec-backup .subnav-pane').forEach(el => el.classList.toggle('active', el.id === 'backup-pane-' + target));

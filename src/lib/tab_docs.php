@@ -70,11 +70,35 @@
                         <div class="card">
                             <div class="card-body doc-content">
                                 <h1>Roadmap</h1>
-                                <p>What's coming next.</p>
-                                <ul>
-                                    <li><strong>CSRF tokens</strong> — no explicit CSRF protection exists yet on state-changing actions; today's browsers' default same-site cookie behavior mitigates the classic attack, but proper tokens are the correct long-term fix (see Security Review in CODEBASE.md).</li>
-                                </ul>
-                                <p>No fixed release dates yet, but work is underway. If that would help you, or you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
+                                <p>No fixed release dates yet, but work is underway. If you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
+                                <p>What's coming next, roughly ordered by how soon each is likely to land. The dot marks roughly how big a lift it is: <span class="roadmap-legend-quick">green</span> is a quick win, <span class="roadmap-legend-medium">amber</span> a medium lift, <span class="roadmap-legend-large">red</span> a bigger effort.</p>
+                                <?php
+                                $__roadmapEffortLabels = ['quick' => 'Quick win', 'medium' => 'Medium lift', 'large' => 'Larger effort'];
+                                $__roadmapItems = [
+                                    ['effort' => 'medium', 'title' => 'CSRF tokens', 'desc' => 'No explicit CSRF protection exists yet on state-changing actions; today\'s browsers\' default same-site cookie behavior mitigates the classic attack, but proper tokens are the correct long-term fix (see Security Review in CODEBASE.md).'],
+                                    ['effort' => 'quick', 'title' => 'Keyboard shortcuts', 'desc' => 'Beyond the existing Ctrl/Cmd+K search, single-key shortcuts for the actions used most (new invoice, new expense, jump to a tab) with a <code>?</code> overlay listing them, for anyone who\'d rather stay on the keyboard than reach for the sidebar.'],
+                                    ['effort' => 'quick', 'title' => 'Branding theme presets', 'desc' => 'Settings &gt; Branding currently offers one brand color field; this adds a small set of curated color/accent presets plus a live preview, so a new install can pick a coherent look in one click instead of hand-tuning a hex value, and have it carry through to the Client Portal too.'],
+                                    ['effort' => 'medium', 'title' => 'Bulk CSV import for Invoices and Expenses', 'desc' => 'Clients already support bulk import alongside export; Invoices and Expenses currently only export. Extending the same importer to both would make migrating off a spreadsheet or another tool a single upload instead of manual re-entry.'],
+                                    ['effort' => 'medium', 'title' => 'Dashboard customization', 'desc' => 'Drag-and-drop reordering of the stat cards and charts, with the option to hide ones a given business doesn\'t care about, instead of the current fixed layout.'],
+                                    ['effort' => 'medium', 'title' => 'Live exchange-rate conversion for Statistics, Forecasting, and AR Aging', 'desc' => 'These three still total in the instance default currency only (see Clients &amp; Portal and Reporting docs), excluding other-currency invoices rather than converting them, since a single chart axis or forecast can\'t blend currencies without a rate. Pulling in a daily FX rate would let them show one true blended total instead.'],
+                                    ['effort' => 'large', 'title' => 'Passkey / WebAuthn login', 'desc' => '2FA is TOTP-only today. Adding passkeys as an alternative second factor (or a full passwordless login option) would cover people who\'d rather use a hardware key or their device\'s built-in biometrics than an authenticator app.'],
+                                    ['effort' => 'large', 'title' => 'Two-way Xero / QuickBooks Online sync', 'desc' => 'Today\'s Accounting Journal and QuickBooks (IIF) exports are one-way CSV/file dumps. A real API-based sync that pushes invoices and payments and pulls back reconciliation status would remove the manual export/import step entirely — the largest single item here.'],
+                                ];
+                                ?>
+                                <div class="roadmap-timeline">
+                                    <?php foreach ($__roadmapItems as $__item): ?>
+                                        <div class="roadmap-entry roadmap-<?= $__item['effort'] ?>">
+                                            <div class="roadmap-dot"></div>
+                                            <div class="roadmap-card">
+                                                <div class="roadmap-card-head">
+                                                    <span class="roadmap-title"><?= htmlspecialchars($__item['title'], ENT_QUOTES, 'UTF-8') ?></span>
+                                                    <span class="badge roadmap-effort roadmap-<?= $__item['effort'] ?>"><?= $__roadmapEffortLabels[$__item['effort']] ?></span>
+                                                </div>
+                                                <p class="roadmap-desc"><?= $__item['desc'] ?></p>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -84,7 +108,7 @@
                             <div class="card-body doc-content">
                                 <?php
                                 $__changelogFile = DOCS_DIR . 'CHANGELOG.md';
-                                echo is_file($__changelogFile) ? invoxaRenderMarkdown(file_get_contents($__changelogFile)) : '<p>Document not found.</p>';
+                                echo is_file($__changelogFile) ? invoxaRenderChangelog(file_get_contents($__changelogFile)) : '<p>Document not found.</p>';
                                 ?>
                             </div>
                         </div>

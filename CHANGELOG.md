@@ -2,6 +2,26 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.21] - 2026-08-30
+
+### Changed
+- Roadmap timeline (added in 2.11.20) tightened up: less padding between entries and inside each card, and a shorter line-height on the description text, so the list reads as a compact stack instead of feeling spread out.
+
+## [2.11.20] - 2026-08-30
+
+### Changed
+- Docs > Reference > Roadmap restyled to match the Changelog's timeline: each item is now its own card with a connecting dot line and an effort badge (Quick win/Medium lift/Larger effort, color-coded green/amber/red) instead of a plain bullet list, so difficulty is visible at a glance instead of just implied by the writing.
+
+## [2.11.19] - 2026-08-30
+
+### Added
+- Docs > Reference > Roadmap expanded from a single item to eight: keyboard shortcuts, branding theme presets, bulk CSV import for Invoices and Expenses, dashboard customization (drag-and-drop stat cards/charts), live exchange-rate conversion for Statistics/Forecasting/AR Aging, passkey/WebAuthn login, and two-way Xero/QuickBooks Online sync, alongside the existing CSRF tokens item — a mix of quick visual wins and larger integrations, not just security work.
+
+## [2.11.18] - 2026-08-30
+
+### Changed
+- Docs > Reference > Changelog rebuilt from a flat list of headings into a timeline: each release gets a monospace version badge, formatted date, and its own dot on a connecting line, with Added/Changed/Fixed/Removed grouped into colored, iconed sections instead of plain sub-headings. The newest release carries a "Latest" badge; everything past the last 8 releases collapses behind a "Show N older releases" toggle instead of dumping the full history at once.
+
 ## [2.11.17] - 2026-08-30
 
 ### Fixed
