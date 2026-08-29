@@ -2,6 +2,12 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.8] - 2026-08-29
+
+### Added
+- Creating a user (Settings > Users) now emails the new account a welcome message with a link to set their own password, instead of the admin's chosen password being the only one they ever know. Reuses the existing password-reset token machinery rather than emailing a plaintext password.
+- A security review — see CODEBASE.md for scope and findings. No high-confidence exploitable issues found; two defense-in-depth items (CSRF tokens, session ID regeneration on login) added to the Roadmap.
+
 ## [2.11.7] - 2026-08-29
 
 ### Fixed

@@ -329,6 +329,7 @@ function invoxaHandleCreateUser($mysqli, array $settings): void
     $stmt = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, ?, ?, ?)");
     $stmt->bind_param("ssss", $newUsername, $newEmail, $newRole, $hash);
     $stmt->execute();
+    invoxaIssueUserWelcomeEmail($mysqli, (int) $mysqli->insert_id, $newUsername, $newEmail);
     invoxaLogAction($mysqli, null, '', 'user_created', "User account created: {$newUsername} ({$newRole})");
     notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F User account created: {$newUsername} ({$newRole})");
     echo json_encode(['success' => true]);

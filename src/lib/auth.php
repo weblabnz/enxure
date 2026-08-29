@@ -178,6 +178,53 @@ function invoxaSendPasswordResetEmail(string $username, string $toEmail, string 
     }
 }
 
+function invoxaSendWelcomeEmail(string $username, string $toEmail, string $rawToken): bool
+{
+    require_once PHPMAILER_DIR . 'PHPMailer.php';
+    require_once PHPMAILER_DIR . 'SMTP.php';
+    require_once PHPMAILER_DIR . 'Exception.php';
+    $fromName = 'Invoxa (No-Reply)';
+    $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
+    $baseUrl = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '');
+    $setPasswordLink = $baseUrl . '/?reset_token=' . $rawToken;
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host = getenv('SMTP_HOST') ?: '';
+        $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
+        $mail->SMTPAuth = true;
+        $mail->Username = getenv('SMTP_USER') ?: '';
+        $mail->Password = getenv('SMTP_PASSWORD') ?: '';
+        $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {
+            'ssl' => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS,
+            'none', '' => false,
+            default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
+        };
+        $mail->CharSet = 'UTF-8';
+        $mail->setFrom($fromEmail, $fromName);
+        $mail->addAddress($toEmail);
+        $mail->Subject = 'Invoxa - Your account is ready';
+        $mail->isHTML(true);
+        $mail->Body = '<p>An Invoxa account has been created for you. Your username is <strong>' . htmlspecialchars($username) . '</strong>.</p>'
+            . '<p>Your administrator set an initial password for you, but for security we recommend setting your own instead: <a href="' . htmlspecialchars($setPasswordLink) . '">set your password</a> - this link expires in 24 hours.</p>'
+            . '<p>If you\'d rather use the password your administrator gave you, you can ignore this email and log in directly.</p>';
+        $mail->send();
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function invoxaIssueUserWelcomeEmail($mysqli, int $userId, string $username, string $email): bool
+{
+    $rawToken = bin2hex(random_bytes(32));
+    $resetTokenHash = hash('sha256', $rawToken);
+    $stmt = $mysqli->prepare("UPDATE invoxa_users SET reset_token_hash = ?, reset_token_expires = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?");
+    $stmt->bind_param("si", $resetTokenHash, $userId);
+    $stmt->execute();
+    return invoxaSendWelcomeEmail($username, $email, $rawToken);
+}
+
 function invoxaSendVerificationEmail(string $username, string $toEmail, string $rawToken): bool
 {
     require_once PHPMAILER_DIR . 'PHPMailer.php';
