@@ -1,10 +1,5 @@
 # Invoxa — Paid License Terms
 
-> **Starting template, not legal advice.** Fill in the bracketed placeholders and get
-> an actual NZ lawyer to glance over it before relying on it for real sales — cheap
-> insurance before money changes hands. Send this to buyers as part of the sale (e.g.
-> attached to the invoice); it isn't linked anywhere in the running app.
-
 **Licensor:** The Web Lab, New Zealand ("we", "us")
 **Contact:** contact-project+weblabnz-invoxa-inv@incoming.gitlab.com
 
