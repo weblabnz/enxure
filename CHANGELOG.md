@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.17] - 2026-08-30
+
+### Fixed
+- The session ID wasn't rotated after a successful login, a session-fixation-shaped gap flagged in the Security Review (see CODEBASE.md) with no known exploit path but no reason to leave open either. `auth_gate.php` now calls `session_regenerate_id(true)` on all four paths that grant an authenticated session — password login, signup, 2FA verification, and password reset — so a pre-login session ID can never carry over into an authenticated one. CSRF tokens are now the only item left on the Roadmap.
+
 ## [2.11.16] - 2026-08-30
 
 ### Fixed

@@ -73,6 +73,8 @@ These are **not** required at the top of the file. Each is `require_once`'d at t
 
 This should be repeated periodically — at minimum before any release touching auth, sessions, tokens, payments, or licensing, and otherwise on a regular cadence rather than only reactively.
 
+**2026-08-30 (2.11.17).** The session-regeneration gap above is fixed: `auth_gate.php` now calls `session_regenerate_id(true)` on all four paths that grant `$_SESSION['invoxa_auth']` (signup, password login, 2FA verification, password reset), rotating the session ID on every privilege escalation into an authenticated session. CSRF tokens remain the one open item on the Roadmap.
+
 ## History
 
 - **2.11.3** — client/stats/exports/payments logic split into `lib/clients.php`, `lib/stats.php`, `lib/exports.php`, `lib/payments.php`.

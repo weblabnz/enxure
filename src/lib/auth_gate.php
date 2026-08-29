@@ -185,6 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
             $stmt->bind_param("sss", $user, $email, $hash);
             $stmt->execute();
             invoxaIssueEmailVerification($mysqli, (int) $mysqli->insert_id, $user, $email);
+            session_regenerate_id(true);
             $_SESSION['invoxa_auth'] = true;
             $_SESSION['invoxa_username'] = $user;
             $_SESSION['invoxa_user_id'] = (int) $mysqli->insert_id;
@@ -217,6 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
                     $authMode = 'totp';
                 } else {
                     $mysqli->query("UPDATE invoxa_users SET failed_login_attempts = 0, locked_until = NULL WHERE id = " . (int) $row['id']);
+                    session_regenerate_id(true);
                     $_SESSION['invoxa_auth'] = true;
                     $_SESSION['invoxa_username'] = $user;
                     $_SESSION['invoxa_user_id'] = (int) $row['id'];
@@ -252,6 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
             } elseif ($codeOk) {
                 $mysqli->query("UPDATE invoxa_users SET failed_login_attempts = 0, locked_until = NULL WHERE id = " . (int) $row['id']);
                 unset($_SESSION['invoxa_2fa_pending_user']);
+                session_regenerate_id(true);
                 $_SESSION['invoxa_auth'] = true;
                 $_SESSION['invoxa_username'] = $pendingUser;
                 $_SESSION['invoxa_user_id'] = (int) $row['id'];
@@ -307,6 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
                 $stmt = $mysqli->prepare("UPDATE invoxa_users SET password_hash = ?, reset_token_hash = NULL, reset_token_expires = NULL, failed_login_attempts = 0, locked_until = NULL WHERE id = ?");
                 $stmt->bind_param("si", $hash, $row['id']);
                 $stmt->execute();
+                session_regenerate_id(true);
                 $_SESSION['invoxa_auth'] = true;
                 $_SESSION['invoxa_username'] = $row['username'];
                 $_SESSION['invoxa_user_id'] = (int) $row['id'];

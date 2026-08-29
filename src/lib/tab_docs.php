@@ -73,7 +73,6 @@
                                 <p>What's coming next.</p>
                                 <ul>
                                     <li><strong>CSRF tokens</strong> — no explicit CSRF protection exists yet on state-changing actions; today's browsers' default same-site cookie behavior mitigates the classic attack, but proper tokens are the correct long-term fix (see Security Review in CODEBASE.md).</li>
-                                    <li><strong>Session ID regeneration on login</strong> — the session ID isn't rotated after a successful login (session-fixation-shaped gap; no known exploit path currently, see Security Review in CODEBASE.md).</li>
                                 </ul>
                                 <p>No fixed release dates yet, but work is underway. If that would help you, or you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
                             </div>
