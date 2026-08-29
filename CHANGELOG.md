@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.7] - 2026-08-29
+
+### Fixed
+- Outgoing emails (invoices, resends, overdue reminders, the SMTP test) never set PHPMailer's `CharSet`, so it defaulted to ISO-8859-1 — any non-ASCII character (the em dash in the "Powered by Invoxa" footer, currency symbols, accented names) rendered as mojibake in the recipient's inbox. All four send sites now set `CharSet = 'UTF-8'`, matching the password-reset/verification emails, which already had it. Pre-existing, not introduced by the 2.11.3–2.11.6 code-organization moves.
+
 ## [2.11.6] - 2026-08-29
 
 ### Changed

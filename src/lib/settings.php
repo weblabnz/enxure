@@ -33,6 +33,7 @@ function invoxaHandleTestEmail($mysqli, array $settings, string $emailPassword):
             'none', '' => false,
             default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
         };
+        $mail->CharSet = 'UTF-8';
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($to);
         $mail->Subject = "SMTP Test - {$fromName}";

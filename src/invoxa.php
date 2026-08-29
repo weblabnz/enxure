@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.6');
+define('APP_VERSION', '2.11.7');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -349,6 +349,7 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
             'none', '' => false,
             default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
         };
+        $mail->CharSet = 'UTF-8';
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($client['email'], $client['client_name']);
         $mail->Subject = renderEmailTemplate($settings['invoice_email_subject'] ?? DEFAULT_INVOICE_SUBJECT, [
@@ -548,6 +549,7 @@ function sendOverdueReminders($mysqli, array $settings, string $emailPassword): 
                 'none', '' => false,
                 default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
             };
+            $mail->CharSet = 'UTF-8';
             $mail->setFrom($fromEmail, $fromName);
             $mail->addAddress($inv['recipient_email'], $inv['client_name']);
             $mail->Subject = $subject;
@@ -1481,6 +1483,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     'none', '' => false,
                     default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
                 };
+                $mail->CharSet = 'UTF-8';
                 $mail->setFrom($fromEmail, $fromName);
                 $mail->addAddress($inv['recipient_email'], $inv['client_name']);
                 $mail->Subject = renderEmailTemplate($settings['invoice_email_subject'] ?? DEFAULT_INVOICE_SUBJECT, [
