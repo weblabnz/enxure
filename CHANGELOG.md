@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.5] - 2026-08-29
+
+### Fixed
+- 2.11.4 broke every request with a 500: `lib/auth_gate.php` requires `lib/license.php`, but the path was left over from when that code lived in `invoxa.php` itself (where `__DIR__` pointed at `src/`) — now that the code lives inside `lib/`, `__DIR__` already points there, so the old path doubled up to `lib/lib/license.php`. Fixed to `__DIR__ . '/license.php'`.
+
 ## [2.11.4] - 2026-08-29
 
 ### Changed
