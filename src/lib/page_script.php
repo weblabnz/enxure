@@ -1,4 +1,5 @@
         <script src="assets/js/simple-datatables.js"></script>
+        <script src="assets/js/qrcode.min.js"></script>
         <script>
             const APP_CURRENCY = <?= json_encode($settings['currency'] ?? 'USD') ?>;
             let chartInstance = null, pieChartInstance = null, chartAllData = null, chartRange = '12';
@@ -2048,6 +2049,10 @@
                 const json = await res.json();
                 btn.disabled = false;
                 if (!json.success) return showToast(json.error || 'Failed to start setup', true);
+                const qr = qrcode(0, 'M');
+                qr.addData(json.otpauth_uri);
+                qr.make();
+                document.getElementById('totpQrCode').innerHTML = qr.createSvgTag(4);
                 document.getElementById('totpSecretDisplay').value = json.secret;
                 document.getElementById('totpAccountLabel').textContent = json.account_label;
                 document.getElementById('totpConfirmCode').value = '';

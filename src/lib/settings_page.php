@@ -245,12 +245,18 @@
                                         Authentication</button>
                                     <div id="totpSetupWrap" style="display:none; margin-top:1rem;">
                                         <div class="form-group">
+                                            <label class="form-label">Scan this QR code</label>
+                                            <div id="totpQrCode" style="display:inline-block; line-height:0; border-radius:8px; overflow:hidden;"></div>
+                                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
+                                                Scan with your authenticator app (Google Authenticator, Authy,
+                                                1Password, etc). Account name: <code id="totpAccountLabel"></code>.</p>
+                                        </div>
+                                        <div class="form-group">
                                             <label class="form-label">Secret Key</label>
                                             <input type="text" id="totpSecretDisplay" class="form-control" readonly>
                                             <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
-                                                Add this as a new account in your authenticator app — look for "Enter
-                                                setup key manually" / "Can't scan a QR code?". Account name: <code
-                                                    id="totpAccountLabel"></code>.</p>
+                                                Can't scan the QR code? Add this as a new account manually instead —
+                                                look for "Enter setup key manually" in your authenticator app.</p>
                                         </div>
                                         <div class="form-group">
                                             <label class="form-label">Confirmation Code</label>

@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.9] - 2026-08-29
+
+### Added
+- Two-Factor Authentication setup now shows a QR code to scan, instead of only the manual setup key. Generated entirely client-side (vendored `qrcode-generator`, no data leaves the browser) from the same `otpauth://` URI the setup key was already built from.
+
 ## [2.11.8] - 2026-08-29
 
 ### Added
