@@ -93,6 +93,10 @@ Sending real invoice emails needs SMTP configured, though (there's no working de
 
 Invoxa is free and open source — everything above works with no license key at all. A paid license is an optional unlock for six extras: Stripe/PayPal payment collection, recurring billing automation, the Client Portal, the external API, Reporting & Statistics, and removing the "Powered by Invoxa" credit from invoices and emails. [Buy a license](https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2) and add the key under the **License** tab if you want those; the rest of the app is unaffected either way.
 
+## Support
+
+Questions, bug reports, or feature requests: [open an issue on GitLab](https://gitlab.com/weblabnz/invoxa/-/issues), or email `contact-project+weblabnz-invoxa-inv@incoming.gitlab.com` if you'd rather not create a GitLab account — it lands in the same place either way.
+
 ## Migrating or locked out?
 
 See [INSTALL.md](INSTALL.md#migrating-to-a-new-server) for moving Invoxa to a new server, or [INSTALL.md](INSTALL.md#recovering-access-forgot-adminusernamepassword) if you've forgotten the admin login.

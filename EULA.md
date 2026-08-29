@@ -7,7 +7,7 @@
 
 **Licensor:** [Your Name — a registered business isn't required; trading as a sole
 trader under your own name is fine], New Zealand ("we", "us")
-**Contact:** [your-support-email@example.com]
+**Contact:** contact-project+weblabnz-invoxa-inv@incoming.gitlab.com
 
 Invoxa's core software is free and open source, licensed to everyone under the GNU
 Affero General Public License v3.0 — see `LICENSE`, also readable in-app under Docs >

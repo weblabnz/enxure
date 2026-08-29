@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.13] - 2026-08-29
+
+### Added
+- A support contact address, now that Service Desk is working: README's new Support section and the in-app Docs > Source Code pane both point to it as a GitLab-account-free alternative to filing an issue directly.
+
 ## [2.11.12] - 2026-08-29
 
 ### Added

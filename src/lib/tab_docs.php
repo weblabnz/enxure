@@ -123,6 +123,9 @@
                                         target="_blank">gitlab.com/weblabnz/invoxa</a>. Read the code, file an issue, or
                                     fork it for your own self-hosted copy — see <strong>License (AGPL-3.0)</strong> for
                                     what that license requires if you distribute a modified version.</p>
+                                <p>Don't want a GitLab account just to report something? Email
+                                    <code>contact-project+weblabnz-invoxa-inv@incoming.gitlab.com</code> instead — it
+                                    creates the same issue either way.</p>
                             </div>
                         </div>
                     </div>
