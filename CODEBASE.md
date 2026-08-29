@@ -41,20 +41,29 @@ These are **not** required at the top of the file. Each is `require_once`'d at t
 | `lib/api_v1.php` | `invoxa.php`, after the Client Portal block | The `?apiv1=` endpoint dispatch, plus the "show the login page" gate/render for anyone who isn't authenticated. |
 | `lib/settings_page.php` | `invoxa.php`, at the Settings tab's position in the page body | The entire Settings tab's HTML (`<div id="sec-settings">`). Pure markup + inline `<?php ?>` expressions, no function definitions. |
 | `lib/backup_page.php` | `invoxa.php`, at the Data Management tab's position | The entire Backup & Restore / Data Management tab's HTML (`<div id="sec-backup">`). Same shape as `settings_page.php`. |
+| `lib/page_head.php` | `invoxa.php`, right after the last GET-route branch | `<!DOCTYPE html>` through `</head>` — meta tags, the theme-flash-prevention inline script, and all page CSS. |
+| `lib/page_nav.php` | `invoxa.php`, right after `page_head.php` | `<body>` through the sidebar's closing tag: mobile brand icon/menu button, the mobile bottom nav, and the full sidebar (nav items, global search, user panel). |
+| `lib/tab_dashboard.php` / `tab_invoices.php` / `tab_billing.php` / `tab_clients.php` / `tab_expenses.php` / `tab_quotes.php` | `invoxa.php`, inside `<div class="main">`, one after another in tab order | Each tab's full `<div id="sec-X" class="section">...</div>`. |
+| `lib/tabs_misc.php` | `invoxa.php`, after `tab_quotes.php` | The three trivial report tabs — Stats, Audit, Sync — each just a `<div id="sec-X">` wrapping a call to its already-extracted `renderXSection()`. |
+| `lib/tab_docs.php` | `invoxa.php`, after `tabs_misc.php` | The in-app Docs tab (Quick Start/feature docs/Roadmap/Changelog viewer). |
+| `lib/page_modals.php` | `invoxa.php`, after `backup_page.php` | Every modal dialog (Add/Edit Client, invoice line items, CRM panel, etc). |
+| `lib/page_script.php` | `invoxa.php`, after `page_modals.php`, through to just before `</body>` | The `simple-datatables` script tag plus the entire inline `<script>` block — all client-side JS for the SPA. Almost entirely static JS; only 3 lines interpolate a PHP value (`$settings['currency']`, `$missingFiles`, `$missingDiskData`), all already loaded by Data Fetching before this point. |
 
 **The rule of thumb when splitting more of this file:** if the code only defines functions, require it early (top of `invoxa.php`, alongside `clients.php`/`stats.php`/etc.) so it's available to both the AJAX dispatch and the page render. If it's top-level executable code or raw page markup that only runs once, require it in place at its original position instead — and double-check any `__DIR__`-relative paths inside it, since a file that moved from `invoxa.php`'s directory into `lib/` needs those adjusted — the 2.11.5 fix was exactly this: `lib/auth_gate.php` required `__DIR__ . '/lib/license.php'` instead of `__DIR__ . '/license.php'`.
 
 ## Still inline in `invoxa.php`
+
+`invoxa.php` is down to ~2,300 lines, all backend logic — no more page markup:
 
 - Cron API key / path constants / email template defaults (top-of-file config).
 - The Client Portal (`?portal=`, public/token-gated).
 - Invoice Generation Core: `generateInvoiceNumber()`, `processInvoice()`, `notifyChannel()`, `convertQuoteToInvoice()`, `sendOverdueReminders()`, `applyLateFees()`, `pruneAuditActions()`, and the invoice/quote/expense/recurring-expense/activity row renderers.
 - The remaining AJAX handlers that don't belong to Settings/Backup/clients/stats/exports/payments (expenses, ad hoc/quote generation, recurring billing, cron schedule editing).
 - Data Fetching — the block that runs every query the page template needs before rendering.
-- **The page template** — the HTML shell (head/styles/sidebar/nav/modals), the Dashboard/Invoices/Billing/Clients/Expenses/Quotes/Stats/Audit/Sync/Docs tab markup, and the big inline `<script>` block with all client-side JS. This is the one piece from the 2.11.3/2.11.4 roadmap item not yet split out — by far the largest remaining chunk (~6,200 lines), and structurally different from everything above since it's one continuous block rendered exactly once rather than a set of discrete handlers.
+- The `<?php require_once ... ?>` calls that assemble the page template from the `lib/page_*.php`, `lib/tab_*.php`, `lib/tabs_misc.php`, `lib/settings_page.php`, and `lib/backup_page.php` files above.
 
 ## History
 
 - **2.11.3** — client/stats/exports/payments logic split into `lib/clients.php`, `lib/stats.php`, `lib/exports.php`, `lib/payments.php`.
 - **2.11.4** — auth/2FA/API-token logic, Settings, and Backup & Restore split into the `lib/auth*.php`, `lib/settings*.php`, `lib/backup*.php` files described above.
-- Next: the page template.
+- **2.11.6** — the page template split into the `lib/page_*.php`/`lib/tab_*.php` files described above. This was the last item on the original code-organization roadmap.

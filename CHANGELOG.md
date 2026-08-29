@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.6] - 2026-08-29
+
+### Changed
+- Code organization: `invoxa.php`'s page template — the HTML head/styles, sidebar/mobile nav, every tab's markup (Dashboard, Invoices, Ad Hoc Invoice, Clients, Expenses, Quotes, Stats, Audit, Sync, Docs), every modal, and the entire client-side `<script>` block — moved into new `lib/page_head.php`, `lib/page_nav.php`, `lib/tab_*.php`, `lib/tabs_misc.php`, `lib/page_modals.php`, and `lib/page_script.php`. This was the last piece of the 2.11.3/2.11.4 code-organization work — `invoxa.php` itself is now backend logic only, down from over 13,000 lines to around 2,300. A relocation, not a rewrite — behavior is meant to be unchanged, run the internal Test Suite after upgrading to confirm.
+
 ## [2.11.5] - 2026-08-29
 
 ### Fixed
