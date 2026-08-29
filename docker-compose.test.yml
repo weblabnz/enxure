@@ -1,0 +1,135 @@
+name: invoxa-test
+
+services:
+
+  db:
+    image: mysql:8.0
+    container_name: invoxa-test-db
+    environment:
+      MYSQL_DATABASE: ${TEST_DB_NAME:-invoxa_test}
+      MYSQL_USER: ${TEST_DB_USER:-invoxa_test}
+      MYSQL_PASSWORD: ${TEST_DB_PASSWORD:-invoxa_test_change_me}
+      MYSQL_ROOT_PASSWORD: ${TEST_DB_ROOT_PASSWORD:-invoxa_test_root_change_me}
+      TZ: ${APP_TIMEZONE:-UTC}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - test-db-data:/var/lib/mysql
+      - ./sql/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - invoxa-test-net
+    labels:
+      wud.watch: "false"
+
+  php:
+    build:
+      context: .
+      dockerfile: php/Dockerfile
+    container_name: invoxa-test-php
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${TEST_DB_NAME:-invoxa_test}
+      DB_USER: ${TEST_DB_USER:-invoxa_test}
+      DB_PASSWORD: ${TEST_DB_PASSWORD:-invoxa_test_change_me}
+      INVOXA_INSTANCE_LABEL: ${TEST_INSTANCE_LABEL:-Test}
+      CRON_SECRET: ${TEST_CRON_SECRET:-}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+      APP_CURRENCY: ${APP_CURRENCY:-USD}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Invoxa (Test)}
+      SMTP_ENCRYPTION: ${SMTP_ENCRYPTION:-tls}
+    volumes:
+      - ./src:/usr/share/nginx/html:ro
+      - ./invoxa-invoices-test:/usr/share/nginx/html/invoxa-invoices
+      - ./invoxa-backups-test:/usr/share/nginx/html/invoxa-backups
+      - test-crontab-data:/etc/invoxa-crontab
+      - ./README.md:/usr/share/nginx/html/docs/README.md:ro
+      - ./INSTALL.md:/usr/share/nginx/html/docs/INSTALL.md:ro
+      - ./CHANGELOG.md:/usr/share/nginx/html/docs/CHANGELOG.md:ro
+      - ./LICENSE:/usr/share/nginx/html/docs/LICENSE:ro
+    networks:
+      - invoxa-test-net
+    healthcheck:
+      test: ["CMD", "cgi-fcgi", "-bind", "-connect", "127.0.0.1:9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      wud.watch: "false"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: invoxa-test-nginx
+    restart: unless-stopped
+    depends_on:
+      - php
+    ports:
+      - "${HTTP_PORT:-8091}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./src:/usr/share/nginx/html:ro
+      - ./invoxa-invoices-test:/usr/share/nginx/html/invoxa-invoices:ro
+    networks:
+      - invoxa-test-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/invoxa.php?health=1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      wud.watch: "false"
+
+  cron:
+    build:
+      context: .
+      dockerfile: cron/Dockerfile
+    container_name: invoxa-test-cron
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    environment:
+      CRON_SECRET: ${TEST_CRON_SECRET:-}
+      CRON_SCHEDULE: ${CRON_SCHEDULE:-15 7 3 * *}
+      TZ: ${APP_TIMEZONE:-UTC}
+    volumes:
+      - test-crontab-data:/etc/crontabs
+    networks:
+      - invoxa-test-net
+    labels:
+      wud.watch: "false"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: invoxa-test-mailpit
+    restart: unless-stopped
+    profiles:
+      - mailsink
+    ports:
+      - "${MAILPIT_UI_PORT:-8026}:8025"
+    networks:
+      - invoxa-test-net
+    labels:
+      wud.watch: "false"
+
+volumes:
+  test-db-data:
+  test-crontab-data:
+
+networks:
+  invoxa-test-net:
+    driver: bridge
