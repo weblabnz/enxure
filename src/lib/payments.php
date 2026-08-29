@@ -4,6 +4,38 @@
 // handlers. Pure Stripe/PayPal API mechanics (no $mysqli) stay in
 // invoice_helpers.php; everything here needs the database.
 
+function invoxaPaymentAccessOk($mysqli, array $settings): bool
+{
+    if (getenv('INVOXA_DEMO_MODE')) {
+        return false;
+    }
+    $host = invoxaNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
+    if ($host === '') {
+        return false;
+    }
+    $license = trim($settings['license_key'] ?? '');
+    $dot = strrpos($license, '.');
+    if ($dot === false) {
+        return false;
+    }
+    $payload = base64_decode(substr($license, 0, $dot), true);
+    $signature = base64_decode(substr($license, $dot + 1), true);
+    $publicKey = base64_decode(INVOXA_LICENSE_PUBLIC_KEY_B64, true);
+    if ($payload === false || $signature === false || $publicKey === false
+        || strlen($signature) !== SODIUM_CRYPTO_SIGN_BYTES
+        || strlen($publicKey) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
+        || !sodium_crypto_sign_verify_detached($signature, $payload, $publicKey)) {
+        return false;
+    }
+    $fields = explode('|', $payload);
+    if (count($fields) !== 3 || $host !== invoxaNormaliseDomain($fields[1])) {
+        return false;
+    }
+    $owner = $mysqli->query("SELECT email FROM invoxa_users ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $ownerEmail = trim((string) ($owner['email'] ?? ''));
+    return $ownerEmail !== '' && strcasecmp($ownerEmail, trim($fields[0])) === 0;
+}
+
 function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $licenseValid): void
 {
     // ── Online Payments (Stripe / PayPal) — public routes ───────────────────────
@@ -34,7 +66,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
         // Payment collection is a paid feature — re-checked here at the moment of
         // taking payment, not just when save_payment_settings first turned it on,
         // so a deactivated license genuinely stops collecting payments.
-        if (!$licenseValid) {
+        if (!invoxaPaymentAccessOk($mysqli, $settings)) {
             echo invoxaSimplePage($__businessName, 'Online payment unavailable', 'Online payment isn\'t set up for this invoice yet. Please contact ' . htmlspecialchars($__businessName) . ' for payment instructions.');
             exit;
         }

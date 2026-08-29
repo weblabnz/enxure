@@ -354,8 +354,32 @@ function invoxaAuthenticateApiRequest($mysqli): ?array
 {
     // The API is a paid feature — re-checked on every request, not just at
     // token creation, so a deactivated license stops authenticating tokens.
-    global $licenseValid;
-    if (!$licenseValid) {
+    $licenseRow = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'license_key'")->fetch_assoc();
+    $license = trim((string) ($licenseRow['setting_value'] ?? ''));
+    $parts = $license === '' ? [] : explode('.', $license, 2);
+    if (getenv('INVOXA_DEMO_MODE') || count($parts) !== 2) {
+        return null;
+    }
+    $payload = base64_decode($parts[0], true);
+    $signature = base64_decode($parts[1], true);
+    $publicKey = base64_decode(INVOXA_LICENSE_PUBLIC_KEY_B64, true);
+    if ($payload === false || $signature === false || $publicKey === false
+        || strlen($signature) !== SODIUM_CRYPTO_SIGN_BYTES
+        || strlen($publicKey) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
+        || !sodium_crypto_sign_verify_detached($signature, $payload, $publicKey)) {
+        return null;
+    }
+    $fields = explode('|', $payload);
+    if (count($fields) !== 3) {
+        return null;
+    }
+    $ownerRow = $mysqli->query("SELECT email FROM invoxa_users ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $ownerEmail = trim((string) ($ownerRow['email'] ?? ''));
+    if ($ownerEmail === '' || strcasecmp($ownerEmail, trim($fields[0])) !== 0) {
+        return null;
+    }
+    $host = invoxaNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
+    if ($host === '' || $host !== invoxaNormaliseDomain($fields[1])) {
         return null;
     }
     $header = '';

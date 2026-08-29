@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.21');
+define('APP_VERSION', '2.11.22');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -268,10 +268,49 @@ function generateInvoiceNumber($mysqli, $clientKey, $clientName, array $settings
 
 // (validDateOverride now lives in lib/invoice_helpers.php)
 
+function invoxaLicenseSignatureOk($mysqli, array $settings): bool
+{
+    if (getenv('INVOXA_DEMO_MODE')) {
+        return false;
+    }
+    $license = trim($settings['license_key'] ?? '');
+    if (!preg_match('/^([^.]+)\.([^.]+)$/', $license, $m)) {
+        return false;
+    }
+    $payload = base64_decode($m[1], true);
+    $signature = base64_decode($m[2], true);
+    $publicKey = base64_decode(INVOXA_LICENSE_PUBLIC_KEY_B64, true);
+    if ($payload === false || $signature === false || $publicKey === false) {
+        return false;
+    }
+    if (strlen($signature) !== SODIUM_CRYPTO_SIGN_BYTES || strlen($publicKey) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES) {
+        return false;
+    }
+    if (!sodium_crypto_sign_verify_detached($signature, $payload, $publicKey)) {
+        return false;
+    }
+    $fields = explode('|', $payload);
+    if (count($fields) !== 3) {
+        return false;
+    }
+    $owner = $mysqli->query("SELECT email FROM invoxa_users ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $ownerEmail = trim((string) ($owner['email'] ?? ''));
+    if ($ownerEmail === '' || strcasecmp($ownerEmail, trim($fields[0])) !== 0) {
+        return false;
+    }
+    global $isCron;
+    if ($isCron) {
+        return true;
+    }
+    $host = invoxaNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
+    return $host !== '' && $host === invoxaNormaliseDomain($fields[1]);
+}
+
 function processInvoice($mysqli, $client, $amount, $description, $emailPassword, $lineItems = null, $dueDateOverride = null, $memo = null, $discountPct = 0.0, $taxRate = 0.0)
 {
-    global $settings, $licenseValid;
-    $showPoweredBy = !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1');
+    global $settings;
+    $__unlocked = invoxaLicenseSignatureOk($mysqli, $settings);
+    $showPoweredBy = !($__unlocked && ($settings['hide_powered_by'] ?? '0') === '1');
     $date = date("Y-m-d");
     $termsDays = (int) ($client['payment_terms_days'] ?? 21);
     $dueDate = $dueDateOverride ?: date("Y-m-d", strtotime("+{$termsDays} days"));
@@ -292,7 +331,7 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
     // no request context to infer one from).
     $payUrl = null;
     $publicBase = invoxaPublicBaseUrl($settings);
-    if ($licenseValid && $publicBase !== null && (($settings['stripe_enabled'] ?? '0') === '1' || ($settings['paypal_enabled'] ?? '0') === '1')) {
+    if ($__unlocked && $publicBase !== null && (($settings['stripe_enabled'] ?? '0') === '1' || ($settings['paypal_enabled'] ?? '0') === '1')) {
         $payUrl = $publicBase . '/?pay=' . rawurlencode($invNum);
     }
 
@@ -969,7 +1008,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         //   or removing one — update_user/delete_user — stays free, same pattern
         //   as the others above).
         $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense', 'create_user'];
-        if (!$licenseValid && in_array($_POST['action'], $__licensePaidActions, true)) {
+        if (!invoxaLicenseSignatureOk($mysqli, $settings) && in_array($_POST['action'], $__licensePaidActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This needs a license — add a key under Settings > License, or see Docs for what a license unlocks.']);
             exit;
         }

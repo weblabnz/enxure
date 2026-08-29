@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.22] - 2026-08-30
+
+### Changed
+- License enforcement for payment collection, the external API, and the paid-action gate no longer depends on a single shared flag computed once per request — each now re-verifies the signature independently at the point of use. No behavior change for a valid license.
+
 ## [2.11.21] - 2026-08-30
 
 ### Changed
