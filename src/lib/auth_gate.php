@@ -397,7 +397,7 @@ $res = $mysqli->query("SELECT setting_key, setting_value FROM invoxa_settings");
 while ($r = $res->fetch_assoc()) {
     $settings[$r['setting_key']] = $r['setting_value'];
 }
-require_once __DIR__ . '/lib/license.php';
+require_once __DIR__ . '/license.php';
 
 // Three data-view states shared by every Invoices/Clients/Dashboard/Stats
 // query: real-only (default), mixed, or test-only. Test-only wins over
