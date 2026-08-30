@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.23] - 2026-08-30
+
+### Fixed
+- Recurring billing cron could silently stop firing after any php container restart/rebuild. `php/docker-entrypoint.sh` recursively chowned the entire shared `crontab-data` volume (including `/etc/invoxa-crontab`) to `www-data:www-data` on every boot, which also flipped the crontab file busybox crond loads back from `root:33` to `www-data:www-data` — crond refuses to load a crontab it doesn't own as root, so it would keep running whatever schedule it last loaded successfully until the cron container itself restarted and re-chowned the file. php's entrypoint no longer recursively chowns the crontab directory; only the cron container's entrypoint manages ownership there now.
+
 ## [2.11.22] - 2026-08-30
 
 ### Changed
