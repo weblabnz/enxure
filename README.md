@@ -97,6 +97,10 @@ Invoxa is free and open source — everything above works with no license key at
 
 Questions, bug reports, or feature requests: [open an issue on GitLab](https://gitlab.com/weblabnz/invoxa/-/issues), or email `contact-project+weblabnz-invoxa-inv@incoming.gitlab.com` if you'd rather not create a GitLab account — it lands in the same place either way.
 
+## Contributing
+
+Development happens on [GitLab](https://gitlab.com/weblabnz/invoxa) — merge requests, issues, and discussion all live there. This GitHub repository is a read-only mirror; pull requests opened here are closed automatically with a link back to GitLab.
+
 ## Migrating or locked out?
 
 See [INSTALL.md](INSTALL.md#migrating-to-a-new-server) for moving Invoxa to a new server, or [INSTALL.md](INSTALL.md#recovering-access-forgot-adminusernamepassword) if you've forgotten the admin login.
