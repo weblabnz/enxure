@@ -1727,7 +1727,17 @@
             }
 
             .modal {
-                max-width: 94vw !important;
+                width: 100vw !important;
+                max-width: 100vw !important;
+                height: 100vh !important;
+                max-height: 100vh !important;
+                border-radius: 0 !important;
+                border-left: none;
+                border-right: none;
+            }
+
+            .modal-overlay {
+                padding: 0;
             }
 
             h2.page-title {

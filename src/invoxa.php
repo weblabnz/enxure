@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.24');
+define('APP_VERSION', '2.11.25');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -1461,6 +1461,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 . " Recurring expenses logged {$recurExpSent}, skipped {$recurExpSkipped}, errors {$recurExpErrors}.";
             invoxaLogAction($mysqli, null, '', 'recurring_run', $runNotes);
             $totalRunErrors = $errors + $reminderErrors + $lateFeeErrors + $recurExpErrors;
+            if ($sent > 0) {
+                notifyChannel($mysqli, $settings, 'notify_on_recurring_run', "\xF0\x9F\x94\x81 Recurring billing run sent {$sent} invoice" . ($sent === 1 ? '' : 's') . " — {$runNotes}");
+            }
             if ($totalRunErrors > 0) {
                 notifyChannel($mysqli, $settings, 'notify_on_recurring_errors', "\xE2\x9A\xA0\xEF\xB8\x8F Recurring billing run had {$totalRunErrors} error" . ($totalRunErrors === 1 ? '' : 's') . " — {$runNotes}");
             }

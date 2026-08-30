@@ -68,6 +68,7 @@ function invoxaHandleSaveNotificationSettings($mysqli): void
     $notifyInvoiceVoided = ($_POST['notify_on_invoice_voided'] ?? '0') === '1' ? '1' : '0';
     $notifyWebhookUnmatched = ($_POST['notify_on_webhook_unmatched'] ?? '0') === '1' ? '1' : '0';
     $notifyRefund = ($_POST['notify_on_refund'] ?? '0') === '1' ? '1' : '0';
+    $notifyRecurringRun = ($_POST['notify_on_recurring_run'] ?? '0') === '1' ? '1' : '0';
     $notifyRecurringErrors = ($_POST['notify_on_recurring_errors'] ?? '0') === '1' ? '1' : '0';
     $notifySecurityEvent = ($_POST['notify_on_security_event'] ?? '0') === '1' ? '1' : '0';
     $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
@@ -86,6 +87,7 @@ function invoxaHandleSaveNotificationSettings($mysqli): void
         'notify_on_invoice_voided' => $notifyInvoiceVoided,
         'notify_on_webhook_unmatched' => $notifyWebhookUnmatched,
         'notify_on_refund' => $notifyRefund,
+        'notify_on_recurring_run' => $notifyRecurringRun,
         'notify_on_recurring_errors' => $notifyRecurringErrors,
         'notify_on_security_event' => $notifySecurityEvent,
     ] as $key => $value) {

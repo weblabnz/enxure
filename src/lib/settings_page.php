@@ -571,76 +571,95 @@
                                             <button type="button" class="btn small" onclick="setAllNotifyEvents(false)">Select None</button>
                                         </span>
                                     </div>
-                                    <div class="form-group" style="margin-top:0.5rem;">
-                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" class="notify-event-cb" id="notifyOnPayment" name="notify_on_payment" value="1"
-                                                <?= ($settings['notify_on_payment'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                            Notify when a payment is received
-                                        </label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" class="notify-event-cb" id="notifyOnRefund" name="notify_on_refund" value="1"
-                                                <?= ($settings['notify_on_refund'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                            Notify when a refund is issued
-                                        </label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" class="notify-event-cb" id="notifyOnOverdue" name="notify_on_overdue" value="1"
-                                                <?= ($settings['notify_on_overdue'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                            Notify when an invoice becomes overdue (same trigger as the reminder email)
-                                        </label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" class="notify-event-cb" id="notifyOnQuoteAccepted" name="notify_on_quote_accepted" value="1"
-                                                <?= ($settings['notify_on_quote_accepted'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                            Notify when a client accepts a quote from their Client Portal
-                                        </label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" class="notify-event-cb" id="notifyOnEmailFailed" name="notify_on_email_failed" value="1"
-                                                <?= ($settings['notify_on_email_failed'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                            Notify when an invoice email fails to send
-                                        </label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" class="notify-event-cb" id="notifyOnLateFee" name="notify_on_late_fee" value="1"
-                                                <?= ($settings['notify_on_late_fee'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                            Notify when a late fee is charged
-                                        </label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" class="notify-event-cb" id="notifyOnInvoiceVoided" name="notify_on_invoice_voided" value="1"
-                                                <?= ($settings['notify_on_invoice_voided'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                            Notify when an invoice is voided
-                                        </label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" class="notify-event-cb" id="notifyOnWebhookUnmatched" name="notify_on_webhook_unmatched" value="1"
-                                                <?= ($settings['notify_on_webhook_unmatched'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                            Notify when an incoming payment doesn't match any invoice
-                                        </label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" class="notify-event-cb" id="notifyOnRecurringErrors" name="notify_on_recurring_errors" value="1"
-                                                <?= ($settings['notify_on_recurring_errors'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                            Notify when a recurring billing run has errors
-                                        </label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
-                                            <input type="checkbox" class="notify-event-cb" id="notifyOnSecurityEvent" name="notify_on_security_event" value="1"
-                                                <?= ($settings['notify_on_security_event'] ?? '1') === '1' ? 'checked' : '' ?>>
-                                            Notify on security events (2FA enabled/disabled, API tokens created/revoked)
-                                        </label>
-                                    </div>
+                                    <details open class="notify-group" style="margin-top:0.75rem;">
+                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;">Payments &amp; Billing</summary>
+                                        <div class="form-group" style="margin-top:0.5rem;">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnPayment" name="notify_on_payment" value="1"
+                                                    <?= ($settings['notify_on_payment'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify when a payment is received
+                                            </label>
+                                        </div>
+                                        <div class="form-group">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnRefund" name="notify_on_refund" value="1"
+                                                    <?= ($settings['notify_on_refund'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify when a refund is issued
+                                            </label>
+                                        </div>
+                                        <div class="form-group">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnLateFee" name="notify_on_late_fee" value="1"
+                                                    <?= ($settings['notify_on_late_fee'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify when a late fee is charged
+                                            </label>
+                                        </div>
+                                        <div class="form-group">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnWebhookUnmatched" name="notify_on_webhook_unmatched" value="1"
+                                                    <?= ($settings['notify_on_webhook_unmatched'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify when an incoming payment doesn't match any invoice
+                                            </label>
+                                        </div>
+                                    </details>
+                                    <details open class="notify-group" style="margin-top:0.75rem;">
+                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;">Invoices &amp; Quotes</summary>
+                                        <div class="form-group" style="margin-top:0.5rem;">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnOverdue" name="notify_on_overdue" value="1"
+                                                    <?= ($settings['notify_on_overdue'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify when an invoice becomes overdue (same trigger as the reminder email)
+                                            </label>
+                                        </div>
+                                        <div class="form-group">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnQuoteAccepted" name="notify_on_quote_accepted" value="1"
+                                                    <?= ($settings['notify_on_quote_accepted'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify when a client accepts a quote from their Client Portal
+                                            </label>
+                                        </div>
+                                        <div class="form-group">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnEmailFailed" name="notify_on_email_failed" value="1"
+                                                    <?= ($settings['notify_on_email_failed'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify when an invoice email fails to send
+                                            </label>
+                                        </div>
+                                        <div class="form-group">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnInvoiceVoided" name="notify_on_invoice_voided" value="1"
+                                                    <?= ($settings['notify_on_invoice_voided'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify when an invoice is voided
+                                            </label>
+                                        </div>
+                                    </details>
+                                    <details open class="notify-group" style="margin-top:0.75rem;">
+                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;">Recurring &amp; Automation</summary>
+                                        <div class="form-group" style="margin-top:0.5rem;">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnRecurringRun" name="notify_on_recurring_run" value="1"
+                                                    <?= ($settings['notify_on_recurring_run'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify when a recurring billing run sends invoice emails
+                                            </label>
+                                        </div>
+                                        <div class="form-group">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnRecurringErrors" name="notify_on_recurring_errors" value="1"
+                                                    <?= ($settings['notify_on_recurring_errors'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify when a recurring billing run has errors
+                                            </label>
+                                        </div>
+                                    </details>
+                                    <details open class="notify-group" style="margin-top:0.75rem;">
+                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;">Security</summary>
+                                        <div class="form-group" style="margin-top:0.5rem;">
+                                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
+                                                <input type="checkbox" class="notify-event-cb" id="notifyOnSecurityEvent" name="notify_on_security_event" value="1"
+                                                    <?= ($settings['notify_on_security_event'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                                Notify on security events (2FA enabled/disabled, API tokens created/revoked)
+                                            </label>
+                                        </div>
+                                    </details>
                                     <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
                                         <button type="submit" class="btn primary" id="saveNotificationSettingsBtn"><i
                                                 class="fa-solid fa-save"></i> Save Notification Settings</button>

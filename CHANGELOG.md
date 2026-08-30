@@ -2,6 +2,15 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.25] - 2026-08-31
+
+### Added
+- New `notify_on_recurring_run` notification event (Settings > Notifications > Recurring & Automation) pings the configured channel whenever a cron-triggered recurring billing run actually emails invoices — previously the only recurring-billing alert was `notify_on_recurring_errors`, which stays silent on a clean run, so there was no way to confirm the cron had fired and sent anything without checking the audit log.
+
+### Changed
+- Settings > Notifications event list regrouped from one flat block of 10 checkboxes into four collapsible sections (Payments & Billing, Invoices & Quotes, Recurring & Automation, Security) so related events are easier to scan; Select All/Select None and the save handler are unaffected since they still operate on every `.notify-event-cb` inside the form regardless of grouping.
+- Login screen (`api_v1.php`'s `.auth-box`) now fills the full viewport on screens 640px and narrower instead of floating as a fixed max-width card with the background gradient visible above and below it.
+
 ## [2.11.24] - 2026-08-30
 
 ### Fixed
