@@ -639,6 +639,20 @@
             top: 0;
         }
 
+        .docs-nav-category summary::marker,
+        .docs-nav-category summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .docs-nav-category summary .docs-cat-chevron {
+            font-size: 0.65rem;
+            transition: transform 0.15s ease;
+        }
+
+        .docs-nav-category[open] summary .docs-cat-chevron {
+            transform: rotate(90deg);
+        }
+
         .subnav-item {
             display: flex;
             align-items: center;

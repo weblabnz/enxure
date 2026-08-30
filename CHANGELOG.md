@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.27] - 2026-08-31
+
+### Changed
+- Docs submenu categories: only Features (the 10-item one) starts collapsed on load — Getting Started and Reference stay open, since they're short enough not to need hiding. Each category heading now shows an item count badge (Getting Started 2, Features 10, Reference 4) and a chevron that rotates to reflect open/closed state, and there's more breathing room between the heading and the first item beneath it.
+
 ## [2.11.26] - 2026-08-31
 
 ### Added

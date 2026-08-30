@@ -32,9 +32,12 @@
                     </div>
                     <?php foreach ($__docCategories as $__catName => $__catPages): ?>
                         <details class="docs-nav-category" data-category="<?= htmlspecialchars($__catName) ?>"
-                            <?= $__catName === 'Getting Started' ? 'open' : '' ?>>
-                            <summary style="padding:0.5rem 0.75rem 0.25rem; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); cursor:pointer;">
-                                <?= htmlspecialchars($__catName) ?></summary>
+                            <?= $__catName !== 'Features' ? 'open' : '' ?>>
+                            <summary style="padding:0.5rem 0.75rem 0.6rem; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; gap:0.5rem;">
+                                <i class="fa-solid fa-chevron-right docs-cat-chevron"></i>
+                                <span style="flex:1;"><?= htmlspecialchars($__catName) ?></span>
+                                <span style="background:var(--surface-hover); border:1px solid var(--border); border-radius:10px; padding:0.05rem 0.45rem; font-size:0.68rem; font-weight:600; letter-spacing:normal; text-transform:none; color:var(--text-secondary);"><?= count($__catPages) ?></span>
+                            </summary>
                             <?php foreach ($__catPages as $__pageId => $__pageTitle): ?>
                                 <button type="button" class="subnav-item docs-nav-page<?= $__pageId === 'readme' ? ' active' : '' ?>"
                                     data-docs-target="<?= htmlspecialchars($__pageId) ?>" data-title="<?= htmlspecialchars(strtolower($__pageTitle)) ?>"
