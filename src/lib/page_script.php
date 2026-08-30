@@ -223,7 +223,7 @@
             // Settings and Docs each get their own mini nav (mirrors the main sidebar
             // nav()/`.section` pattern, nested one level deeper).
             function navSettings(target) {
-                document.querySelectorAll('#sec-settings .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.settingsTarget === target));
+                document.querySelectorAll('#sec-settings .subnav-item, .nav-subnav-slot[data-for="settings"] .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.settingsTarget === target));
                 document.querySelectorAll('#sec-settings .subnav-pane').forEach(el => el.classList.toggle('active', el.id === 'settings-pane-' + target));
                 localStorage.setItem('settingsSubTab', target);
             }
@@ -231,7 +231,7 @@
             if (storedSettingsTab && document.getElementById('settings-pane-' + storedSettingsTab)) navSettings(storedSettingsTab);
 
             function navDocs(target) {
-                document.querySelectorAll('#sec-docs .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.docsTarget === target));
+                document.querySelectorAll('#sec-docs .subnav-item, .nav-subnav-slot[data-for="docs"] .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.docsTarget === target));
                 document.querySelectorAll('#sec-docs .subnav-pane').forEach(el => el.classList.toggle('active', el.id === 'docs-pane-' + target));
                 localStorage.setItem('docsSubTab', target);
             }
@@ -270,7 +270,7 @@
             }
 
             function navBackup(target) {
-                document.querySelectorAll('#sec-backup .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.backupTarget === target));
+                document.querySelectorAll('#sec-backup .subnav-item, .nav-subnav-slot[data-for="backup"] .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.backupTarget === target));
                 document.querySelectorAll('#sec-backup .subnav-pane').forEach(el => el.classList.toggle('active', el.id === 'backup-pane-' + target));
                 localStorage.setItem('backupSubTab', target);
                 if (target === 'sync') refreshSync();
@@ -405,7 +405,7 @@
                 }
             }
             function navStats(target) {
-                document.querySelectorAll('#sec-stats .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.statsTarget === target));
+                document.querySelectorAll('#sec-stats .subnav-item, .nav-subnav-slot[data-for="stats"] .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.statsTarget === target));
                 document.querySelectorAll('#sec-stats .subnav-pane').forEach(el => el.classList.toggle('active', el.id === 'stats-pane-' + target));
                 localStorage.setItem('statsSubTab', target);
                 initStatsChartsFor(target);

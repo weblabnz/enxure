@@ -653,6 +653,7 @@
             font-weight: 500;
             text-align: left;
             cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .subnav-item:hover {

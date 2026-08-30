@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.24] - 2026-08-30
+
+### Fixed
+- Mobile submenu highlight for Statistics, Data Management, Docs, and Settings could get stuck on the first sub-item selected and never move to whichever one was tapped next. `placeSubnavs()` relocates each section's `.subnav` button list out of its `#sec-*` container into the mobile `.nav-subnav-slot` on narrow screens, but `navStats()`/`navDocs()`/`navSettings()`/`navBackup()` only ever looked for `.subnav-item` inside the original `#sec-*` container, so on mobile the active-item toggle silently matched nothing after that relocation. Only a full page reload (which re-applies the stored sub-tab before relocation runs) showed the correct item highlighted. All four functions now also match `.nav-subnav-slot[data-for="..."] .subnav-item`, the same dual-location pattern `placeSubnavs()` itself uses.
+
 ## [2.11.23] - 2026-08-30
 
 ### Fixed
