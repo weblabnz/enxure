@@ -146,14 +146,113 @@ function invoxaHandleSaveScreenshot(): void
 
 // The Audit Log tab — same reasoning as renderStatsSection() above (no
 // client-side state worth preserving across a refresh).
-function renderAuditSection(array $actions): string
+function invoxaAuditIcons(): array
 {
-    $icons = ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban', 'quote_accepted' => 'fa-file-circle-check', 'quote_converted' => 'fa-file-invoice', 'user_created' => 'fa-user-plus', 'user_role_changed' => 'fa-user-gear', 'user_password_reset' => 'fa-key', 'user_deleted' => 'fa-user-xmark'];
+    return ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban', 'quote_accepted' => 'fa-file-circle-check', 'quote_converted' => 'fa-file-invoice', 'user_created' => 'fa-user-plus', 'user_role_changed' => 'fa-user-gear', 'user_password_reset' => 'fa-key', 'user_deleted' => 'fa-user-xmark'];
+}
+
+// Short category tag for the Type column — every action type gets one,
+// grouping the 26 granular action_type values (already shown in full in the
+// Details badge) into the handful of subsystems a reader actually scans for.
+function invoxaAuditTypeLabel(string $actionType): string
+{
+    $types = [
+        'email_sent' => 'INV',
+        'email_failed' => 'INV',
+        'mark_paid' => 'INV',
+        'manual_send' => 'INV',
+        'note_added' => 'INV',
+        'synced' => 'SYNC',
+        'smtp_test' => 'SMTP',
+        'reminder_sent' => 'INV',
+        'reminder_failed' => 'INV',
+        'late_fee_charged' => 'INV',
+        'recurring_run' => 'BILL',
+        'audit_log_pruned' => 'SYS',
+        'invoice_voided' => 'INV',
+        'invoice_unvoided' => 'INV',
+        'notification_test' => 'NOTIF',
+        'notification_failed' => 'NOTIF',
+        'totp_enabled' => 'SEC',
+        'totp_disabled' => 'SEC',
+        'refund_issued' => 'INV',
+        'webhook_unmatched' => 'WH',
+        'api_token_created' => 'API',
+        'api_token_revoked' => 'API',
+        'quote_accepted' => 'QTE',
+        'quote_converted' => 'QTE',
+        'user_created' => 'USR',
+        'user_role_changed' => 'USR',
+        'user_password_reset' => 'USR',
+        'user_deleted' => 'USR',
+    ];
+    return $types[$actionType] ?? 'SYS';
+}
+
+// One page of audit rows, newest first — backs both the initial Audit Log
+// render and the "Show Next 100"/AJAX refresh paths so they can't drift
+// apart. Fetches $pageSize+1 rows so the presence of that extra row tells
+// the caller whether another page exists, without a separate COUNT(*).
+function renderAuditItems($mysqli, int $offset, int $pageSize = 100): array
+{
+    $icons = invoxaAuditIcons();
+    $fetchLimit = $pageSize + 1;
+    $stmt = $mysqli->prepare("SELECT a.*, i.client_name FROM invoxa_actions a LEFT JOIN invoxa_invoices i ON a.invoice_number = i.invoice_number ORDER BY a.performed_at DESC LIMIT ? OFFSET ?");
+    $stmt->bind_param('ii', $fetchLimit, $offset);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $rows = [];
+    while ($r = $res->fetch_assoc())
+        $rows[] = $r;
+    $hasMore = count($rows) > $pageSize;
+    if ($hasMore)
+        array_pop($rows);
+    ob_start();
+    foreach ($rows as $act):
+        $icon = $icons[$act['action_type']] ?? 'fa-bolt';
+        $client = !empty($act['client_name']) ? htmlspecialchars($act['client_name']) : (empty($act['invoice_number']) ? '' : 'Unknown Client');
+        $typeLabel = invoxaAuditTypeLabel($act['action_type']);
+        $performedBy = $act['performed_by_username'] ?? null;
+        $performedByLabel = $performedBy !== null ? htmlspecialchars($performedBy) : 'System';
+        $searchBlob = strtolower($client . ' ' . $typeLabel . ' ' . $act['invoice_number'] . ' ' . str_replace('_', ' ', $act['action_type']) . ' ' . ($act['notes'] ?? '') . ' ' . $performedByLabel);
+        ?>
+        <div class="timeline-item" data-action-type="<?= htmlspecialchars($act['action_type']) ?>"
+            data-search="<?= htmlspecialchars($searchBlob) ?>">
+            <div class="timeline-icon"><i class="fa-solid <?= $icon ?>"></i></div>
+            <div class="timeline-content">
+                <div class="timeline-time"><?= date('M j, Y H:i', strtotime($act['performed_at'])) ?></div>
+                <div
+                    style="font-size: 0.75rem; font-weight: 700; white-space: nowrap; min-width: 90px; color: var(--accent); letter-spacing: 0.03em;">
+                    <?= $typeLabel ?></div>
+                <div style="font-size: 0.85rem; color: var(--text-primary); flex: 1; min-width: 200px;">
+                    <span
+                        style="background: rgba(255,255,255,0.05); padding: 0.2rem 0.4rem; border-radius: 4px; border: 1px solid var(--border); font-size: 0.65rem; text-transform: uppercase; margin-right: 0.75rem; font-weight: 600; letter-spacing: 0.5px;"><?= htmlspecialchars(str_replace('_', ' ', $act['action_type'])) ?></span><?= htmlspecialchars($act['notes'] ?? '') ?>
+                </div>
+                <div style="font-size: 0.78rem; min-width: 110px; color: var(--text-secondary); white-space: nowrap;"
+                    title="Performed by"><i class="fa-solid fa-user-shield"
+                        style="font-size: 0.7rem; margin-right: 0.3rem;"></i><?= $performedByLabel ?></div>
+                <div style="font-size: 0.85rem; min-width: 140px; color: var(--text-secondary);"
+                    title="<?= $client ?>"><?php if ($client !== ''): ?><i class="fa-solid fa-user"
+                        style="font-size: 0.75rem; margin-right: 0.3rem;"></i><?= $client ?><?php endif; ?></div>
+            </div>
+        </div>
+    <?php endforeach;
+    return ['html' => ob_get_clean(), 'hasMore' => $hasMore, 'nextOffset' => $offset + count($rows)];
+}
+
+function renderAuditSection($mysqli): string
+{
+    $icons = invoxaAuditIcons();
+    $page = renderAuditItems($mysqli, 0);
     ob_start();
     ?>
     <h2 class="page-title">Audit Log
-        <button class="btn" onclick="refreshAuditSection()" title="Reload audit log"><i
-                class="fa-solid fa-rotate"></i> Refresh</button>
+        <span style="display:flex; gap:0.5rem;">
+            <button class="btn" onclick="exportAuditLogCsv()" title="Export the currently loaded/filtered rows as CSV"><i
+                    class="fa-solid fa-file-csv"></i> Export CSV</button>
+            <button class="btn" onclick="refreshAuditSection()" title="Reload audit log"><i
+                    class="fa-solid fa-rotate"></i> Refresh</button>
+        </span>
     </h2>
     <!-- Deliberately a sibling of .section-scroll, not a child inside it — same
          reasoning as h2.page-title: this needs to stay put while the timeline
@@ -174,38 +273,23 @@ function renderAuditSection(array $actions): string
     </div>
     <div class="section-scroll">
     <div class="card">
-        <div class="card-body timeline" id="auditTimelineBody">
-            <?php
-            foreach ($actions as $act):
-                $icon = $icons[$act['action_type']] ?? 'fa-bolt';
-                $client = !empty($act['client_name']) ? htmlspecialchars($act['client_name']) : 'Unknown Client';
-                $performedBy = $act['performed_by_username'] ?? null;
-                $performedByLabel = $performedBy !== null ? htmlspecialchars($performedBy) : 'System';
-                $searchBlob = strtolower($client . ' ' . $act['invoice_number'] . ' ' . str_replace('_', ' ', $act['action_type']) . ' ' . ($act['notes'] ?? '') . ' ' . $performedByLabel);
-                ?>
-                <div class="timeline-item" data-action-type="<?= htmlspecialchars($act['action_type']) ?>"
-                    data-search="<?= htmlspecialchars($searchBlob) ?>">
-                    <div class="timeline-icon"><i class="fa-solid <?= $icon ?>"></i></div>
-                    <div class="timeline-content">
-                        <div class="timeline-time"><?= date('M j, Y H:i', strtotime($act['performed_at'])) ?></div>
-                        <div
-                            style="font-size: 0.85rem; font-weight: 600; white-space: nowrap; min-width: 90px; color: var(--accent);">
-                            Inv <?= htmlspecialchars($act['invoice_number']) ?></div>
-                        <div style="font-size: 0.85rem; min-width: 140px; color: var(--text-secondary);"
-                            title="<?= $client ?>"><i class="fa-solid fa-user"
-                                style="font-size: 0.75rem; margin-right: 0.3rem;"></i><?= $client ?></div>
-                        <div style="font-size: 0.85rem; color: var(--text-primary); flex: 1; min-width: 200px;">
-                            <span
-                                style="background: rgba(255,255,255,0.05); padding: 0.2rem 0.4rem; border-radius: 4px; border: 1px solid var(--border); font-size: 0.65rem; text-transform: uppercase; margin-right: 0.75rem; font-weight: 600; letter-spacing: 0.5px;"><?= htmlspecialchars(str_replace('_', ' ', $act['action_type'])) ?></span><?= htmlspecialchars($act['notes'] ?? '') ?>
-                        </div>
-                        <div style="font-size: 0.78rem; min-width: 110px; color: var(--text-secondary); white-space: nowrap;"
-                            title="Performed by"><i class="fa-solid fa-user-shield"
-                                style="font-size: 0.7rem; margin-right: 0.3rem;"></i><?= $performedByLabel ?></div>
-                    </div>
-                </div>
-            <?php endforeach; ?>
+        <div class="card-body">
+        <div class="timeline-header" style="display:flex; align-items:center; flex-wrap:wrap; gap:0.75rem 1.5rem; margin-left:2rem; padding:0 1.25rem 0.5rem; border-bottom:1px solid var(--border); margin-bottom:0.75rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary);">
+            <div style="min-width:130px;">Time</div>
+            <div style="min-width:90px;">Type</div>
+            <div style="flex:1; min-width:200px;">Details</div>
+            <div style="min-width:110px;">Performed By</div>
+            <div style="min-width:140px;">Client</div>
+        </div>
+        <div class="timeline" id="auditTimelineBody" data-next-offset="<?= $page['nextOffset'] ?>"
+            data-has-more="<?= $page['hasMore'] ? '1' : '0' ?>">
+            <?= $page['html'] ?>
             <p id="auditNoResults" style="display:none; color:var(--text-secondary); text-align:center; padding:1.5rem 0; margin:0;">
                 No entries match your search/filter.</p>
+        </div>
+        <div id="auditLoadMoreWrap" style="text-align:center; margin-top:1rem; <?= $page['hasMore'] ? '' : 'display:none;' ?>">
+            <button type="button" class="btn" id="auditLoadMoreBtn" onclick="loadMoreAuditRows()">Show Next 100</button>
+        </div>
         </div>
     </div>
     </div>

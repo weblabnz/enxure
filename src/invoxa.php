@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.25');
+define('APP_VERSION', '2.11.26');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -2429,7 +2429,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
     } elseif ($which === 'sync_section') {
         echo renderSyncSection($missingFiles, $knownClientFolders, $missingDiskData);
     } elseif ($which === 'audit_section') {
-        echo renderAuditSection($actions);
+        echo renderAuditSection($mysqli);
+    } elseif ($which === 'audit_items') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(renderAuditItems($mysqli, max(0, (int) ($_GET['offset'] ?? 0))));
     }
     exit;
 }

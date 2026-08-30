@@ -2,6 +2,18 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.26] - 2026-08-31
+
+### Added
+- Audit Log gets a paginated "Show Next 100" button (`renderAuditItems()`, a new `audit_items` AJAX endpoint) instead of a hard 200-row cap with nothing beyond it, and an Export CSV button that downloads whatever's currently loaded and passing the search/type filter, matching the existing bulk-export convention used on Invoices/Expenses/Quotes.
+- Docs submenu categories (Getting Started/Features/Reference) are now collapsible `<details>` sections instead of always-expanded lists — only Getting Started is open by default, cutting the always-visible item count from 16 to 2. Selecting a page (including via the remembered last-viewed tab on reload) or matching a search term auto-expands its category.
+
+### Changed
+- Audit Log timeline gets column headings, and the Client column moved next to Performed By on the right. The old "Invoice" column is now "Type": a short subsystem tag (INV, QTE, SMTP, BILL, SYS, NOTIF, SEC, WH, API, USR, SYNC) shown for every row instead of a literal invoice number that was blank (just "Inv" with nothing after it) for the many action types — recurring billing runs, SMTP tests, API token changes, user management, etc. — that were never invoice-scoped to begin with. The Client column is blank for those same non-client actions instead of the misleading "Unknown Client" it showed before; a genuinely orphaned invoice (client record deleted) still shows "Unknown Client".
+
+### Fixed
+- `renderAuditSection()`/`renderAuditItems()` now query the audit log directly instead of reusing the page's pre-fetched, 200-row-capped `$actions` array, so the Audit Log tab (and its Refresh button) are no longer tied to that cap.
+
 ## [2.11.25] - 2026-08-31
 
 ### Added

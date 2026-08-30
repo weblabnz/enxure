@@ -5,6 +5,6 @@
 
         <!-- AUDIT LOG -->
         <div id="sec-audit" class="section">
-            <?= renderAuditSection($actions) ?>
+            <?= renderAuditSection($mysqli) ?>
         </div>
 

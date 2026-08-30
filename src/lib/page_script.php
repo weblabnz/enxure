@@ -233,6 +233,10 @@
             function navDocs(target) {
                 document.querySelectorAll('#sec-docs .subnav-item, .nav-subnav-slot[data-for="docs"] .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.docsTarget === target));
                 document.querySelectorAll('#sec-docs .subnav-pane').forEach(el => el.classList.toggle('active', el.id === 'docs-pane-' + target));
+                document.querySelectorAll(`.docs-nav-page[data-docs-target="${target}"]`).forEach(el => {
+                    const details = el.closest('details.docs-nav-category');
+                    if (details) details.open = true;
+                });
                 localStorage.setItem('docsSubTab', target);
             }
             const storedDocsTab = localStorage.getItem('docsSubTab');
@@ -258,6 +262,7 @@
                         if (match) { catHasVisible = true; anyVisible = true; }
                     });
                     catEl.style.display = catHasVisible ? '' : 'none';
+                    if (terms.length > 0 && catHasVisible) catEl.open = true;
                 });
                 document.getElementById('docsNoResults').style.display = anyVisible ? 'none' : '';
             }
@@ -568,10 +573,12 @@
                     // Silent by design, same reasoning as refreshTable() above.
                 }
             }
-            // Client-side show/hide over the (max 200) rendered timeline items. data-search
-            // is a pre-lowercased blob (client name + invoice # + type + notes) baked in
-            // server-side per item; data-action-type backs the dropdown since "Overdue"
-            // etc. aren't literal stored values, same as the Invoices status filter.
+            // Client-side show/hide over whichever timeline items are currently loaded
+            // (100 per page — see loadMoreAuditRows()). data-search is a pre-lowercased
+            // blob (client name + invoice # + type + notes) baked in server-side per
+            // item; data-action-type backs the dropdown since "Overdue" etc. aren't
+            // literal stored values, same as the Invoices status filter. Search/filter
+            // only ever covers what's been loaded, not the whole audit log.
             function filterAuditLog() {
                 const q = document.getElementById('auditSearchInput').value.trim().toLowerCase();
                 const type = document.getElementById('auditTypeFilter').value;
@@ -584,6 +591,54 @@
                 });
                 const noResults = document.getElementById('auditNoResults');
                 if (noResults) noResults.style.display = visible === 0 ? '' : 'none';
+            }
+            async function loadMoreAuditRows() {
+                const container = document.getElementById('auditTimelineBody');
+                const offset = parseInt(container.dataset.nextOffset || '0', 10);
+                const btn = document.getElementById('auditLoadMoreBtn');
+                const wrap = document.getElementById('auditLoadMoreWrap');
+                const originalLabel = btn.innerHTML;
+                btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+                try {
+                    const json = await fetch('?api=table_html&which=audit_items&offset=' + offset).then(r => r.json());
+                    document.getElementById('auditNoResults').insertAdjacentHTML('beforebegin', json.html);
+                    container.dataset.nextOffset = json.nextOffset;
+                    container.dataset.hasMore = json.hasMore ? '1' : '0';
+                    wrap.style.display = json.hasMore ? '' : 'none';
+                    filterAuditLog();
+                } catch (e) {
+                    showToast('Failed to load more audit entries', true);
+                }
+                btn.disabled = false; btn.innerHTML = originalLabel;
+            }
+            // Exports whatever's currently loaded and passing the search/type filter —
+            // same "export what's visible" convention as bulkExportExpensesCsv() etc.,
+            // just reading .timeline-item cells instead of table rows/checkboxes.
+            function exportAuditLogCsv() {
+                const items = Array.from(document.querySelectorAll('#auditTimelineBody .timeline-item')).filter(item => item.style.display !== 'none');
+                if (!items.length) { showToast('No audit rows to export', true); return; }
+                const rows = [['Time', 'Type', 'Action', 'Notes', 'Performed By', 'Client']];
+                items.forEach(item => {
+                    const cells = item.querySelectorAll('.timeline-content > div');
+                    const detailsEl = cells[2];
+                    const badge = detailsEl.querySelector('span');
+                    const action = (item.dataset.actionType || '').replace(/_/g, ' ');
+                    const notes = (detailsEl.innerText || '').replace(badge ? badge.innerText : '', '').trim();
+                    rows.push([
+                        (cells[0].innerText || '').trim(),
+                        (cells[1].innerText || '').trim(),
+                        action,
+                        notes,
+                        (cells[3].innerText || '').trim(),
+                        (cells[4].innerText || '').trim(),
+                    ]);
+                });
+                const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'audit_log.csv'; a.click();
+                URL.revokeObjectURL(url);
             }
 
             function closeModal(id) { document.getElementById(id).classList.remove('active'); if (id === 'noteModal' && window._notePageNeedsReload) { window._notePageNeedsReload = false; window.location.reload(); } requestAnimationFrame(() => window.dispatchEvent(new Event('resize'))); }

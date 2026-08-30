@@ -31,15 +31,16 @@
                             oninput="filterDocsNav()" style="font-size:0.85rem;">
                     </div>
                     <?php foreach ($__docCategories as $__catName => $__catPages): ?>
-                        <div class="docs-nav-category" data-category="<?= htmlspecialchars($__catName) ?>">
-                            <div style="padding:0.5rem 0.75rem 0.25rem; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary);">
-                                <?= htmlspecialchars($__catName) ?></div>
+                        <details class="docs-nav-category" data-category="<?= htmlspecialchars($__catName) ?>"
+                            <?= $__catName === 'Getting Started' ? 'open' : '' ?>>
+                            <summary style="padding:0.5rem 0.75rem 0.25rem; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); cursor:pointer;">
+                                <?= htmlspecialchars($__catName) ?></summary>
                             <?php foreach ($__catPages as $__pageId => $__pageTitle): ?>
                                 <button type="button" class="subnav-item docs-nav-page<?= $__pageId === 'readme' ? ' active' : '' ?>"
                                     data-docs-target="<?= htmlspecialchars($__pageId) ?>" data-title="<?= htmlspecialchars(strtolower($__pageTitle)) ?>"
                                     onclick="navDocs('<?= htmlspecialchars($__pageId) ?>')" style="padding-left:1.5rem;"><?= htmlspecialchars($__pageTitle) ?></button>
                             <?php endforeach; ?>
-                        </div>
+                        </details>
                     <?php endforeach; ?>
                     <div id="docsNoResults" style="display:none; padding:0.5rem 1rem; color:var(--text-secondary); font-size:0.85rem;">
                         No matching pages.</div>
