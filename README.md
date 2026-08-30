@@ -99,7 +99,7 @@ Questions, bug reports, or feature requests: [open an issue on GitLab](https://g
 
 ## Contributing
 
-Development happens on [GitLab](https://gitlab.com/weblabnz/invoxa) — merge requests, issues, and discussion all live there. This GitHub repository is a read-only mirror; pull requests opened here are closed automatically with a link back to GitLab.
+Development happens on [GitLab](https://gitlab.com/weblabnz/invoxa) — merge requests, issues, and discussion all live there. The GitHub mirror is read-only; pull requests opened there are closed automatically with a link back to GitLab.
 
 ## Migrating or locked out?
 
