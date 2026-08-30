@@ -1409,6 +1409,36 @@
                 if (json.success) { showToast('Fixed ' + json.fixed + ' invoices. Reload to see updated Payment Velocity.'); }
                 else { showToast('Error: ' + (json.error || 'Unknown'), true); }
             }
+            async function backfillClientNames() {
+                if (!confirm('This will fill in any blank invoice client-name snapshots from the current client record. Continue?')) return;
+                const btn = document.getElementById('backfillClientNamesBtn');
+                btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing…';
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'backfill_client_names' }) });
+                const json = await res.json();
+                btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-pen"></i> Backfill Missing Client Names';
+                if (json.success) { showToast('Backfilled ' + json.fixed + ' invoice(s).'); }
+                else { showToast('Error: ' + (json.error || 'Unknown'), true); }
+            }
+            async function dedupePayments() {
+                if (!confirm('This will permanently delete exact-duplicate payment ledger rows (same invoice, provider, amount, note, and date), keeping only the earliest of each. Continue?')) return;
+                const btn = document.getElementById('dedupePaymentsBtn');
+                btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing…';
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'dedupe_payments' }) });
+                const json = await res.json();
+                btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-copy"></i> Dedupe Payment Ledger';
+                if (json.success) { showToast('Removed ' + json.fixed + ' duplicate payment row(s).'); }
+                else { showToast('Error: ' + (json.error || 'Unknown'), true); }
+            }
+            async function reconcilePaymentTotals() {
+                if (!confirm('This will recalculate every invoice\'s cached paid amount from its payment ledger, and mark fully-paid invoices as paid. Continue?')) return;
+                const btn = document.getElementById('reconcilePaymentTotalsBtn');
+                btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing…';
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'reconcile_payment_totals' }) });
+                const json = await res.json();
+                btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-scale-balanced"></i> Reconcile Payment Totals';
+                if (json.success) { showToast('Reconciled ' + json.fixed + ' invoice(s).'); }
+                else { showToast('Error: ' + (json.error || 'Unknown'), true); }
+            }
             async function addNote() { const btn = document.getElementById('addNoteBtn'); btn.disabled = true; const data = new URLSearchParams({ action: 'add_note', id: document.getElementById('noteInvoiceId').value, note: document.getElementById('noteText').value }); const res = await fetch('', { method: 'POST', body: data }); const json = await res.json(); if (json.success) { showToast('Note added!'); setTimeout(() => window.location.reload(), 1000); } else { showToast(json.error, true); btn.disabled = false; } }
             async function deleteInvoice(id) {
                 if (!confirm('Are you sure you want to delete this invoice? This will remove it from the database and delete the HTML file. This action cannot be undone.')) return;

@@ -576,13 +576,27 @@
                                     real client, never Demo Data's fixtures — and none of it ever sends a real email
                                     or calls the real Stripe/PayPal APIs.</p>
                                 <h2>Data Repair</h2>
-                                <p>A narrow, specific fix rather than a general-purpose repair tool: <strong>Reset
-                                        paid_at to End-of-Month</strong> corrects historical <code>paid_at</code>
-                                    dates that were bulk-set incorrectly (e.g. from an old import) by resetting every
-                                    paid invoice's <code>paid_at</code> to the last day of its own invoice month.
-                                    That's what the Payment Velocity figure under Statistics &gt; Revenue is computed
-                                    from, so a batch of invoices with a wrong or missing paid date will visibly skew
-                                    that number until this is run.</p>
+                                <p>Four narrow, specific fixes rather than one general-purpose repair tool:</p>
+                                <ul>
+                                    <li><strong>Reset paid_at to End-of-Month</strong> corrects historical
+                                        <code>paid_at</code> dates that were bulk-set incorrectly (e.g. from an old
+                                        import) by resetting every paid invoice's <code>paid_at</code> to the last day
+                                        of its own invoice month. That's what the Payment Velocity figure under
+                                        Statistics &gt; Revenue is computed from, so a batch of invoices with a wrong
+                                        or missing paid date will visibly skew that number until this is run.</li>
+                                    <li><strong>Backfill Missing Client Names</strong> fills in an invoice's stored
+                                        client-name snapshot from the current client record, for any invoice whose
+                                        snapshot came back blank but the client itself still exists.</li>
+                                    <li><strong>Dedupe Payment Ledger</strong> removes exact-duplicate rows recorded
+                                        against the same invoice (same provider, amount, note, and date), keeping the
+                                        earliest — the case a webhook/return-URL race can't already prevent since that
+                                        guard only applies to Stripe/PayPal's unique <code>provider_ref</code>, not
+                                        manually-entered payments.</li>
+                                    <li><strong>Reconcile Payment Totals</strong> recalculates every invoice's cached
+                                        paid amount from the actual sum of its ledger rows and flips status to paid
+                                        for anything fully paid that isn't already marked as such — it never reverses
+                                        an already-paid invoice or touches a voided one.</li>
+                                </ul>
                                 <h2>Danger zone</h2>
                                 <p><strong>Factory Reset</strong> wipes the instance back to a clean install —
                                     every client, invoice, quote, note, and setting, every generated invoice file,

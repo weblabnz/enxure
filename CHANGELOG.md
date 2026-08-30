@@ -2,6 +2,14 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.29] - 2026-08-31
+
+### Added
+- Data Repair gets three more tools alongside the existing "Reset paid_at to End-of-Month": **Backfill Missing Client Names** fills a blank invoice client-name snapshot from the current client record; **Dedupe Payment Ledger** removes exact-duplicate payment rows (same invoice, provider, amount, note, and date), keeping the earliest and recalculating affected invoices' cached paid total; **Reconcile Payment Totals** recalculates every invoice's cached paid amount from the actual sum of its ledger rows and flips status to paid for anything fully paid that isn't already marked as such, without ever reversing an already-paid invoice or touching a voided one.
+
+### Changed
+- Settings > Notifications' event group headings (Payments & Billing, Invoices & Quotes, Recurring & Automation, Security) now sit in a bordered, background-shaded bar instead of plain uppercase text, so the four groups read as distinct sections instead of one crowded block.
+
 ## [2.11.28] - 2026-08-31
 
 ### Fixed

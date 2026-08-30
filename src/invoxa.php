@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.28');
+define('APP_VERSION', '2.11.29');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -1020,7 +1020,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // not on this list). $isCron requests bypass this the same way they
         // bypass the $isAuth gate above — a cron-triggered run has no user at
         // all, and CRON_SECRET is its own, separate authorization.
-        $__adminOnlyActions = ['backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'delete_api_token', 'delete_missing_db', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'get_db_stats', 'import_backup', 'import_clients_csv', 'list_backups', 'preview_restore', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_recurring', 'run_test_suite', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
+        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'get_db_stats', 'import_backup', 'import_clients_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_recurring', 'run_test_suite', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
         if (!$isCron && !$isAdmin && in_array($_POST['action'], $__adminOnlyActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This requires an admin account — see Settings > Users.']);
             exit;
@@ -1577,6 +1577,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET paid_at = LAST_DAY(invoice_date) WHERE id = ?");
             while ($row = $res->fetch_assoc()) {
                 $stmt->bind_param("i", $row['id']);
+                $stmt->execute();
+                $fixed++;
+            }
+            echo json_encode(['success' => true, 'fixed' => $fixed]);
+            exit;
+        }
+        if ($_POST['action'] === 'backfill_client_names') {
+            $mysqli->query("UPDATE invoxa_invoices i JOIN invoxa_clients c ON i.client_key = c.client_key SET i.client_name = c.client_name WHERE TRIM(i.client_name) = ''");
+            echo json_encode(['success' => true, 'fixed' => $mysqli->affected_rows]);
+            exit;
+        }
+        if ($_POST['action'] === 'dedupe_payments') {
+            $res = $mysqli->query("SELECT invoice_id, provider, amount, note, paid_at, COUNT(*) as c, GROUP_CONCAT(id ORDER BY id) as ids FROM invoxa_payments GROUP BY invoice_id, provider, amount, note, paid_at HAVING c > 1");
+            $removed = 0;
+            $affectedInvoiceIds = [];
+            while ($row = $res->fetch_assoc()) {
+                $ids = array_map('intval', explode(',', $row['ids']));
+                array_shift($ids);
+                if (!$ids)
+                    continue;
+                $mysqli->query("DELETE FROM invoxa_payments WHERE id IN (" . implode(',', $ids) . ")");
+                $removed += count($ids);
+                $affectedInvoiceIds[] = (int) $row['invoice_id'];
+            }
+            foreach (array_unique($affectedInvoiceIds) as $invId) {
+                $totalPaid = (float) ($mysqli->query("SELECT COALESCE(SUM(amount), 0) as t FROM invoxa_payments WHERE invoice_id = $invId")->fetch_assoc()['t'] ?? 0);
+                $mysqli->query("UPDATE invoxa_invoices SET paid_amount = $totalPaid WHERE id = $invId");
+            }
+            echo json_encode(['success' => true, 'fixed' => $removed]);
+            exit;
+        }
+        if ($_POST['action'] === 'reconcile_payment_totals') {
+            $res = $mysqli->query("SELECT i.id, i.amount, i.status, i.paid_amount, COALESCE(SUM(p.amount), 0) as total_paid FROM invoxa_invoices i LEFT JOIN invoxa_payments p ON p.invoice_id = i.id WHERE i.is_quote = 0 GROUP BY i.id HAVING ABS(total_paid - COALESCE(i.paid_amount, 0)) > 0.004");
+            $fixed = 0;
+            $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET paid_amount = ?, status = ?, paid_at = CASE WHEN paid_at IS NULL AND ? = 'paid' THEN NOW() ELSE paid_at END WHERE id = ?");
+            while ($row = $res->fetch_assoc()) {
+                $newStatus = $row['status'];
+                if ($row['status'] !== 'void' && (float) $row['total_paid'] >= (float) $row['amount'] && (float) $row['amount'] > 0) {
+                    $newStatus = 'paid';
+                }
+                $totalPaid = (float) $row['total_paid'];
+                $stmt->bind_param("dssi", $totalPaid, $newStatus, $newStatus, $row['id']);
                 $stmt->execute();
                 $fixed++;
             }

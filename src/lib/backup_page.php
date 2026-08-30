@@ -371,16 +371,62 @@
                                         style="color:#ef4444; margin-right:0.5rem;"></i>Data Repair</h3>
                             </div>
                             <div class="card-body">
-                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Fix
-                                    historical
-                                    <code>paid_at</code> dates that were bulk-set incorrectly. This resets
-                                    <strong>all paid invoices</strong> so their <code>paid_at</code> becomes the last day of
-                                    their invoice month &mdash; giving a more accurate Payment Velocity figure.
-                                </p>
-                                <button class="btn" id="fixPaidDatesBtn"
-                                    style="background: var(--danger); color:white; border:none;"
-                                    onclick="fixPaidDates()"><i class="fa-solid fa-calendar-xmark"></i> Reset paid_at to
-                                    End-of-Month</button>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.25rem;">
+                                    Narrow, specific fixes for data that drifted out of sync &mdash; not a
+                                    general-purpose repair tool.</p>
+
+                                <div>
+                                    <h4 style="margin:0 0 0.4rem; font-size:0.95rem;">Reset paid_at to End-of-Month</h4>
+                                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">
+                                        Fixes historical <code>paid_at</code> dates that were bulk-set incorrectly.
+                                        Resets <strong>all paid invoices</strong> so their <code>paid_at</code> becomes
+                                        the last day of their invoice month &mdash; giving a more accurate Payment
+                                        Velocity figure.</p>
+                                    <button class="btn" id="fixPaidDatesBtn"
+                                        style="background: var(--danger); color:white; border:none;"
+                                        onclick="fixPaidDates()"><i class="fa-solid fa-calendar-xmark"></i> Reset
+                                        paid_at to End-of-Month</button>
+                                </div>
+
+                                <div style="margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--border);">
+                                    <h4 style="margin:0 0 0.4rem; font-size:0.95rem;">Backfill Missing Client Names</h4>
+                                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">
+                                        Invoices store the client's name as it was when the invoice was created; if
+                                        that snapshot is blank (e.g. from an old import) but the client record itself
+                                        still exists, this fills it back in from the current client. Invoices whose
+                                        client has since been deleted are left as-is.</p>
+                                    <button class="btn" id="backfillClientNamesBtn"
+                                        style="background: var(--danger); color:white; border:none;"
+                                        onclick="backfillClientNames()"><i class="fa-solid fa-user-pen"></i> Backfill
+                                        Missing Client Names</button>
+                                </div>
+
+                                <div style="margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--border);">
+                                    <h4 style="margin:0 0 0.4rem; font-size:0.95rem;">Dedupe Payment Ledger</h4>
+                                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">
+                                        Removes exact-duplicate rows in the payment ledger &mdash; same invoice,
+                                        provider, amount, note, and payment date &mdash; keeping only the earliest.
+                                        This only catches manual payments recorded twice by accident; Stripe/PayPal
+                                        payments can't already duplicate since <code>provider_ref</code> is unique per
+                                        provider. Affected invoices' cached paid total is recalculated afterward.</p>
+                                    <button class="btn" id="dedupePaymentsBtn"
+                                        style="background: var(--danger); color:white; border:none;"
+                                        onclick="dedupePayments()"><i class="fa-solid fa-copy"></i> Dedupe Payment
+                                        Ledger</button>
+                                </div>
+
+                                <div style="margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--border);">
+                                    <h4 style="margin:0 0 0.4rem; font-size:0.95rem;">Reconcile Payment Totals</h4>
+                                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">
+                                        Recalculates every invoice's cached paid amount from the actual sum of its
+                                        payment ledger rows, and flips status to <strong>paid</strong> for any invoice
+                                        that's fully paid but still shows otherwise. Never reverses an already-paid
+                                        invoice or touches a voided one.</p>
+                                    <button class="btn" id="reconcilePaymentTotalsBtn"
+                                        style="background: var(--danger); color:white; border:none;"
+                                        onclick="reconcilePaymentTotals()"><i class="fa-solid fa-scale-balanced"></i>
+                                        Reconcile Payment Totals</button>
+                                </div>
                             </div>
                         </div>
                     </div>

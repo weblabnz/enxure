@@ -572,7 +572,7 @@
                                         </span>
                                     </div>
                                     <details open class="notify-group" style="margin-top:0.75rem;">
-                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;">Payments &amp; Billing</summary>
+                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; background:var(--surface-hover); border:1px solid var(--border); border-radius:6px; padding:0.5rem 0.65rem;">Payments &amp; Billing</summary>
                                         <div class="form-group" style="margin-top:0.5rem;">
                                             <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
                                                 <input type="checkbox" class="notify-event-cb" id="notifyOnPayment" name="notify_on_payment" value="1"
@@ -603,7 +603,7 @@
                                         </div>
                                     </details>
                                     <details open class="notify-group" style="margin-top:0.75rem;">
-                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;">Invoices &amp; Quotes</summary>
+                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; background:var(--surface-hover); border:1px solid var(--border); border-radius:6px; padding:0.5rem 0.65rem;">Invoices &amp; Quotes</summary>
                                         <div class="form-group" style="margin-top:0.5rem;">
                                             <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
                                                 <input type="checkbox" class="notify-event-cb" id="notifyOnOverdue" name="notify_on_overdue" value="1"
@@ -634,7 +634,7 @@
                                         </div>
                                     </details>
                                     <details open class="notify-group" style="margin-top:0.75rem;">
-                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;">Recurring &amp; Automation</summary>
+                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; background:var(--surface-hover); border:1px solid var(--border); border-radius:6px; padding:0.5rem 0.65rem;">Recurring &amp; Automation</summary>
                                         <div class="form-group" style="margin-top:0.5rem;">
                                             <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
                                                 <input type="checkbox" class="notify-event-cb" id="notifyOnRecurringRun" name="notify_on_recurring_run" value="1"
@@ -651,7 +651,7 @@
                                         </div>
                                     </details>
                                     <details open class="notify-group" style="margin-top:0.75rem;">
-                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;">Security</summary>
+                                        <summary style="cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; background:var(--surface-hover); border:1px solid var(--border); border-radius:6px; padding:0.5rem 0.65rem;">Security</summary>
                                         <div class="form-group" style="margin-top:0.5rem;">
                                             <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:400;">
                                                 <input type="checkbox" class="notify-event-cb" id="notifyOnSecurityEvent" name="notify_on_security_event" value="1"
