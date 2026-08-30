@@ -2636,47 +2636,49 @@
             }
             async function runTestSuite() {
                 const rows = Array.from(document.querySelectorAll('.test-suite-row'));
-                const selected = [];
-                rows.forEach(row => {
-                    const checked = row.querySelector('.test-suite-checkbox').checked;
-                    // Only touch the status of rows actually being run — an unchecked row
-                    // keeps its previous result (or "Not run"), so the column is never blank.
-                    if (checked) {
-                        row.querySelector('.test-suite-status').innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:var(--text-secondary);"></i> Running…';
-                        selected.push(row.dataset.testName);
-                    }
-                });
-                if (selected.length === 0) return showToast('Select at least one test first', true);
+                const selectedRows = rows.filter(row => row.querySelector('.test-suite-checkbox').checked);
+                // Only touch the status of rows actually being run — an unchecked row
+                // keeps its previous result (or "Not run"), so the column is never blank.
+                selectedRows.forEach(row => { row.querySelector('.test-suite-time').textContent = ''; });
+                if (selectedRows.length === 0) return showToast('Select at least one test first', true);
                 const btn = document.getElementById('runTestSuiteBtn');
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…';
                 document.getElementById('testSuiteSummary').innerHTML = '';
+                let passed = 0, failed = 0;
                 try {
-                    const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'run_test_suite', tests: JSON.stringify(selected) }) });
-                    const json = await res.json();
-                    if (!json.success) {
-                        showToast(json.error || 'Test suite failed to run', true);
-                        return;
-                    }
-                    // Results land inline in each row's own Status cell (not a separate
-                    // list) so what you selected and what happened to it stay tied
-                    // together at a glance.
-                    const resultsByName = {};
-                    json.results.forEach(r => { resultsByName[r.name] = r; });
-                    rows.forEach(row => {
-                        const r = resultsByName[row.dataset.testName];
-                        if (!r) return; // not selected this run — leave its status as-is
+                    // One request per test, run in sequence rather than all at once — each
+                    // row ticks pass/fail with its own timing the moment that test finishes,
+                    // instead of every row jumping from "Running…" to a result together at
+                    // the end with no way to see which case is the slow one.
+                    for (let i = 0; i < selectedRows.length; i++) {
+                        const row = selectedRows[i];
+                        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running ' + (i + 1) + '/' + selectedRows.length + '…';
+                        row.querySelector('.test-suite-status').innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:var(--text-secondary);"></i> Running…';
+                        const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'run_test_suite', tests: JSON.stringify([row.dataset.testName]) }) });
+                        const json = await res.json();
                         const status = row.querySelector('.test-suite-status');
-                        status.innerHTML = r.status === 'pass'
-                            ? '<i class="fa-solid fa-check" style="color:var(--success);"></i> Passed'
-                            : '<i class="fa-solid fa-xmark" style="color:var(--danger);"></i> <span style="color:var(--danger);">' + (r.message || 'Failed').replace(/</g, '&lt;') + '</span>';
-                    });
-                    const allPassed = json.failed === 0;
+                        const time = row.querySelector('.test-suite-time');
+                        const r = json.success ? json.results[0] : null;
+                        if (!r) {
+                            status.innerHTML = '<i class="fa-solid fa-xmark" style="color:var(--danger);"></i> <span style="color:var(--danger);">' + (json.error || 'Failed to run').replace(/</g, '&lt;') + '</span>';
+                            failed++;
+                            continue;
+                        }
+                        time.textContent = r.duration_ms + ' ms';
+                        if (r.status === 'pass') {
+                            status.innerHTML = '<i class="fa-solid fa-check" style="color:var(--success);"></i> Passed';
+                            passed++;
+                        } else {
+                            status.innerHTML = '<i class="fa-solid fa-xmark" style="color:var(--danger);"></i> <span style="color:var(--danger);">' + (r.message || 'Failed').replace(/</g, '&lt;') + '</span>';
+                            failed++;
+                        }
+                    }
+                    const allPassed = failed === 0;
                     document.getElementById('testSuiteSummary').innerHTML =
                         '<span style="color:' + (allPassed ? 'var(--success)' : 'var(--danger)') + '; font-weight:600;">' +
                         (allPassed ? '<i class="fa-solid fa-circle-check"></i> ' : '<i class="fa-solid fa-circle-xmark"></i> ') +
-                        json.passed + ' passed, ' + json.failed + ' failed</span>';
-                    showToast(allPassed ? 'All selected tests passed!' : (json.failed + ' test(s) failed'), !allPassed);
+                        passed + ' passed, ' + failed + ' failed</span>';
+                    showToast(allPassed ? 'All selected tests passed!' : (failed + ' test(s) failed'), !allPassed);
                 } catch (e) {
                     showToast('Failed to run test suite (network error)', true);
                 } finally {

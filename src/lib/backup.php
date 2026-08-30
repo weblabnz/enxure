@@ -496,7 +496,10 @@ function normaliseDate(?string $raw): ?string
 // Runs from Data Management > Test Suite (see run_test_suite below). Covers
 // pure logic (invoice math, TOTP, Stripe/PayPal conversion and signature
 // verification, lockout timing, backup code format) plus the payment
-// ledger's DB behavior — never a real Stripe/PayPal/SMTP call. DB-touching
+// ledger's DB behavior — never a real Stripe/PayPal/SMTP call or a real
+// notification send (invoxaRunTestSuite() forces notification_channel to
+// 'none', both on the $settings passed in here and on $GLOBALS['settings']
+// for code paths that read the global directly). DB-touching
 // tests use disposable fixtures (client_key prefixed 'zt') deleted in a
 // finally block regardless of pass/fail.
 class InvoxaTestFailure extends Exception
@@ -1343,16 +1346,29 @@ function invoxaTestDefinitions($mysqli, array $settings): array
 // are silently ignored, so a stale checkbox list in another tab can't crash a run.
 function invoxaRunTestSuite($mysqli, array $settings, ?array $selected = null): array
 {
+    $settings['notification_channel'] = 'none';
+    $hadGlobalChannel = array_key_exists('notification_channel', $GLOBALS['settings'] ?? []);
+    $savedGlobalChannel = $GLOBALS['settings']['notification_channel'] ?? null;
+    $GLOBALS['settings']['notification_channel'] = 'none';
     $results = [];
-    foreach (invoxaTestDefinitions($mysqli, $settings) as $name => $test) {
-        if ($selected !== null && !in_array($name, $selected, true)) {
-            continue;
+    try {
+        foreach (invoxaTestDefinitions($mysqli, $settings) as $name => $test) {
+            if ($selected !== null && !in_array($name, $selected, true)) {
+                continue;
+            }
+            $start = microtime(true);
+            try {
+                $test['fn']();
+                $results[] = ['name' => $name, 'status' => 'pass', 'message' => '', 'duration_ms' => (int) round((microtime(true) - $start) * 1000)];
+            } catch (Throwable $e) {
+                $results[] = ['name' => $name, 'status' => 'fail', 'message' => $e->getMessage(), 'duration_ms' => (int) round((microtime(true) - $start) * 1000)];
+            }
         }
-        try {
-            $test['fn']();
-            $results[] = ['name' => $name, 'status' => 'pass', 'message' => ''];
-        } catch (Throwable $e) {
-            $results[] = ['name' => $name, 'status' => 'fail', 'message' => $e->getMessage()];
+    } finally {
+        if ($hadGlobalChannel) {
+            $GLOBALS['settings']['notification_channel'] = $savedGlobalChannel;
+        } else {
+            unset($GLOBALS['settings']['notification_channel']);
         }
     }
     return [

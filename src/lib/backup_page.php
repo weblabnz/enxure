@@ -166,14 +166,11 @@
                             </div>
                             <div class="card-body">
                                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                                    Checks invoice math, TOTP, Stripe/PayPal amount conversion and webhook signature
-                                    verification, receipt OCR, user roles, and the payment ledger's actual database
-                                    behavior (partial payments, duplicate-webhook idempotency, refunds). Every check
-                                    that touches the database creates its own disposable client/invoice/user (never a
-                                    real one, never Demo Data's) and deletes it again immediately after — nothing
-                                    from a run is left behind, pass or fail. Does <strong>not</strong> call the real
-                                    Stripe/PayPal/SMTP APIs — those need live credentials this can't assume exist,
-                                    and a real API call isn't something a button click should cause.
+                                    Checks invoice math, TOTP, Stripe/PayPal conversion and webhook verification,
+                                    receipt OCR, user roles, and payment-ledger behavior. Each check creates its own
+                                    disposable data and deletes it after — nothing is left behind, pass or fail. Does
+                                    <strong>not</strong> call the real Stripe/PayPal/SMTP APIs, or send real
+                                    Telegram/Slack/webhook notifications even if you have those configured.
                                 </p>
                                 <?php
                                 $__testDefs = invoxaTestDefinitions($mysqli, $settings);
@@ -198,8 +195,9 @@
                                         <thead>
                                             <tr style="text-align:left; color:var(--text-secondary); border-bottom:1px solid var(--border);">
                                                 <th style="padding:0.55rem 0.5rem; width:48px;"></th>
-                                                <th style="padding:0.55rem 0.75rem; width:200px;">Category</th>
+                                                <th style="padding:0.55rem 0.75rem; width:230px;">Category</th>
                                                 <th style="padding:0.55rem 0.75rem;">Case <span style="font-weight:400; text-transform:none;">(hover for detail)</span></th>
+                                                <th style="padding:0.55rem 0.75rem; text-align:right; width:70px;">Time</th>
                                                 <th style="padding:0.55rem 0.75rem; text-align:right; width:100px;">Status</th>
                                             </tr>
                                         </thead>
@@ -207,7 +205,7 @@
                                             <?php $__lastGroup = null; $__firstGroup = true; foreach ($__testDefs as $__testName => $__test): ?>
                                                 <?php if ($__test['group'] !== $__lastGroup): $__lastGroup = $__test['group']; ?>
                                                     <tr class="test-suite-group-row">
-                                                        <td colspan="4" style="padding:0.75rem 0.75rem 0.5rem; <?= $__firstGroup ? '' : 'border-top:2px solid var(--border);' ?>">
+                                                        <td colspan="5" style="padding:0.75rem 0.75rem 0.5rem; <?= $__firstGroup ? '' : 'border-top:2px solid var(--border);' ?>">
                                                             <label style="cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-weight:600; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--accent);">
                                                                 <input type="checkbox" class="test-suite-group-checkbox" data-group="<?= htmlspecialchars($__lastGroup) ?>" checked onclick="toggleTestGroup(this)">
                                                                 <?= htmlspecialchars($__lastGroup) ?>
@@ -220,6 +218,7 @@
                                                     <td style="padding:0.55rem 0.5rem 0.55rem 1.25rem;"><input type="checkbox" class="test-suite-checkbox" checked></td>
                                                     <td style="padding:0.55rem 0.75rem; color:var(--text-secondary); overflow-wrap:break-word;"><?= htmlspecialchars($__test['category']) ?></td>
                                                     <td style="padding:0.55rem 0.75rem; cursor:help;" title="<?= htmlspecialchars($__test['description']) ?>"><?= htmlspecialchars($__test['label']) ?></td>
+                                                    <td class="test-suite-time" style="padding:0.55rem 0.75rem; text-align:right; color:var(--text-secondary); white-space:nowrap; font-variant-numeric:tabular-nums;"></td>
                                                     <td class="test-suite-status" style="padding:0.55rem 0.75rem; text-align:right; color:var(--text-secondary); white-space:nowrap;">Not run</td>
                                                 </tr>
                                             <?php endforeach; ?>
@@ -301,20 +300,12 @@
                             </div>
                             <div class="card-body">
                                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                                    Copies the SQL backups from <strong>Backup &amp; Restore</strong> to a remote
-                                    location (S3, B2, SFTP, another server, etc.) using
-                                    <a href="https://rclone.org/" target="_blank" rel="noopener">rclone</a>. This
-                                    panel only stores the <em>on/off switch</em> and which remote to use &mdash; it
-                                    does not talk to the remote itself. A scheduled job on the <code>cron</code>
-                                    container reads this setting, and if enabled, runs
-                                    <code>rclone copy</code> using a remote of this name defined in that
-                                    container's own <code>rclone.conf</code>. The actual storage credentials
-                                    (access keys, host, etc.) are configured there, on disk in the cron container
-                                    &mdash; never entered here and never stored in this app's database &mdash; so
-                                    nothing this web app touches or serves can leak your offsite storage
-                                    credentials. Setting up <code>rclone.conf</code> and the scheduled job itself is
-                                    a one-time infrastructure step outside this app; this toggle just tells that
-                                    job whether to run and where to push to.
+                                    Copies SQL backups from <strong>Backup &amp; Restore</strong> to a remote (S3,
+                                    B2, SFTP, etc.) via <a href="https://rclone.org/" target="_blank"
+                                        rel="noopener">rclone</a>, run by a scheduled job on the <code>cron</code>
+                                    container. This panel only sets the on/off switch and remote name &mdash;
+                                    credentials live in that container's <code>rclone.conf</code>, set up once
+                                    outside this app, never entered or stored here.
                                 </p>
                                 <div class="form-group">
                                     <label class="form-label" style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">

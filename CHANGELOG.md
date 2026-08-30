@@ -2,6 +2,15 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.28] - 2026-08-31
+
+### Fixed
+- Test Suite fixture runs (Payments & Refunds group especially) were firing real Telegram/Slack/webhook notifications for disposable ZTEST- invoices — `recordInvoicePayment()` and friends run the same `notifyChannel()` call production code does. `invoxaRunTestSuite()` now forces `notification_channel` to 'none' both on the `$settings` passed into test closures and on `$GLOBALS['settings']`, since some call paths (`invoxaLogUnmatchedWebhook()`, the one actually responsible for the unmatched-webhook message that was leaking out) read the global directly rather than taking `$settings` as a parameter. Restored in a `finally` block so it can't leak past the run even if a test throws unexpectedly.
+
+### Changed
+- Test Suite now runs one test at a time (was one big batch request) so each row ticks pass/fail live as it finishes instead of all 60 jumping from "Running…" to a result together at the end, and shows each test's execution time in a new Time column — the point being to actually see which case is slow, not just that the suite as a whole took a while.
+- Test Suite and Offsite Push descriptions trimmed down considerably; Test Suite's now also states it won't send real notifications, matching the fix above. Test Suite's Category column widened slightly so longer names (e.g. "Payments & Refunds") don't wrap to a second line.
+
 ## [2.11.27] - 2026-08-31
 
 ### Changed
