@@ -149,7 +149,7 @@
 
                                 <div class="pref-item">
                                     <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Custom CSS</label>
-                                    <textarea id="customCssInput" class="form-control" rows="6" spellcheck="false"
+                                    <textarea id="customCssInput" class="form-control" rows="4" spellcheck="false"
                                         style="font-family:monospace; font-size:0.8rem; white-space:pre; margin-top:0.5rem;"
                                         placeholder="/* Any CSS you write here is injected into the app immediately, on this browser only. */"></textarea>
                                     <script>
@@ -159,7 +159,6 @@
                                         <button type="button" class="btn" onclick="applyCustomCss()"><i class="fa-solid fa-check"></i> Apply Custom CSS</button>
                                         <button type="button" class="btn" onclick="clearCustomCss()"><i class="fa-solid fa-xmark"></i> Clear</button>
                                     </div>
-                                    <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem;">Advanced: raw CSS injected into the app on this browser only, for tweaks beyond the presets above.</p>
                                 </div>
 
                                 <div class="pref-item">
@@ -283,8 +282,7 @@
                                 <div id="totpDisabledView" style="<?= $__totpEnabled ? 'display:none;' : '' ?>">
                                     <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:1rem;">Adds
                                         a 6-digit code from an authenticator app (Google Authenticator, Authy,
-                                        1Password, etc.) on top of your password. Recommended — this account has
-                                        full access to client bank details and invoice data.</p>
+                                        1Password, Proton Authenticator etc) on top of your password. Recommended.</p>
                                     <button class="btn primary" id="totpStartBtn" onclick="startTotpSetup()"><i
                                             class="fa-solid fa-shield-halved"></i> Enable Two-Factor
                                         Authentication</button>
@@ -293,8 +291,7 @@
                                             <label class="form-label">Scan this QR code</label>
                                             <div id="totpQrCode" style="display:inline-block; line-height:0; border-radius:8px; overflow:hidden;"></div>
                                             <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
-                                                Scan with your authenticator app (Google Authenticator, Authy,
-                                                1Password, etc). Account name: <code id="totpAccountLabel"></code>.</p>
+                                                Scan with your authenticator app. Account name: <code id="totpAccountLabel"></code>.</p>
                                         </div>
                                         <div class="form-group">
                                             <label class="form-label">Secret Key</label>

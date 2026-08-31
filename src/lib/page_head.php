@@ -291,8 +291,8 @@
 
         .nav-item.tool-item {
             color: var(--text-secondary);
-            margin-top: calc(0.05rem + 2px);
-            margin-bottom: calc(0.05rem + 2px);
+            margin-top: calc(0.05rem);
+            margin-bottom: calc(0.05rem);
         }
 
         .nav-item.tool-item:hover {
