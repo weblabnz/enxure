@@ -10,14 +10,19 @@
                 </button>
                 <div class="toolbar-collapsible" id="expensesToolbarGroups">
 
-                <!-- Group 1: Export -->
+                <!-- Group 1: CSV export/import -->
                 <div
                     style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
                     <span
                         style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; white-space: nowrap; padding-right: 0.75rem; border-right: 1px solid var(--border);"><i
-                            class="fa-solid fa-file-export" style="margin-right:0.3rem;"></i>Export</span>
+                            class="fa-solid fa-file-csv" style="margin-right:0.3rem;"></i>CSV</span>
                     <button class="btn" style="background: var(--surface-hover); white-space: nowrap;"
-                        onclick="window.location.href='?export=expenses'"><i class="fa-solid fa-file-csv"></i> CSV</button>
+                        onclick="window.location.href='?export=expenses'"><i class="fa-solid fa-download"></i> Export</button>
+                    <label class="btn" style="background: var(--surface-hover); cursor:pointer; margin:0; white-space: nowrap;"
+                        title="CSV with a header row: Date, Vendor, Category, Amount, Description">
+                        <i class="fa-solid fa-file-import"></i> Import
+                        <input type="file" id="importExpensesFile" accept=".csv" style="display:none;"
+                            onchange="importExpensesCsv(this.files[0])"></label>
                 </div>
 
                 <!-- Total Expenses stat -->

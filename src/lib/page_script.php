@@ -1436,6 +1436,52 @@
                     input.value = '';
                 }
             }
+            async function importInvoicesCsv(file) {
+                if (!file) return;
+                const input = document.getElementById('importInvoicesFile');
+                const fd = new FormData();
+                fd.append('action', 'import_invoices_csv');
+                fd.append('invoices_file', file);
+                try {
+                    const res = await fetch('', { method: 'POST', body: fd });
+                    const json = await res.json();
+                    if (json.success) {
+                        let msg = `Imported ${json.imported} invoice(s)`;
+                        if (json.skipped > 0) msg += `, skipped ${json.skipped}`;
+                        showToast(msg + '!');
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                        showToast(json.error || 'Import failed', true);
+                    }
+                } catch (e) {
+                    showToast('Import failed (network error)', true);
+                } finally {
+                    input.value = '';
+                }
+            }
+            async function importExpensesCsv(file) {
+                if (!file) return;
+                const input = document.getElementById('importExpensesFile');
+                const fd = new FormData();
+                fd.append('action', 'import_expenses_csv');
+                fd.append('expenses_file', file);
+                try {
+                    const res = await fetch('', { method: 'POST', body: fd });
+                    const json = await res.json();
+                    if (json.success) {
+                        let msg = `Imported ${json.imported} expense(s)`;
+                        if (json.skipped > 0) msg += `, skipped ${json.skipped}`;
+                        showToast(msg + '!');
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                        showToast(json.error || 'Import failed', true);
+                    }
+                } catch (e) {
+                    showToast('Import failed (network error)', true);
+                } finally {
+                    input.value = '';
+                }
+            }
 
             // Adhoc & Recurring Billing
             const LINE_ITEM_ROW_HTML = `

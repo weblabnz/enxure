@@ -13,7 +13,7 @@
                 </button>
                 <div class="toolbar-collapsible" id="invoicesToolbarGroups">
 
-                <!-- Group 1: Exports -->
+                <!-- Group 1: Export -->
                 <div
                     style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
                     <span
@@ -41,7 +41,20 @@
                         onclick="runInvoiceExport()"><i class="fa-solid fa-download"></i> Export</button>
                 </div>
 
-                <!-- Group 2: Status Filter -->
+                <!-- Group 2: CSV import -->
+                <div
+                    style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
+                    <span
+                        style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; white-space: nowrap; padding-right: 0.75rem; border-right: 1px solid var(--border);"><i
+                            class="fa-solid fa-file-csv" style="margin-right:0.3rem;"></i>CSV</span>
+                    <label class="btn" style="background: var(--surface-hover); cursor:pointer; margin:0; white-space: nowrap;"
+                        title="CSV with a header row: Invoice Number, Client Name, Email, Invoice Date, Due Date, Amount, Currency, Status, Paid Amount, Paid Date. Client Name must match an existing client; Invoice Number/Email/Currency/Status/Paid Amount/Paid Date are optional.">
+                        <i class="fa-solid fa-file-import"></i> Import
+                        <input type="file" id="importInvoicesFile" accept=".csv" style="display:none;"
+                            onchange="importInvoicesCsv(this.files[0])"></label>
+                </div>
+
+                <!-- Group 3: Status Filter -->
                 <div
                     style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
                     <span
@@ -60,7 +73,7 @@
                     </select>
                 </div>
 
-                <!-- Group 3: Saved Views -->
+                <!-- Group 4: Saved Views -->
                 <div
                     style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem;">
                     <span

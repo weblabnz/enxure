@@ -6,7 +6,7 @@
                         <i class="fa-solid fa-clock-rotate-left" style="margin-right:0.25rem;"></i>Next Auto-Run: <span
                             id="nextCronRunDashboard" style="color:var(--accent); font-weight:600;"><span class="skeleton"></span></span>
                     </div>
-                    <div class="widget-manage" style="position:relative;">
+                    <div class="widget-manage" style="position:relative; top:-2px;">
                         <button type="button" class="btn small" onclick="toggleDashboardWidgetMenu()"><i
                                 class="fa-solid fa-sliders"></i> Customize</button>
                         <div id="dashboardWidgetMenu" class="widget-manage-menu" hidden></div>

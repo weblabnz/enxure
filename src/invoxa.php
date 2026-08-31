@@ -837,6 +837,104 @@ function renderInvoiceRows(array $invoices): string
     return ob_get_clean();
 }
 
+function invoxaHandleImportInvoicesCsv($mysqli, array $settings): void
+{
+if (!isset($_FILES['invoices_file']) || $_FILES['invoices_file']['error'] !== UPLOAD_ERR_OK) {
+    echo json_encode(['success' => false, 'error' => 'No file uploaded, or the upload failed.']);
+    exit;
+}
+if (!is_uploaded_file($_FILES['invoices_file']['tmp_name'])) {
+    echo json_encode(['success' => false, 'error' => 'Invalid upload.']);
+    exit;
+}
+$fh = fopen($_FILES['invoices_file']['tmp_name'], 'r');
+if ($fh === false) {
+    echo json_encode(['success' => false, 'error' => 'Failed to read the uploaded file.']);
+    exit;
+}
+
+$clientsByName = [];
+$cRes = $mysqli->query("SELECT client_key, client_name, email, currency, payment_terms_days FROM invoxa_clients");
+while ($cr = $cRes->fetch_assoc())
+    $clientsByName[strtolower($cr['client_name'])] = $cr;
+
+$existingNumbers = [];
+$nRes = $mysqli->query("SELECT invoice_number FROM invoxa_invoices");
+while ($nr = $nRes->fetch_assoc())
+    $existingNumbers[$nr['invoice_number']] = true;
+
+$validStatuses = ['sent', 'failed', 'pending', 'draft', 'paid', 'void'];
+$insert = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+$paymentInsert = $mysqli->prepare("INSERT INTO invoxa_payments (invoice_id, amount, note, provider, paid_at) VALUES (?, ?, 'Imported from CSV', 'manual', ?)");
+
+$imported = 0;
+$skipped = 0;
+$rowNum = 0;
+$errors = [];
+while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
+    $rowNum++;
+    if ($rowNum === 1) {
+        continue;
+    }
+    $clientName = trim($row[1] ?? '');
+    $client = $clientsByName[strtolower($clientName)] ?? null;
+    if (!$client) {
+        $skipped++;
+        if (count($errors) < 10)
+            $errors[] = "Row $rowNum: client \"$clientName\" doesn't match an existing client — import clients first.";
+        continue;
+    }
+
+    $invNum = trim($row[0] ?? '');
+    if ($invNum !== '' && isset($existingNumbers[$invNum])) {
+        $skipped++;
+        if (count($errors) < 10)
+            $errors[] = "Row $rowNum: invoice number \"$invNum\" already exists.";
+        continue;
+    }
+    if ($invNum === '') {
+        $invNum = generateInvoiceNumber($mysqli, $client['client_key'], $client['client_name'], $settings);
+    }
+
+    $email = trim($row[2] ?? '') ?: $client['email'];
+    $invoiceDateTs = strtotime(trim($row[3] ?? ''));
+    $invoiceDate = $invoiceDateTs ? date('Y-m-d H:i:s', $invoiceDateTs) : date('Y-m-d H:i:s');
+    $dueDateTs = strtotime(trim($row[4] ?? ''));
+    $termsDays = (int) ($client['payment_terms_days'] ?? 21);
+    $dueDate = $dueDateTs ? date('Y-m-d', $dueDateTs) : date('Y-m-d', strtotime("$invoiceDate +{$termsDays} days"));
+    $amount = (float) ($row[5] ?? 0);
+    $currency = invoxaNormalizeCurrencyCode(trim($row[6] ?? '')) ?: ($client['currency'] ?? '');
+    $status = strtolower(trim($row[7] ?? ''));
+    if (!in_array($status, $validStatuses, true))
+        $status = 'pending';
+    $paidAmountRaw = trim($row[8] ?? '');
+    $paidAmount = $paidAmountRaw !== '' ? (float) $paidAmountRaw : 0.0;
+    $paidAmountParam = $paidAmount > 0 ? $paidAmount : null;
+    $paidAtTs = strtotime(trim($row[9] ?? ''));
+    $paidAt = $paidAtTs ? date('Y-m-d H:i:s', $paidAtTs) : ($paidAmount > 0 ? $invoiceDate : null);
+
+    try {
+        $insert->bind_param("ssssssdssds", $invNum, $client['client_key'], $client['client_name'], $email, $invoiceDate, $dueDate, $amount, $currency, $status, $paidAmountParam, $paidAt);
+        $insert->execute();
+    } catch (mysqli_sql_exception $e) {
+        $skipped++;
+        if (count($errors) < 10)
+            $errors[] = "Row $rowNum ($invNum): " . $e->getMessage();
+        continue;
+    }
+    $existingNumbers[$invNum] = true;
+    $imported++;
+
+    if ($paidAmount > 0) {
+        $invoiceId = $insert->insert_id;
+        $paymentInsert->bind_param("ids", $invoiceId, $paidAmount, $paidAt);
+        $paymentInsert->execute();
+    }
+}
+fclose($fh);
+echo json_encode(['success' => true, 'imported' => $imported, 'skipped' => $skipped, 'errors' => $errors]);
+exit;
+}
 
 // Same idea for the Quotes table — takes the mysqli result directly since the
 // original inline block used a while() over the live query rather than an array.
@@ -917,6 +1015,69 @@ function renderExpenseRows(array $expenses): string
         </tr>
     <?php endforeach;
     return ob_get_clean();
+}
+
+function invoxaHandleImportExpensesCsv($mysqli): void
+{
+if (!isset($_FILES['expenses_file']) || $_FILES['expenses_file']['error'] !== UPLOAD_ERR_OK) {
+    echo json_encode(['success' => false, 'error' => 'No file uploaded, or the upload failed.']);
+    exit;
+}
+if (!is_uploaded_file($_FILES['expenses_file']['tmp_name'])) {
+    echo json_encode(['success' => false, 'error' => 'Invalid upload.']);
+    exit;
+}
+$fh = fopen($_FILES['expenses_file']['tmp_name'], 'r');
+if ($fh === false) {
+    echo json_encode(['success' => false, 'error' => 'Failed to read the uploaded file.']);
+    exit;
+}
+
+$categories = expenseCategories();
+$categoryByLabel = [];
+foreach ($categories as $catKey => $label)
+    $categoryByLabel[strtolower($label)] = $catKey;
+
+$insert = $mysqli->prepare("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description) VALUES (?, ?, ?, ?, ?)");
+$imported = 0;
+$skipped = 0;
+$rowNum = 0;
+$errors = [];
+while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
+    $rowNum++;
+    if ($rowNum === 1) {
+        continue;
+    }
+    $vendor = trim($row[1] ?? '');
+    $amount = (float) ($row[3] ?? 0);
+    if ($vendor === '' || $amount <= 0) {
+        $skipped++;
+        continue;
+    }
+    $dateTs = strtotime(trim($row[0] ?? ''));
+    $date = $dateTs ? date('Y-m-d', $dateTs) : date('Y-m-d');
+    $rawCategory = strtolower(trim($row[2] ?? ''));
+    $category = 'other';
+    if (array_key_exists($rawCategory, $categories)) {
+        $category = $rawCategory;
+    } elseif (isset($categoryByLabel[$rawCategory])) {
+        $category = $categoryByLabel[$rawCategory];
+    }
+    $description = trim($row[4] ?? '');
+
+    try {
+        $insert->bind_param("sssds", $date, $vendor, $category, $amount, $description);
+        $insert->execute();
+        $imported++;
+    } catch (mysqli_sql_exception $e) {
+        $skipped++;
+        if (count($errors) < 10)
+            $errors[] = "Row $rowNum ($vendor): " . $e->getMessage();
+    }
+}
+fclose($fh);
+echo json_encode(['success' => true, 'imported' => $imported, 'skipped' => $skipped, 'errors' => $errors]);
+exit;
 }
 
 // Recurring expense templates — the run_recurring cron action auto-logs one
@@ -1022,7 +1183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // not on this list). $isCron requests bypass this the same way they
         // bypass the $isAuth gate above — a cron-triggered run has no user at
         // all, and CRON_SECRET is its own, separate authorization.
-        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'get_db_stats', 'import_backup', 'import_clients_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
+        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'get_db_stats', 'import_backup', 'import_clients_csv', 'import_expenses_csv', 'import_invoices_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
         if (!$isCron && !$isAdmin && in_array($_POST['action'], $__adminOnlyActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This requires an admin account — see Settings > Users.']);
             exit;
@@ -1242,6 +1403,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         if ($_POST['action'] === 'import_clients_csv') { invoxaHandleImportClientsCsv($mysqli); }
+        if ($_POST['action'] === 'import_invoices_csv') { invoxaHandleImportInvoicesCsv($mysqli, $settings); }
+        if ($_POST['action'] === 'import_expenses_csv') { invoxaHandleImportExpensesCsv($mysqli); }
         if ($_POST['action'] === 'preview_adhoc') {
             $clientId = (int) $_POST['client_id'];
             $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id=$clientId")->fetch_assoc();
