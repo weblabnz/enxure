@@ -943,7 +943,7 @@
             };
             function getTblOpts(which) {
                 const preferredPageSize = parseInt(localStorage.getItem('invoxa_table_page_size'), 10) || 12;
-                return { searchable: true, fixedHeight: false, perPage: preferredPageSize, perPageSelect: [12, 30, 50, 99999], labels: { noRows: tblEmptyMessages[which] || 'No entries found' } };
+                return { searchable: true, fixedHeight: false, perPage: preferredPageSize, perPageSelect: [12, 30, 50, 99999], labels: { noRows: tblEmptyMessages[which] || 'No entries found', searchLabel: '' } };
             }
             const dataTables = {};
             if (document.getElementById("invoicesTable")) dataTables.invoices = new simpleDatatables.DataTable("#invoicesTable", getTblOpts('invoices'));
