@@ -13,3 +13,13 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/workspace -w /workspace php:8.3-cli \
             sh -c 'find src -name "*.php" -print0 | xargs -0 -r -n1 php -l'
+
+  test-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Test Suite against invoxa-test
+        run: |
+          resp=$(curl -sf -X POST --data "action=run_test_suite&cron_key=${{ secrets.TEST_CRON_SECRET }}" http://invoxa-test-nginx/invoxa.php)
+          echo "$resp"
+          failed=$(echo "$resp" | grep -oP '"failed":\K[0-9]+')
+          [ "$failed" = "0" ]
