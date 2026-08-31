@@ -2,6 +2,14 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.35] - 2026-08-31
+
+### Added
+- Dashboard now has the same kind of card customization Statistics has, via its own independent implementation (not shared code, so Statistics' own drag/resize behavior is untouched): the four "flash card" KPI tiles at the top drag-reorder within a fixed 4-wide row, and a new Customize button (next to Next Auto-Run) lists three more you can swap in — Total Paid, Overdue Invoices, Failed Emails — capped at four visible at a time. The Revenue Over Time and Client Share charts below drag-reorder and resize between 1/3, 1/2, 2/3, and full width via a cycling width button. All of it saves per-user to `invoxa_stats_layout` under new `dashboard-tidbits`/`dashboard-charts` panes, reusing the existing table and save/load functions since they were already pane-agnostic.
+
+### Fixed
+- The Dashboard customization above shipped with a temporal-dead-zone bug: the chart width-cycle button's label lookup tables were declared with `const` after the point in `page_script.php` where the Dashboard's layout-apply function is first called at page load, so once a user had a saved chart layout, that call threw a `ReferenceError` and silently aborted the rest of the script — breaking chart-card sizing, drag-and-drop, and the Dashboard's "Next Auto-Run" cron message all at once, on any page load with a saved Dashboard layout. Moved the declarations to the top of the script, before any code can reach them.
+
 ## [2.11.34] - 2026-08-31
 
 ### Changed

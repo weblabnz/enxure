@@ -51,8 +51,8 @@ CREATE TABLE IF NOT EXISTS `invoxa_settings` (
 
 CREATE TABLE IF NOT EXISTS `invoxa_stats_layout` (
   `user_id`      INT NOT NULL COMMENT 'FK to invoxa_users.id',
-  `pane`         VARCHAR(30) NOT NULL COMMENT 'Statistics subnav tab, e.g. revenue, forecasting, clients',
-  `layout_json`  TEXT NOT NULL COMMENT 'JSON array of {id, width} in the user''s chosen card order, width is 1 (half) or 2 (full)',
+  `pane`         VARCHAR(30) NOT NULL COMMENT 'Statistics subnav tab (revenue, forecasting, clients, ...) or dashboard-tidbits/dashboard-charts',
+  `layout_json`  TEXT NOT NULL COMMENT 'JSON array of {id, width, col, hidden} in the user''s chosen card order; width/col meaning is pane-specific (Statistics: width 1=half/2=full, col 0/1; dashboard-charts: width is a 6-unit grid span, col unused)',
   `updated_at`   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`, `pane`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

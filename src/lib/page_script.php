@@ -4,6 +4,14 @@
             const APP_CURRENCY = <?= json_encode($settings['currency'] ?? 'USD') ?>;
             let chartInstance = null, pieChartInstance = null, chartAllData = null, chartRange = '12';
             const CLIENT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#f97316', '#84cc16', '#a855f7', '#ec4899', '#14b8a6', '#f43f5e'];
+            // Declared here (not just above their only use in updateDashboardCardWidthLabel
+            // further down) because applyDashboardLayouts() is called at top-level well
+            // before that point in the script — a `const` declared after the call site is
+            // still in its temporal dead zone when the call runs, so a saved dashboard-charts
+            // layout (which routes through updateDashboardCardWidthLabel) would throw a
+            // ReferenceError and abort the rest of this script's top-level execution.
+            const DASH_WIDTH_CYCLE = { '3': '2', '2': '4', '4': '6', '6': '3' };
+            const DASH_WIDTH_LABEL = { '2': '1/3', '3': '1/2', '4': '2/3', '6': 'Full' };
             const justLoggedIn = new URLSearchParams(window.location.search).has('login');
             const justSignedUp = new URLSearchParams(window.location.search).has('welcome');
             const defaultLandingTab = localStorage.getItem('invoxa_default_tab') || 'dashboard';
@@ -423,6 +431,11 @@
             if (storedStatsTab && document.getElementById('stats-pane-' + storedStatsTab)) navStats(storedStatsTab);
             else initStatsChartsFor('revenue');
 
+            // Dashboard's own cards, already in the DOM at this point — see the
+            // comment above applyDashboardLayouts() further down.
+            applyDashboardLayouts();
+            initDashboardDragDrop();
+
             // Statistics cards: drag-to-reorder (including between columns, or
             // into an empty one) and half/full width, saved per-user to
             // invoxa_stats_layout (see save_stats_layout / renderStatsSection()).
@@ -529,6 +542,247 @@
                     col: c.dataset.cardCol === '1' ? 1 : 0
                 }));
                 fetch('', { method: 'POST', body: new URLSearchParams({ action: 'save_stats_layout', pane, layout: JSON.stringify(layout) }) }).catch(() => { });
+            }
+
+            // ── Dashboard's own two customizable regions ───────────────────────
+            // The "flash card" stat tidbits (.dashboard-tidbit-row) and the chart
+            // row (.dashboard-chart-row) each get simple drag-to-reorder, saved
+            // per-user under the 'dashboard-tidbits'/'dashboard-charts' panes in
+            // invoxa_stats_layout (see save_stats_layout / renderDashboardStats()).
+            // Deliberately its own code, not a rename of Statistics' layoutStatsPane/
+            // initStatsDragDrop/etc above — the layout rules differ (a flat 4-wide
+            // grid vs. a 6-unit span grid, vs. Statistics' 2-column pairing), and
+            // keeping them separate means nothing here can change how Statistics
+            // behaves.
+            function applyDashboardLayouts() {
+                const dataEl = document.getElementById('dashboardLayoutData');
+                let layouts = {};
+                if (dataEl) {
+                    try { layouts = JSON.parse(dataEl.dataset.layouts || '{}'); } catch (e) { layouts = {}; }
+                }
+                document.querySelectorAll('[data-dash-pane]').forEach(container => {
+                    const pane = container.dataset.dashPane;
+                    const saved = layouts[pane] || [];
+                    const cards = Array.from(container.querySelectorAll('.card[data-card-id]'));
+                    const byId = new Map(cards.map(c => [c.dataset.cardId, c]));
+                    const seen = new Set();
+                    const order = [];
+                    saved.forEach(entry => {
+                        const el = byId.get(entry.id);
+                        if (el && !seen.has(entry.id)) {
+                            if (el.dataset.cardWidth !== undefined && entry.width) el.dataset.cardWidth = String(entry.width);
+                            el.dataset.cardHidden = entry.hidden ? '1' : '0';
+                            updateDashboardCardWidthLabel(el);
+                            order.push(el);
+                            seen.add(entry.id);
+                        }
+                    });
+                    cards.forEach(c => { if (!seen.has(c.dataset.cardId)) order.push(c); });
+                    order.forEach(el => container.appendChild(el));
+                    layoutDashboardChartRow(container);
+                });
+            }
+
+            // Chart cards carry their column span (2=1/3, 3=1/2, 4=2/3, 6=full) directly
+            // in data-card-width and grid-column, so laying out the row after a
+            // reorder/resize is just re-applying that to each card in its new order
+            // — the CSS grid (see .dashboard-chart-row in page_head.php) handles
+            // wrapping combinations onto their own row on its own.
+            function layoutDashboardChartRow(container) {
+                if (!container.classList.contains('dashboard-chart-row')) return;
+                container.querySelectorAll('.card[data-card-id]').forEach(c => {
+                    c.style.gridColumn = 'span ' + (c.dataset.cardWidth || '3');
+                });
+            }
+
+            function updateDashboardCardWidthLabel(cardEl) {
+                const label = cardEl.querySelector(':scope > .card-drag-controls .card-width-toggle .width-label');
+                if (label) label.textContent = DASH_WIDTH_LABEL[cardEl.dataset.cardWidth] || '1/2';
+            }
+
+            function toggleDashboardChartWidth(btn) {
+                const cardEl = btn.closest('.card[data-card-id]');
+                if (!cardEl) return;
+                const container = cardEl.closest('[data-dash-pane]');
+                cardEl.dataset.cardWidth = DASH_WIDTH_CYCLE[cardEl.dataset.cardWidth] || '3';
+                updateDashboardCardWidthLabel(cardEl);
+                layoutDashboardChartRow(container);
+                saveDashboardLayout(container);
+            }
+
+            // Hides a card in place (kept in the DOM, just display:none via
+            // [data-card-hidden="1"], see page_head.php) — re-shown from the
+            // Customize menu (renderDashboardWidgetMenu below), not the card itself.
+            function hideDashboardCard(btn) {
+                const cardEl = btn.closest('.card[data-card-id]');
+                if (!cardEl) return;
+                const container = cardEl.closest('[data-dash-pane]');
+                cardEl.dataset.cardHidden = '1';
+                saveDashboardLayout(container);
+                refreshDashboardWidgetMenuIfOpen();
+            }
+
+            function saveDashboardLayout(container) {
+                if (!container) return;
+                const pane = container.dataset.dashPane;
+                const layout = Array.from(container.querySelectorAll('.card[data-card-id]')).map(c => ({
+                    id: c.dataset.cardId,
+                    width: parseInt(c.dataset.cardWidth || '0', 10) || 0,
+                    hidden: c.dataset.cardHidden === '1'
+                }));
+                fetch('', { method: 'POST', body: new URLSearchParams({ action: 'save_stats_layout', pane, layout: JSON.stringify(layout) }) }).catch(() => { });
+            }
+
+            // "Customize" popover — lists every card in both dashboard regions
+            // (built from the DOM, not hardcoded, so it can never drift from
+            // renderDashboardStats()), grouped under a heading per region, each
+            // with a checkbox toggling data-card-hidden.
+            function toggleDashboardWidgetMenu() {
+                const menu = document.getElementById('dashboardWidgetMenu');
+                if (!menu) return;
+                if (menu.hidden) {
+                    renderDashboardWidgetMenu();
+                    menu.hidden = false;
+                } else {
+                    menu.hidden = true;
+                }
+            }
+
+            // A pane can cap how many of its cards may be visible at once (see
+            // data-max-visible on .dashboard-tidbit-row — DASHBOARD_TIDBIT_VISIBLE_MAX
+            // in stats.php) — once that many are checked, the remaining unchecked
+            // boxes disable until one is unchecked to free a slot, so the fixed-width
+            // tidbit row never has to grow.
+            function renderDashboardWidgetMenu() {
+                const menu = document.getElementById('dashboardWidgetMenu');
+                if (!menu) return;
+                menu.innerHTML = '';
+                [
+                    { label: 'Stat Cards', pane: 'dashboard-tidbits' },
+                    { label: 'Charts', pane: 'dashboard-charts' },
+                ].forEach(g => {
+                    const container = document.querySelector('#sec-dashboard [data-dash-pane="' + g.pane + '"]');
+                    if (!container) return;
+                    const heading = document.createElement('div');
+                    heading.className = 'widget-manage-menu-heading';
+                    heading.textContent = g.label;
+                    menu.appendChild(heading);
+                    const maxVisible = parseInt(container.dataset.maxVisible || '0', 10) || 0;
+                    const cards = Array.from(container.querySelectorAll('.card[data-card-id]'));
+                    const visibleCount = cards.filter(c => c.dataset.cardHidden !== '1').length;
+                    cards.forEach(c => {
+                        const isVisible = c.dataset.cardHidden !== '1';
+                        const label = document.createElement('label');
+                        label.className = 'widget-manage-menu-item';
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox';
+                        cb.checked = isVisible;
+                        if (maxVisible > 0 && !isVisible && visibleCount >= maxVisible) {
+                            cb.disabled = true;
+                            label.classList.add('widget-manage-menu-item-disabled');
+                        }
+                        cb.addEventListener('change', () => {
+                            c.dataset.cardHidden = cb.checked ? '0' : '1';
+                            saveDashboardLayout(container);
+                            renderDashboardWidgetMenu();
+                        });
+                        label.appendChild(cb);
+                        label.appendChild(document.createTextNode(c.dataset.cardLabel || c.dataset.cardId));
+                        menu.appendChild(label);
+                    });
+                    if (maxVisible > 0) {
+                        const hint = document.createElement('div');
+                        hint.className = 'widget-manage-menu-hint';
+                        hint.textContent = 'Up to ' + maxVisible + ' at a time — uncheck one to swap in another.';
+                        menu.appendChild(hint);
+                    }
+                });
+            }
+
+            function refreshDashboardWidgetMenuIfOpen() {
+                const menu = document.getElementById('dashboardWidgetMenu');
+                if (menu && !menu.hidden) renderDashboardWidgetMenu();
+            }
+
+            document.addEventListener('click', e => {
+                const menu = document.getElementById('dashboardWidgetMenu');
+                if (!menu || menu.hidden) return;
+                if (!e.target.closest('.widget-manage')) menu.hidden = true;
+            });
+
+            // Same FLIP technique as Statistics' flipStatsMove below, duplicated
+            // here rather than shared so Dashboard's drag code has no dependency
+            // on Statistics' — see the comment above applyDashboardLayouts.
+            function flipDashboardMove(container, mutate) {
+                const cards = Array.from(container.querySelectorAll('.card[data-card-id]'));
+                const before = new Map(cards.map(c => [c, c.getBoundingClientRect()]));
+                mutate();
+                cards.forEach(c => {
+                    const a = before.get(c);
+                    const b = c.getBoundingClientRect();
+                    const dx = a.left - b.left, dy = a.top - b.top;
+                    if (!dx && !dy) return;
+                    c.style.transition = 'none';
+                    c.style.transform = `translate(${dx}px, ${dy}px)`;
+                    requestAnimationFrame(() => {
+                        c.style.transition = 'transform 0.16s ease';
+                        c.style.transform = '';
+                    });
+                });
+            }
+
+            let __dashDragCard = null;
+            let __dashDragRaf = null;
+            function initDashboardDragDrop() {
+                document.querySelectorAll('[data-dash-pane]').forEach(container => {
+                    if (container.dataset.dragBound) return;
+                    container.dataset.dragBound = '1';
+                    container.addEventListener('dragstart', e => {
+                        const cardEl = e.target.closest('.card[data-card-id]');
+                        if (!cardEl) return;
+                        __dashDragCard = cardEl;
+                        cardEl.classList.add('dragging');
+                        e.dataTransfer.effectAllowed = 'move';
+                    });
+                    container.addEventListener('dragover', e => {
+                        if (!__dashDragCard) return;
+                        e.preventDefault();
+                        if (__dashDragRaf) return;
+                        const targetEl = e.target, clientX = e.clientX, clientY = e.clientY;
+                        __dashDragRaf = requestAnimationFrame(() => {
+                            __dashDragRaf = null;
+                            positionDashboardDragCard(container, targetEl, clientX, clientY);
+                        });
+                    });
+                    container.addEventListener('dragend', () => {
+                        if (!__dashDragCard) return;
+                        if (__dashDragRaf) { cancelAnimationFrame(__dashDragRaf); __dashDragRaf = null; }
+                        __dashDragCard.classList.remove('dragging');
+                        saveDashboardLayout(container);
+                        __dashDragCard = null;
+                    });
+                });
+            }
+
+            // Both dashboard rows can have multiple cards side by side on the same
+            // line (the tidbit row always does; the chart row does whenever two
+            // cards' spans sum to <= 6), so before/after has to be decided on
+            // whichever axis the pointer is actually off-center on, not just Y like
+            // Statistics' single-column-flow positionStatsDragCard.
+            function positionDashboardDragCard(container, targetEl, clientX, clientY) {
+                if (!__dashDragCard) return;
+                const overCard = targetEl.closest('.card[data-card-id]');
+                if (!overCard || overCard === __dashDragCard) return;
+                const rect = overCard.getBoundingClientRect();
+                const relX = (clientX - rect.left) / rect.width;
+                const relY = (clientY - rect.top) / rect.height;
+                const rel = Math.abs(relX - 0.5) >= Math.abs(relY - 0.5) ? relX : relY;
+                if (rel >= 0.4 && rel <= 0.6) return;
+                const before = rel < 0.4;
+                flipDashboardMove(container, () => {
+                    overCard.parentNode.insertBefore(__dashDragCard, before ? overCard : overCard.nextSibling);
+                    layoutDashboardChartRow(container);
+                });
             }
 
             // FLIP (First-Last-Invert-Play): snapshot every card's position,
@@ -723,10 +977,13 @@
                 }
             }
 
-            // Refreshes the alert strips, top stat cards, and Recent Activity list, and
-            // forces the chart to refetch (bypassing initChart's cache via `force`).
-            // The canvases themselves are left alone — renderChart() just redraws into
-            // the existing ones, so no Chart.js instances need destroying/recreating.
+            // Refreshes the alert strips, top stat cards, charts, and Recent Activity
+            // list, and forces the chart to refetch (bypassing initChart's cache via
+            // `force`). The stat/chart cards' canvases are part of the innerHTML swap
+            // (they're drag-reorderable alongside the stat cards, see
+            // renderDashboardStats()), so their Chart.js instances are orphaned —
+            // renderChart() already destroys the previous instance before creating a
+            // new one against the fresh canvas, so nothing extra is needed here.
             async function refreshDashboard() {
                 document.querySelectorAll('#dashboardStatsWrap .stat-card').forEach(el => el.classList.add('stats-loading'));
                 try {
@@ -736,6 +993,10 @@
                     ]);
                     document.getElementById('dashboardStatsWrap').innerHTML = statsHtml;
                     document.getElementById('activityTbody').innerHTML = activityHtml;
+                    applyDashboardLayouts();
+                    initDashboardDragDrop();
+                    const menu = document.getElementById('dashboardWidgetMenu');
+                    if (menu) menu.hidden = true;
                     initChart(true);
                     animateStatCards();
                 } catch (e) {

@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.34');
+define('APP_VERSION', '2.11.35');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -2488,7 +2488,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
     } elseif ($which === 'expenses') {
         echo renderExpenseRows($expenses);
     } elseif ($which === 'dashboard_stats') {
-        echo renderDashboardStats($settings, $failedInvoices, $overdueInvoices, $total_invoiced_by_ccy, $total_monthly_by_ccy, $total_paid_by_ccy, (int) $client_count);
+        echo renderDashboardStats($mysqli, $currentUserId, $settings, $failedInvoices, $overdueInvoices, $total_invoiced_by_ccy, $total_monthly_by_ccy, $total_paid_by_ccy, (int) $client_count);
     } elseif ($which === 'activity') {
         echo renderActivityRows($actions);
     } elseif ($which === 'stats_section') {

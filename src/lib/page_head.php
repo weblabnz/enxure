@@ -414,13 +414,14 @@
             margin-bottom: 2rem;
         }
 
-        /* Statistics tab only (Dashboard's own 4-card .stats-grid stays
-           auto-fit — it's always a full row of 4, no orphan). A couple of the
-           Statistics tab's inner tile grids have 3 tiles instead, which
-           auto-fit can resolve to 2 columns and leave the 3rd stranded with an
-           empty cell beside it; pinning to a fixed 2 columns here makes that
-           trailing odd tile reliably detectable so it can stretch full-width
-           instead. */
+        /* Statistics tab only — its inner tile grids (Dashboard's own 4-card
+           .stats-grid, the .dashboard-tidbit-row below, stays plain auto-fit —
+           it's always a full row of up to 4, no orphan tile to rescue). A
+           couple of the Statistics tab's tile grids have 3 tiles instead,
+           which auto-fit can resolve to 2 columns and leave the 3rd stranded
+           with an empty cell beside it; pinning to a fixed 2 columns here
+           makes that trailing odd tile reliably detectable so it can stretch
+           full-width instead. */
         #sec-stats .stats-grid {
             grid-template-columns: repeat(2, 1fr);
         }
@@ -485,6 +486,11 @@
         .stat-icon.warning {
             background: color-mix(in srgb, var(--warning) 15%, transparent);
             color: var(--warning);
+        }
+
+        .stat-icon.danger {
+            background: color-mix(in srgb, var(--danger) 15%, transparent);
+            color: var(--danger);
         }
 
         .stat-value {
@@ -595,19 +601,6 @@
             font-weight: 700;
             letter-spacing: 0.02em;
             flex-shrink: 0;
-        }
-
-        .charts-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 1.25rem;
-            margin-bottom: 2rem;
-        }
-
-        @media (max-width: 1024px) {
-            .charts-grid {
-                grid-template-columns: 1fr;
-            }
         }
 
         .client-form-grid {
@@ -777,6 +770,65 @@
             opacity: 0.4;
         }
 
+        /* Dashboard's own two customizable regions — deliberately separate
+           containers/classes from Statistics' .stats-columns above (own
+           drag-reorder logic in page_script.php, initDashboardDragDrop() /
+           applyDashboardLayouts()) so nothing here can change how Statistics
+           behaves. Saved per user under the 'dashboard-tidbits' and
+           'dashboard-charts' panes in invoxa_stats_layout — same table
+           Statistics uses, just a different pane, since the save/load
+           functions are pane-agnostic. */
+        .dashboard-tidbit-row .card,
+        .dashboard-chart-row .card {
+            position: relative;
+        }
+
+        /* Baseline span so a chart card is never smaller than half-width even
+           before JS runs (or if it fails to for any reason) — applyDashboardLayouts()
+           / layoutDashboardChartRow() in page_script.php override this with an inline
+           style once they run, same "server render is never broken by JS" approach
+           STATS_PANES's doc comment describes for Statistics. */
+        .dashboard-chart-row .card {
+            grid-column: span 3;
+        }
+
+        .dashboard-tidbit-row .card[draggable="true"],
+        .dashboard-chart-row .card[draggable="true"] {
+            cursor: grab;
+        }
+
+        .dashboard-tidbit-row .card.dragging,
+        .dashboard-chart-row .card.dragging {
+            opacity: 0.4;
+        }
+
+        .dashboard-tidbit-row .card[data-card-hidden="1"],
+        .dashboard-chart-row .card[data-card-hidden="1"] {
+            display: none;
+        }
+
+        /* Chart row: a 6-unit grid so a card can span 1/3 (2 units), 1/2 (3),
+           2/3 (4), or full width (6) — width-cycle button sets
+           data-card-width to the span count (see toggleDashboardChartWidth
+           in page_script.php); grid auto-flow wraps combinations like
+           half+half or third+two-thirds onto their own row for free. */
+        .dashboard-chart-row {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-chart-row {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-chart-row .card {
+                grid-column: span 1 !important;
+            }
+        }
+
         .card-drag-controls {
             position: absolute;
             top: 0.6rem;
@@ -789,7 +841,9 @@
             z-index: 1;
         }
 
-        #sec-stats .stats-columns .card:hover .card-drag-controls {
+        #sec-stats .stats-columns .card:hover .card-drag-controls,
+        .dashboard-tidbit-row .card:hover .card-drag-controls,
+        .dashboard-chart-row .card:hover .card-drag-controls {
             opacity: 1;
         }
 
@@ -799,7 +853,8 @@
             padding: 0.2rem;
         }
 
-        .card-drag-controls .card-width-toggle {
+        .card-drag-controls .card-width-toggle,
+        .card-drag-controls .card-hide-toggle {
             background: none;
             border: none;
             cursor: pointer;
@@ -809,8 +864,68 @@
         }
 
         .card-drag-controls .card-width-toggle:hover,
+        .card-drag-controls .card-hide-toggle:hover,
         .card-drag-controls .drag-handle:hover {
             color: var(--text-primary);
+        }
+
+        .widget-manage-menu {
+            position: absolute;
+            top: calc(100% + 0.5rem);
+            right: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md);
+            padding: 0.5rem;
+            min-width: 220px;
+            z-index: 10;
+            font-size: 0.85rem;
+            font-weight: 400;
+        }
+
+        .widget-manage-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.45rem 0.6rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            color: var(--text-primary);
+        }
+
+        .widget-manage-menu-heading {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 600;
+            color: var(--text-secondary);
+            padding: 0.5rem 0.6rem 0.25rem;
+        }
+
+        .widget-manage-menu-item:hover {
+            background: var(--surface-hover);
+        }
+
+        .widget-manage-menu-item-disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .widget-manage-menu-item-disabled:hover {
+            background: none;
+        }
+
+        .widget-manage-menu-hint {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            padding: 0.35rem 0.6rem 0.5rem;
+        }
+
+        .card-width-toggle .width-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            font-style: normal;
         }
 
         .card-header {

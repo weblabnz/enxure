@@ -4,14 +4,29 @@
 // chart/stats JSON API). renderStatsSection() still pulls its ~50 $stats_*
 // inputs via `global` from Data Fetching in invoxa.php — unchanged by this move.
 
-// Dashboard's alert strips + top stat cards — the parts that can change from
-// actions taken elsewhere without the Dashboard tab being reloaded.
-function renderDashboardStats(array $settings, array $failedInvoices, array $overdueInvoices, array $total_invoiced_by_ccy, array $total_monthly_by_ccy, array $total_paid_by_ccy, int $client_count): string
+// Max flash-card tidbits visible on the Dashboard at once (see $tidbits in
+// renderDashboardStats() and the Customize menu's cap in page_script.php) —
+// the tidbit row has more candidates than this so a business can pick which
+// ones matter to them, but the row itself stays a fixed 4-wide strip.
+const DASHBOARD_TIDBIT_VISIBLE_MAX = 4;
+
+// Dashboard's alert strips + top "flash card" stats + charts — the parts
+// that can change from actions taken elsewhere without the Dashboard tab
+// being reloaded (see the ?api=table_html&which=dashboard_stats fragment
+// endpoint). Two independent customizable regions, each with their own
+// drag-reorder JS (initDashboardDragDrop/applyDashboardLayouts in
+// page_script.php) deliberately separate from Statistics' own — saved per
+// user in invoxa_stats_layout under the 'dashboard-tidbits'/'dashboard-charts'
+// panes (see STATS_PANES below; that table/functions are pane-agnostic, so
+// reusing them here doesn't touch Statistics' own behavior).
+function renderDashboardStats($mysqli, int $currentUserId, array $settings, array $failedInvoices, array $overdueInvoices, array $total_invoiced_by_ccy, array $total_monthly_by_ccy, array $total_paid_by_ccy, int $client_count): string
 {
     $outstanding_by_ccy = $total_invoiced_by_ccy;
     foreach ($total_paid_by_ccy as $ccy => $amount) {
         $outstanding_by_ccy[$ccy] = ($outstanding_by_ccy[$ccy] ?? 0) - $amount;
     }
+    $allLayouts = invoxaGetStatsLayouts($mysqli, $currentUserId);
+    $dashboardLayouts = ['dashboard-tidbits' => $allLayouts['dashboard-tidbits'] ?? [], 'dashboard-charts' => $allLayouts['dashboard-charts'] ?? []];
     ob_start();
     ?>
     <?php if (count($failedInvoices) > 0): ?>
@@ -35,50 +50,93 @@ function renderDashboardStats(array $settings, array $failedInvoices, array $ove
                 All</button>
         </div>
     <?php endif; ?>
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-card-top">
-                <div class="stat-title">Total Invoiced (All Time)</div>
-                <div class="stat-icon"><i class="fa-solid fa-sack-dollar"></i></div>
+    <div id="dashboardLayoutData" data-layouts="<?= htmlspecialchars(json_encode($dashboardLayouts), ENT_QUOTES) ?>" style="display:none"></div>
+    <?php
+    // The "flash card" tidbits — small, fixed-shape KPI tiles, unlike the
+    // bigger cards below, so no width control; just reorder (drag-handle) and
+    // show/hide via the Customize menu (renderDashboardWidgetMenu in
+    // page_script.php), which also caps how many can be visible at once to
+    // DASHBOARD_TIDBIT_VISIBLE_MAX — more candidates than fit in one row, so
+    // a business picks which ones matter to them and swaps freely, without
+    // the row growing unbounded. The last 3 start hidden; a saved layout (see
+    // $dashboardLayouts above) overrides these defaults once the user's
+    // customized anything.
+    $tidbits = [
+        ['id' => 'dash-total-invoiced', 'label' => 'Total Invoiced (All Time)', 'icon' => 'fa-sack-dollar', 'iconClass' => '', 'valueStyle' => '', 'value' => invoxaFormatMoneyByCurrency($total_invoiced_by_ccy), 'hidden' => false],
+        ['id' => 'dash-this-month', 'label' => 'This Month', 'icon' => 'fa-calendar-check', 'iconClass' => 'success', 'valueStyle' => 'color: var(--success)', 'value' => invoxaFormatMoneyByCurrency($total_monthly_by_ccy), 'hidden' => false],
+        ['id' => 'dash-total-outstanding', 'label' => 'Total Outstanding', 'icon' => 'fa-hourglass-half', 'iconClass' => 'warning', 'valueStyle' => 'color: var(--warning)', 'value' => invoxaFormatMoneyByCurrency($outstanding_by_ccy), 'hidden' => false],
+        ['id' => 'dash-active-clients', 'label' => 'Active Clients', 'icon' => 'fa-users', 'iconClass' => '', 'valueStyle' => '', 'value' => (string) $client_count, 'hidden' => false],
+        ['id' => 'dash-total-paid', 'label' => 'Total Paid (All Time)', 'icon' => 'fa-circle-check', 'iconClass' => 'success', 'valueStyle' => 'color: var(--success)', 'value' => invoxaFormatMoneyByCurrency($total_paid_by_ccy), 'hidden' => true],
+        ['id' => 'dash-overdue-count', 'label' => 'Overdue Invoices', 'icon' => 'fa-circle-exclamation', 'iconClass' => 'danger', 'valueStyle' => 'color: var(--danger)', 'value' => (string) count($overdueInvoices), 'hidden' => true],
+        ['id' => 'dash-failed-emails', 'label' => 'Failed Emails', 'icon' => 'fa-triangle-exclamation', 'iconClass' => 'danger', 'valueStyle' => 'color: var(--danger)', 'value' => (string) count($failedInvoices), 'hidden' => true],
+    ];
+    ?>
+    <div class="stats-grid dashboard-tidbit-row" data-dash-pane="dashboard-tidbits" data-max-visible="<?= DASHBOARD_TIDBIT_VISIBLE_MAX ?>">
+        <?php foreach ($tidbits as $t): ?>
+            <div class="card stat-card" data-card-id="<?= $t['id'] ?>" data-card-label="<?= htmlspecialchars($t['label']) ?>" data-card-hidden="<?= $t['hidden'] ? '1' : '0' ?>" draggable="true" style="margin-bottom:0;">
+                <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i></div>
+                <div class="stat-card-top">
+                    <div class="stat-title"><?= htmlspecialchars($t['label']) ?></div>
+                    <div class="stat-icon <?= $t['iconClass'] ?>"><i class="fa-solid <?= $t['icon'] ?>"></i></div>
+                </div>
+                <div class="stat-value" style="<?= $t['valueStyle'] ?>"><?= $t['value'] ?></div>
             </div>
-            <div class="stat-value"><?= invoxaFormatMoneyByCurrency($total_invoiced_by_ccy) ?></div>
+        <?php endforeach; ?>
+    </div>
+    <div class="dashboard-chart-row" data-dash-pane="dashboard-charts">
+        <div class="card" data-card-id="dash-revenue-chart" data-card-width="3" data-card-label="Revenue Over Time" draggable="true" style="margin-bottom:0;">
+            <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleDashboardChartWidth(this)" title="Cycle width (1/3, 1/2, 2/3, full)"><i class="fa-solid fa-arrows-left-right"></i><span class="width-label">1/2</span></button><button type="button" class="card-hide-toggle" onclick="hideDashboardCard(this)" title="Hide this widget"><i class="fa-solid fa-eye-slash"></i></button></div>
+            <div class="card-header">
+                <h3 style="margin:0; font-size:1rem;"><i class="fa-solid fa-chart-line"
+                        style="color:var(--accent); margin-right:0.5rem;"></i>Revenue Over Time (Cumulative)
+                </h3>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <button id="chartRange12" class="btn small primary" onclick="setChartRange('12')">Last 12
+                        Months</button>
+                    <button id="chartRangeAll" class="btn small" onclick="setChartRange('all')">All
+                        Time</button>
+                </div>
+            </div>
+            <div class="card-body" style="padding:1rem;">
+                <div style="height:420px; position:relative;"><canvas id="revenueChart"></canvas></div>
+            </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-card-top">
-                <div class="stat-title">This Month</div>
-                <div class="stat-icon success"><i class="fa-solid fa-calendar-check"></i></div>
+        <div class="card" data-card-id="dash-client-share-chart" data-card-width="3" data-card-label="Client Share" draggable="true" style="margin-bottom:0; display:flex; flex-direction:column;">
+            <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleDashboardChartWidth(this)" title="Cycle width (1/3, 1/2, 2/3, full)"><i class="fa-solid fa-arrows-left-right"></i><span class="width-label">1/2</span></button><button type="button" class="card-hide-toggle" onclick="hideDashboardCard(this)" title="Hide this widget"><i class="fa-solid fa-eye-slash"></i></button></div>
+            <div class="card-header">
+                <h3 style="margin:0; font-size:1rem;"><i class="fa-solid fa-chart-pie"
+                        style="color:var(--accent); margin-right:0.5rem;"></i>Client Share (All Time)</h3>
             </div>
-            <div class="stat-value" style="color: var(--success)"><?= invoxaFormatMoneyByCurrency($total_monthly_by_ccy) ?>
+            <div class="card-body"
+                style="padding:1rem; flex:1; display:flex; align-items:center; justify-content:center;">
+                <div style="height:320px; width:100%; position:relative;"><canvas id="pieChart"></canvas></div>
             </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-card-top">
-                <div class="stat-title">Total Outstanding</div>
-                <div class="stat-icon warning"><i class="fa-solid fa-hourglass-half"></i></div>
-            </div>
-            <div class="stat-value" style="color: var(--warning)"><?= invoxaFormatMoneyByCurrency($outstanding_by_ccy) ?></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-card-top">
-                <div class="stat-title">Active Clients</div>
-                <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
-            </div>
-            <div class="stat-value"><?= $client_count ?></div>
         </div>
     </div>
     <?php
     return ob_get_clean();
 }
 
-// Statistics subnav tabs — each renders as an independent card grid the user
-// can drag-reorder and resize, saved per pane in invoxa_stats_layout.
-const STATS_PANES = ['revenue', 'forecasting', 'clients', 'expenses', 'tax', 'activity', 'system'];
+// Panes with a draggable/reorderable card grid, saved per pane in
+// invoxa_stats_layout — the Statistics subnav tabs (their own drag/resize
+// logic in page_script.php, unrelated to Dashboard's), plus
+// 'dashboard-tidbits'/'dashboard-charts' for the Dashboard tab's own stat
+// cards and charts (see renderDashboardStats() — separate drag-reorder logic
+// there too, so nothing here couples the two).
+const STATS_PANES = ['dashboard-tidbits', 'dashboard-charts', 'revenue', 'forecasting', 'clients', 'expenses', 'tax', 'activity', 'system'];
 
-// Per-user Statistics card order/width, saved by save_stats_layout below and
-// applied client-side (see toggleStatsCardWidth/initStatsDragDrop in
-// page_script.php) — the server always renders panes in their default order,
-// so a stale/corrupt saved layout can never break the page, only leave a
-// user's customization unapplied until they re-save it.
+// Per-user card order/width/hidden state, saved by save_stats_layout below
+// and applied client-side — Statistics via applyStatsLayouts/
+// toggleStatsCardWidth/initStatsDragDrop, Dashboard via its own
+// applyDashboardLayouts/toggleDashboardChartWidth/hideDashboardCard/
+// initDashboardDragDrop (all in page_script.php). The server always renders
+// every pane's cards in their default order and visible, so a stale/corrupt
+// saved layout can never break the page, only leave a user's customization
+// unapplied until they re-save it. 'width' means different things per pane
+// (Statistics: 1 or 2, half/full; dashboard-charts: a 6-unit grid span) —
+// intentionally not validated against pane-specific semantics here, just
+// clamped to a sane range, since this layer only persists opaque per-card
+// layout data and never needs to interpret it.
 function invoxaGetStatsLayouts($mysqli, int $userId): array
 {
     $layouts = array_fill_keys(STATS_PANES, []);
@@ -116,9 +174,10 @@ function invoxaHandleSaveStatsLayout($mysqli, int $currentUserId): void
         if (!is_array($entry) || !isset($entry['id']) || !is_string($entry['id']) || !preg_match('/^[a-z0-9-]{1,60}$/', $entry['id'])) {
             continue;
         }
-        $width = (int) ($entry['width'] ?? 1) === 2 ? 2 : 1;
+        $width = max(1, min(12, (int) ($entry['width'] ?? 1)));
         $col = (int) ($entry['col'] ?? 0) === 1 ? 1 : 0;
-        $clean[] = ['id' => $entry['id'], 'width' => $width, 'col' => $col];
+        $hidden = !empty($entry['hidden']);
+        $clean[] = ['id' => $entry['id'], 'width' => $width, 'col' => $col, 'hidden' => $hidden];
     }
     $json = json_encode($clean);
     $stmt = $mysqli->prepare("INSERT INTO invoxa_stats_layout (user_id, pane, layout_json) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE layout_json = VALUES(layout_json)");
