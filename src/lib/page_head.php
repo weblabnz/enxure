@@ -13,6 +13,12 @@
     <script>
         const savedTheme = localStorage.getItem('invoxa_theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
+        const savedAccent = localStorage.getItem('invoxa_accent');
+        if (savedAccent) {
+            document.documentElement.style.setProperty('--accent', savedAccent);
+            document.documentElement.style.setProperty('--accent-hover', localStorage.getItem('invoxa_accent_hover') || savedAccent);
+            document.documentElement.style.setProperty('--accent-soft', localStorage.getItem('invoxa_accent_soft') || savedAccent);
+        }
     </script>
     <!--<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">-->
     <link rel="stylesheet" href="assets/css/all.min.css">
@@ -627,6 +633,10 @@
             margin-bottom: 2rem;
             box-shadow: var(--shadow-sm);
             min-width: 0;
+        }
+
+        #sec-settings .subnav-pane {
+            gap: 0;
         }
 
         #sec-stats .card {

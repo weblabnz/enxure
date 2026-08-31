@@ -4,6 +4,43 @@
 // generateInvoiceNumber, notifyChannel, sendOverdueReminders, etc.) live in
 // invoxa.php instead.
 
+// Curated color choices offered in Settings > Branding (and reused for the
+// app's own Accent Color picker in Preferences) so a new install can pick a
+// coherent look in one click instead of hand-tuning a hex value.
+function invoxaBrandPresets(): array
+{
+    return [
+        'Invoxa Blue' => '#4a90e2',
+        'Slate' => '#475569',
+        'Emerald' => '#10b981',
+        'Violet' => '#8b5cf6',
+        'Amber' => '#d97706',
+        'Rose' => '#e11d48',
+        'Teal' => '#0d9488',
+        'Charcoal' => '#1f2937',
+    ];
+}
+
+// Darkens ($percent < 0) or lightens ($percent > 0, 0..1 range either way) a
+// hex color, e.g. for a button's hover state derived from the one brand color
+// setting stores.
+function invoxaShadeColor(string $hex, float $percent): string
+{
+    $hex = ltrim($hex, '#');
+    if (strlen($hex) === 3) {
+        $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+    }
+    if (!preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {
+        return '#4a90e2';
+    }
+    $channels = sscanf($hex, "%02x%02x%02x");
+    $adjust = function (int $c) use ($percent): int {
+        $delta = $percent < 0 ? $c : (255 - $c);
+        return (int) max(0, min(255, round($c + $delta * $percent)));
+    };
+    return sprintf('#%02x%02x%02x', $adjust($channels[0]), $adjust($channels[1]), $adjust($channels[2]));
+}
+
 // Prefers the configured Settings > Payments "Public URL" over the current
 // request's Host header, since Pay Now links and Stripe/PayPal redirect URLs
 // are often built by the cron container, whose internal hostname ("nginx")

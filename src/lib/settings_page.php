@@ -118,6 +118,29 @@
                                     style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem; margin-bottom: 1.5rem;">
                                     Switch between light and dark themes.</p>
 
+                                <div class="form-group" style="margin-bottom:1.5rem;">
+                                    <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">App
+                                        Accent Color</label>
+                                    <div id="accentPresetGrid" style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-top:0.5rem; align-items:center;">
+                                        <?php foreach (invoxaBrandPresets() as $__accentName => $__accentHex): ?>
+                                            <button type="button" class="accent-preset-swatch" data-color="<?= htmlspecialchars($__accentHex) ?>"
+                                                title="<?= htmlspecialchars($__accentName) ?>"
+                                                onclick="applyAccentColor('<?= htmlspecialchars($__accentHex) ?>')"
+                                                style="width:28px;height:28px;border-radius:50%;background:<?= htmlspecialchars($__accentHex) ?>;border:2px solid var(--border);cursor:pointer;padding:0;"></button>
+                                        <?php endforeach; ?>
+                                        <button type="button" class="btn"
+                                            style="width:auto; margin:0; padding:0.35rem 0.75rem; font-size:0.78rem;"
+                                            onclick="resetAccentColor()">Reset to Theme Default</button>
+                                    </div>
+                                    <script>
+                                        markActiveAccentSwatch(localStorage.getItem('invoxa_accent'));
+                                    </script>
+                                    <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.5rem;">
+                                        Recolors the Invoxa interface itself — buttons, links, highlights — separate
+                                        from Branding, which only affects invoices and the Client Portal your clients
+                                        see. Stored on this browser only.</p>
+                                </div>
+
                                 <label
                                     style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-primary); font-weight: 500;">
                                     <input type="checkbox" id="welcomeFlashToggle" checked
@@ -231,7 +254,7 @@
                                     style="margin-top:0.5rem;"><i class="fa-solid fa-save"></i> Save Profile</button>
                             </div>
                         </div>
-                        <div class="card" style="margin-top:1rem;">
+                        <div class="card">
                             <div class="card-header">
                                 <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-shield-halved"
                                         style="color:var(--accent); margin-right:0.5rem;"></i>Two-Factor Authentication</h3>
@@ -980,11 +1003,36 @@
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label" for="brandColor">Primary Brand Color</label>
-                                        <div style="display:flex; gap:1rem; align-items:center;">
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin:-0.25rem 0 0.75rem;">
+                                            Pick a preset or choose your own — carries through to invoices, quotes, and
+                                            the Client Portal.</p>
+                                        <div id="brandPresetGrid" style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.85rem; align-items:center;">
+                                            <?php foreach (invoxaBrandPresets() as $__presetName => $__presetHex): ?>
+                                                <button type="button" class="brand-preset-swatch" data-color="<?= htmlspecialchars($__presetHex) ?>"
+                                                    title="<?= htmlspecialchars($__presetName) ?>"
+                                                    onclick="selectBrandPreset('<?= htmlspecialchars($__presetHex) ?>')"
+                                                    style="width:32px;height:32px;border-radius:50%;background:<?= htmlspecialchars($__presetHex) ?>;border:2px solid var(--border);cursor:pointer;padding:0;"></button>
+                                            <?php endforeach; ?>
                                             <input type="color" id="brandColor" name="brand_color"
+                                                oninput="updateBrandPreview(this.value)" onchange="updateBrandPreview(this.value)"
                                                 value="<?= htmlspecialchars($settings['brand_color'] ?? '#4a90e2') ?>"
-                                                style="width:50px;height:40px;padding:0;background:none;border:none;cursor:pointer;">
+                                                title="Custom color"
+                                                style="width:32px;height:32px;padding:0;background:none;border:none;cursor:pointer;">
+                                            <span id="brandColorHex" style="color:var(--text-secondary); font-size:0.8rem; font-family:monospace;"><?= htmlspecialchars($settings['brand_color'] ?? '#4a90e2') ?></span>
                                         </div>
+                                        <div id="brandPreview" style="border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; max-width:420px;">
+                                            <div id="brandPreviewHeader" style="padding:0.75rem 1rem; display:flex; align-items:center; justify-content:space-between; background:var(--surface-2); border-bottom:2px solid;">
+                                                <strong style="font-size:0.9rem;"><?= htmlspecialchars(($settings['business_name'] ?? '') !== '' ? $settings['business_name'] : 'Your Business') ?></strong>
+                                                <span style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">Invoice #0001</span>
+                                            </div>
+                                            <div style="padding:0.85rem 1rem; display:flex; align-items:center; justify-content:space-between;">
+                                                <span style="font-size:0.8rem; color:var(--text-secondary);">Client Portal preview</span>
+                                                <span id="brandPreviewBtn" style="border:none; border-radius:6px; padding:0.4rem 0.85rem; font-size:0.8rem; font-weight:600; color:#fff;">Pay Now</span>
+                                            </div>
+                                        </div>
+                                        <script>
+                                            updateBrandPreview(document.getElementById('brandColor').value);
+                                        </script>
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: <?= $licenseValid ? 'pointer' : 'not-allowed' ?>;">

@@ -2,6 +2,15 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.32] - 2026-08-31
+
+### Added
+- Settings > Branding's "Primary Brand Color" field now offers eight curated presets (Invoxa Blue, Slate, Emerald, Violet, Amber, Rose, Teal, Charcoal) as one-click swatches alongside the existing custom color picker, plus a live preview showing a mock invoice header and Client Portal "Pay Now" button that update instantly as you pick — no more hand-tuning a hex value blind. The Client Portal itself now actually uses this color (pay/accept buttons, "Back to your invoices" links) instead of a hardcoded blue, so branding finally carries all the way through to what clients see there, not just invoices/quotes/PDFs. Roadmap item removed.
+- Settings > Preferences gets an "App Accent Color" picker — the same eight presets, but for the Invoxa interface itself (buttons, links, highlights) rather than client-facing documents. Stored in the browser (`localStorage`), independent of the Light/Dark toggle and of Branding's brand color, with a "Reset to Theme Default" button to go back to the built-in blue.
+
+### Changed
+- Settings pages now have consistent vertical spacing between cards across every subarea, matching Billing's spacing — the subnav pane's own flex gap was stacking on top of each card's margin, and Account's second card additionally had a stray extra margin-top, both now removed.
+
 ## [2.11.31] - 2026-08-31
 
 ### Fixed

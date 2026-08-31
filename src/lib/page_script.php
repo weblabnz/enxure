@@ -1895,6 +1895,64 @@
                 localStorage.setItem('invoxa_theme', theme);
                 if (chartAllData) renderChart();
             }
+
+            // ── Branding & Accent color helpers ───────────────────────────
+            function shadeColor(hex, percent) {
+                hex = hex.replace('#', '');
+                const num = parseInt(hex, 16);
+                const adjust = (c) => {
+                    const delta = percent < 0 ? c : (255 - c);
+                    return Math.max(0, Math.min(255, Math.round(c + delta * percent)));
+                };
+                const r = adjust((num >> 16) & 0xff), g = adjust((num >> 8) & 0xff), b = adjust(num & 0xff);
+                return '#' + [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
+            }
+            function hexToRgba(hex, alpha) {
+                hex = hex.replace('#', '');
+                const num = parseInt(hex, 16);
+                return `rgba(${(num >> 16) & 0xff}, ${(num >> 8) & 0xff}, ${num & 0xff}, ${alpha})`;
+            }
+            function selectBrandPreset(hex) {
+                document.getElementById('brandColor').value = hex;
+                updateBrandPreview(hex);
+            }
+            function updateBrandPreview(hex) {
+                document.getElementById('brandColorHex').textContent = hex;
+                document.getElementById('brandPreviewHeader').style.borderBottomColor = hex;
+                document.getElementById('brandPreviewBtn').style.background = hex;
+                document.querySelectorAll('.brand-preset-swatch').forEach((sw) => {
+                    sw.style.outline = sw.dataset.color.toLowerCase() === hex.toLowerCase() ? '2px solid var(--accent)' : 'none';
+                    sw.style.outlineOffset = '2px';
+                });
+            }
+            function applyAccentColor(hex) {
+                const hover = shadeColor(hex, -0.15);
+                const soft = hexToRgba(hex, 0.12);
+                document.documentElement.style.setProperty('--accent', hex);
+                document.documentElement.style.setProperty('--accent-hover', hover);
+                document.documentElement.style.setProperty('--accent-soft', soft);
+                localStorage.setItem('invoxa_accent', hex);
+                localStorage.setItem('invoxa_accent_hover', hover);
+                localStorage.setItem('invoxa_accent_soft', soft);
+                markActiveAccentSwatch(hex);
+                if (chartAllData) renderChart();
+            }
+            function resetAccentColor() {
+                document.documentElement.style.removeProperty('--accent');
+                document.documentElement.style.removeProperty('--accent-hover');
+                document.documentElement.style.removeProperty('--accent-soft');
+                localStorage.removeItem('invoxa_accent');
+                localStorage.removeItem('invoxa_accent_hover');
+                localStorage.removeItem('invoxa_accent_soft');
+                markActiveAccentSwatch(null);
+                if (chartAllData) renderChart();
+            }
+            function markActiveAccentSwatch(hex) {
+                document.querySelectorAll('.accent-preset-swatch').forEach((sw) => {
+                    sw.style.outline = (hex && sw.dataset.color.toLowerCase() === hex.toLowerCase()) ? '2px solid var(--text-primary)' : 'none';
+                    sw.style.outlineOffset = '2px';
+                });
+            }
             async function saveCron() {
                 const btn = document.getElementById('saveCronBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true;
                 try {
