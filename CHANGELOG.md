@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.30] - 2026-08-31
+
+### Added
+- Statistics tab cards can now be drag-reordered and resized between half and full width, independently within each subnav pane (Revenue, Forecasting, Clients, Expenses, Tax & Compliance, Activity, System). Layout is saved per user (new `invoxa_stats_layout` table, `save_stats_layout` action) and restored on every reload or restart. Each pane lays cards out as two independent columns rather than a single shared-row grid, so a short card is never stretched to match a taller neighbor, and a card can be dragged into a column that's currently empty.
+
 ## [2.11.29] - 2026-08-31
 
 ### Added

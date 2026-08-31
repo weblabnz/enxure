@@ -49,6 +49,14 @@ CREATE TABLE IF NOT EXISTS `invoxa_settings` (
   `setting_value` TEXT COMMENT 'TEXT (not VARCHAR(255)) so it can hold longer values like reminder_email_body and license_key'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `invoxa_stats_layout` (
+  `user_id`      INT NOT NULL COMMENT 'FK to invoxa_users.id',
+  `pane`         VARCHAR(30) NOT NULL COMMENT 'Statistics subnav tab, e.g. revenue, forecasting, clients',
+  `layout_json`  TEXT NOT NULL COMMENT 'JSON array of {id, width} in the user''s chosen card order, width is 1 (half) or 2 (full)',
+  `updated_at`   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`, `pane`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `invoxa_clients` (
   `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `client_key`     VARCHAR(10)  NOT NULL UNIQUE COMMENT 'Short key e.g. asj, gjm',

@@ -415,9 +415,219 @@
                 localStorage.setItem('statsSubTab', target);
                 initStatsChartsFor(target);
             }
+            // Card order/width (applyStatsLayouts) is applied before the pane is
+            // first shown, so there's no flash of the default order/width.
+            applyStatsLayouts();
+            initStatsDragDrop();
             const storedStatsTab = localStorage.getItem('statsSubTab');
             if (storedStatsTab && document.getElementById('stats-pane-' + storedStatsTab)) navStats(storedStatsTab);
             else initStatsChartsFor('revenue');
+
+            // Statistics cards: drag-to-reorder (including between columns, or
+            // into an empty one) and half/full width, saved per-user to
+            // invoxa_stats_layout (see save_stats_layout / renderStatsSection()).
+            //
+            // Server markup for a pane (`.stats-columns[data-stats-pane]`) is a
+            // flat list of cards. layoutStatsPane() turns that into real layout:
+            // it walks the cards in document order and groups consecutive
+            // half-width ones into a `.stats-col-row` of two independent
+            // `.stats-col` flex columns (so one short card never gets stretched
+            // to match a tall neighbor — the gap bug a shared-row grid or
+            // CSS-multicolumn balance both caused); a full-width card ends any
+            // run and renders as its own direct child of .stats-columns, which
+            // stretches it full-width for free via that container's own
+            // flex-direction: column. Every half-width card carries an explicit
+            // data-card-col ("0" or "1") recording which .stats-col it's in —
+            // set from the saved layout, from a drag, or (first time) by
+            // alternating within its run — so layoutStatsPane can be re-run at
+            // any time (after a drag, a width toggle, or a fresh load) and
+            // reproduce the same structure.
+            function layoutStatsPane(container) {
+                const cards = Array.from(container.querySelectorAll('.card[data-card-id]'));
+                container.querySelectorAll(':scope > .stats-col-row').forEach(row => row.remove());
+                cards.forEach(c => c.remove());
+                let cols = null, runIndex = 0;
+                cards.forEach(card => {
+                    if (card.dataset.cardWidth === '2') {
+                        cols = null;
+                        runIndex = 0;
+                        container.appendChild(card);
+                        return;
+                    }
+                    if (!cols) {
+                        const row = document.createElement('div');
+                        row.className = 'stats-col-row';
+                        cols = [0, 1].map(i => {
+                            const col = document.createElement('div');
+                            col.className = 'stats-col';
+                            col.dataset.col = String(i);
+                            row.appendChild(col);
+                            return col;
+                        });
+                        container.appendChild(row);
+                    }
+                    const colIdx = card.dataset.cardCol === '0' || card.dataset.cardCol === '1'
+                        ? Number(card.dataset.cardCol)
+                        : runIndex % 2;
+                    card.dataset.cardCol = String(colIdx);
+                    cols[colIdx].appendChild(card);
+                    runIndex++;
+                });
+            }
+
+            function applyStatsLayouts() {
+                const dataEl = document.getElementById('statsLayoutData');
+                let layouts = {};
+                if (dataEl) {
+                    try { layouts = JSON.parse(dataEl.dataset.layouts || '{}'); } catch (e) { layouts = {}; }
+                }
+                document.querySelectorAll('#sec-stats .stats-columns[data-stats-pane]').forEach(container => {
+                    const pane = container.dataset.statsPane;
+                    const saved = layouts[pane] || [];
+                    const cards = Array.from(container.querySelectorAll('.card[data-card-id]'));
+                    const byId = new Map(cards.map(c => [c.dataset.cardId, c]));
+                    const seen = new Set();
+                    const order = [];
+                    saved.forEach(entry => {
+                        const el = byId.get(entry.id);
+                        if (el && !seen.has(entry.id)) {
+                            el.dataset.cardWidth = entry.width === 2 ? '2' : '1';
+                            if (entry.col === 0 || entry.col === 1) el.dataset.cardCol = String(entry.col);
+                            updateCardWidthIcon(el);
+                            order.push(el);
+                            seen.add(entry.id);
+                        }
+                    });
+                    cards.forEach(c => { if (!seen.has(c.dataset.cardId)) order.push(c); });
+                    order.forEach(el => container.appendChild(el));
+                    layoutStatsPane(container);
+                });
+            }
+
+            function updateCardWidthIcon(cardEl) {
+                const icon = cardEl.querySelector(':scope > .card-drag-controls .card-width-toggle i');
+                if (!icon) return;
+                icon.className = cardEl.dataset.cardWidth === '2' ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
+            }
+
+            function toggleStatsCardWidth(btn) {
+                const cardEl = btn.closest('.card[data-card-id]');
+                if (!cardEl) return;
+                const container = cardEl.closest('.stats-columns[data-stats-pane]');
+                cardEl.dataset.cardWidth = cardEl.dataset.cardWidth === '2' ? '1' : '2';
+                updateCardWidthIcon(cardEl);
+                layoutStatsPane(container);
+                saveStatsLayout(container);
+            }
+
+            function saveStatsLayout(container) {
+                if (!container) return;
+                const pane = container.dataset.statsPane;
+                const layout = Array.from(container.querySelectorAll('.card[data-card-id]')).map(c => ({
+                    id: c.dataset.cardId,
+                    width: c.dataset.cardWidth === '2' ? 2 : 1,
+                    col: c.dataset.cardCol === '1' ? 1 : 0
+                }));
+                fetch('', { method: 'POST', body: new URLSearchParams({ action: 'save_stats_layout', pane, layout: JSON.stringify(layout) }) }).catch(() => { });
+            }
+
+            // FLIP (First-Last-Invert-Play): snapshot every card's position,
+            // run the DOM mutation, then for anything that moved, jump it back
+            // to where it visually was via a transform and animate that
+            // transform away — turns an instant DOM reorder into a glide.
+            function flipStatsMove(container, mutate) {
+                const cards = Array.from(container.querySelectorAll('.card[data-card-id]'));
+                const before = new Map(cards.map(c => [c, c.getBoundingClientRect()]));
+                mutate();
+                cards.forEach(c => {
+                    const a = before.get(c);
+                    const b = c.getBoundingClientRect();
+                    const dx = a.left - b.left, dy = a.top - b.top;
+                    if (!dx && !dy) return;
+                    c.style.transition = 'none';
+                    c.style.transform = `translate(${dx}px, ${dy}px)`;
+                    requestAnimationFrame(() => {
+                        c.style.transition = 'transform 0.16s ease';
+                        c.style.transform = '';
+                    });
+                });
+            }
+
+            let __statsDragCard = null;
+            let __statsDragRaf = null;
+            function initStatsDragDrop() {
+                document.querySelectorAll('#sec-stats .stats-columns[data-stats-pane]').forEach(container => {
+                    if (container.dataset.dragBound) return;
+                    container.dataset.dragBound = '1';
+                    container.addEventListener('dragstart', e => {
+                        const cardEl = e.target.closest('.card[data-card-id]');
+                        if (!cardEl) return;
+                        __statsDragCard = cardEl;
+                        cardEl.classList.add('dragging');
+                        e.dataTransfer.effectAllowed = 'move';
+                    });
+                    container.addEventListener('dragover', e => {
+                        if (!__statsDragCard) return;
+                        e.preventDefault();
+                        // Coalesce to at most one reorder per animation frame —
+                        // dragover can fire far faster than that, and doing a
+                        // DOM move on every single event is what made this feel
+                        // jerky rather than smooth.
+                        if (__statsDragRaf) return;
+                        const targetEl = e.target, clientY = e.clientY;
+                        __statsDragRaf = requestAnimationFrame(() => {
+                            __statsDragRaf = null;
+                            positionStatsDragCard(container, targetEl, clientY);
+                        });
+                    });
+                    container.addEventListener('dragend', () => {
+                        if (!__statsDragCard) return;
+                        if (__statsDragRaf) { cancelAnimationFrame(__statsDragRaf); __statsDragRaf = null; }
+                        __statsDragCard.classList.remove('dragging');
+                        flipStatsMove(container, () => layoutStatsPane(container));
+                        saveStatsLayout(container);
+                        __statsDragCard = null;
+                    });
+                });
+            }
+
+            function positionStatsDragCard(container, targetEl, clientY) {
+                if (!__statsDragCard) return;
+                const overCard = targetEl.closest('.card[data-card-id]');
+                if (overCard && overCard !== __statsDragCard) {
+                    // Columns flow top-to-bottom, so "before/after" is decided by
+                    // which part of the hovered card the pointer is over — a
+                    // dead zone around the middle (rather than a hard 50/50
+                    // split) stops the decision flip-flopping (and the card
+                    // jittering back and forth) when the pointer sits right on
+                    // the boundary between two cards.
+                    const rect = overCard.getBoundingClientRect();
+                    const rel = (clientY - rect.top) / rect.height;
+                    if (rel >= 0.4 && rel <= 0.6) return;
+                    const before = rel < 0.4;
+                    const col = overCard.closest('.stats-col');
+                    flipStatsMove(container, () => {
+                        if (__statsDragCard.dataset.cardWidth !== '2' && col) __statsDragCard.dataset.cardCol = col.dataset.col;
+                        overCard.parentNode.insertBefore(__statsDragCard, before ? overCard : overCard.nextSibling);
+                    });
+                    return;
+                }
+                // Hovering an empty .stats-col (e.g. the other column when it has
+                // no cards of its own) rather than a card — drop straight into
+                // it, which is what lets a card move to an otherwise-empty
+                // column.
+                const col = targetEl.closest('.stats-col');
+                if (col && __statsDragCard.dataset.cardWidth !== '2' && __statsDragCard.parentElement !== col) {
+                    flipStatsMove(container, () => {
+                        __statsDragCard.dataset.cardCol = col.dataset.col;
+                        col.appendChild(__statsDragCard);
+                    });
+                    return;
+                }
+                if (!overCard && !col && __statsDragCard.parentElement !== container) {
+                    flipStatsMove(container, () => container.appendChild(__statsDragCard));
+                }
+            }
 
             function toggleToolbar(name) {
                 const wrap = document.getElementById(name + 'ToolbarGroups');
@@ -549,6 +759,8 @@
                     if (stored && document.getElementById('stats-pane-' + stored)) navStats(stored);
                     else initStatsChartsFor('revenue');
                     placeSubnavs(mobileMq.matches);
+                    applyStatsLayouts();
+                    initStatsDragDrop();
                 } catch (e) {
                     // Silent by design, same reasoning as refreshTable() above.
                 }

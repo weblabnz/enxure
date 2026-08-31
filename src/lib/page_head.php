@@ -279,6 +279,8 @@
 
         .nav-item.tool-item {
             color: var(--text-secondary);
+            margin-top: calc(0.05rem + 2px);
+            margin-bottom: calc(0.05rem + 2px);
         }
 
         .nav-item.tool-item:hover {
@@ -398,6 +400,27 @@
             grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
             gap: 1.25rem;
             margin-bottom: 2rem;
+        }
+
+        /* Statistics tab only (Dashboard's own 4-card .stats-grid stays
+           auto-fit — it's always a full row of 4, no orphan). A couple of the
+           Statistics tab's inner tile grids have 3 tiles instead, which
+           auto-fit can resolve to 2 columns and leave the 3rd stranded with an
+           empty cell beside it; pinning to a fixed 2 columns here makes that
+           trailing odd tile reliably detectable so it can stretch full-width
+           instead. */
+        #sec-stats .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        #sec-stats .stats-grid > .stat-card:last-child:nth-child(odd) {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 480px) {
+            #sec-stats .stats-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .stat-card {
@@ -604,6 +627,96 @@
             margin-bottom: 2rem;
             box-shadow: var(--shadow-sm);
             min-width: 0;
+        }
+
+        #sec-stats .card {
+            margin-bottom: 1rem;
+        }
+
+        /* Neither a shared-row grid nor CSS multi-column (both pair/balance
+           card heights in ways that either leave gaps or dump everything into
+           one column with a browser-chosen split) — instead two independent
+           flexbox columns per "row", built and kept in sync by
+           layoutStatsPane() in page_script.php. Each half-width card carries
+           an explicit data-card-col (which .stats-col it belongs to), set by
+           the user's drag — this is what lets a card be dropped into an empty
+           column. A full-width card (data-card-width="2") renders as a direct
+           child of .stats-columns instead of inside a row, and stretches full
+           width for free via this container's own flex-direction: column. */
+        #sec-stats .stats-columns {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        #sec-stats .stats-columns .stats-col-row {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        #sec-stats .stats-columns .stats-col {
+            flex: 1 1 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            min-width: 0;
+            min-height: 3rem;
+        }
+
+        @media (max-width: 860px) {
+            #sec-stats .stats-columns .stats-col-row {
+                flex-direction: column;
+            }
+        }
+
+        #sec-stats .stats-columns .card {
+            margin-bottom: 0;
+            position: relative;
+        }
+
+        #sec-stats .stats-columns .card[draggable="true"] {
+            cursor: grab;
+        }
+
+        #sec-stats .stats-columns .card.dragging {
+            opacity: 0.4;
+        }
+
+        .card-drag-controls {
+            position: absolute;
+            top: 0.6rem;
+            right: 0.85rem;
+            display: flex;
+            gap: 0.4rem;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 1;
+        }
+
+        #sec-stats .stats-columns .card:hover .card-drag-controls {
+            opacity: 1;
+        }
+
+        .card-drag-controls .drag-handle {
+            cursor: grab;
+            color: var(--text-secondary);
+            padding: 0.2rem;
+        }
+
+        .card-drag-controls .card-width-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 0.2rem;
+            font-size: 0.85rem;
+        }
+
+        .card-drag-controls .card-width-toggle:hover,
+        .card-drag-controls .drag-handle:hover {
+            color: var(--text-primary);
         }
 
         .card-header {

@@ -3,6 +3,7 @@
 // Defensive fallback only — sql/01-schema.sql is the canonical source of these tables.
 $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_users (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(255) NOT NULL UNIQUE, email VARCHAR(255) DEFAULT NULL, password_hash VARCHAR(255) NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_settings (setting_key VARCHAR(50) PRIMARY KEY, setting_value TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+$mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_stats_layout (user_id INT NOT NULL, pane VARCHAR(30) NOT NULL, layout_json TEXT NOT NULL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (user_id, pane)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 // Expenses (accounts payable) — same defensive-fallback reasoning as above;
 // sql/01-schema.sql is still canonical for a fresh install.
 $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_expenses (id INT AUTO_INCREMENT PRIMARY KEY, expense_date DATE NOT NULL, vendor VARCHAR(150) NOT NULL DEFAULT '', category VARCHAR(50) NOT NULL DEFAULT 'other', amount DECIMAL(10,2) NOT NULL DEFAULT 0.00, description TEXT, receipt_path VARCHAR(500) DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX idx_expense_date (expense_date), INDEX idx_category (category)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");

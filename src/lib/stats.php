@@ -70,13 +70,71 @@ function renderDashboardStats(array $settings, array $failedInvoices, array $ove
     return ob_get_clean();
 }
 
+// Statistics subnav tabs — each renders as an independent card grid the user
+// can drag-reorder and resize, saved per pane in invoxa_stats_layout.
+const STATS_PANES = ['revenue', 'forecasting', 'clients', 'expenses', 'tax', 'activity', 'system'];
+
+// Per-user Statistics card order/width, saved by save_stats_layout below and
+// applied client-side (see toggleStatsCardWidth/initStatsDragDrop in
+// page_script.php) — the server always renders panes in their default order,
+// so a stale/corrupt saved layout can never break the page, only leave a
+// user's customization unapplied until they re-save it.
+function invoxaGetStatsLayouts($mysqli, int $userId): array
+{
+    $layouts = array_fill_keys(STATS_PANES, []);
+    if ($userId <= 0) {
+        return $layouts;
+    }
+    $res = $mysqli->query("SELECT pane, layout_json FROM invoxa_stats_layout WHERE user_id = " . $userId);
+    while ($res && $row = $res->fetch_assoc()) {
+        if (!in_array($row['pane'], STATS_PANES, true)) {
+            continue;
+        }
+        $decoded = json_decode($row['layout_json'], true);
+        if (is_array($decoded)) {
+            $layouts[$row['pane']] = $decoded;
+        }
+    }
+    return $layouts;
+}
+
+function invoxaHandleSaveStatsLayout($mysqli, int $currentUserId): void
+{
+    if ($currentUserId <= 0) {
+        throw new Exception('Not logged in');
+    }
+    $pane = $_POST['pane'] ?? '';
+    if (!in_array($pane, STATS_PANES, true)) {
+        throw new Exception('Unknown pane');
+    }
+    $layout = json_decode($_POST['layout'] ?? '', true);
+    if (!is_array($layout)) {
+        throw new Exception('Invalid layout');
+    }
+    $clean = [];
+    foreach (array_slice($layout, 0, 40) as $entry) {
+        if (!is_array($entry) || !isset($entry['id']) || !is_string($entry['id']) || !preg_match('/^[a-z0-9-]{1,60}$/', $entry['id'])) {
+            continue;
+        }
+        $width = (int) ($entry['width'] ?? 1) === 2 ? 2 : 1;
+        $col = (int) ($entry['col'] ?? 0) === 1 ? 1 : 0;
+        $clean[] = ['id' => $entry['id'], 'width' => $width, 'col' => $col];
+    }
+    $json = json_encode($clean);
+    $stmt = $mysqli->prepare("INSERT INTO invoxa_stats_layout (user_id, pane, layout_json) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE layout_json = VALUES(layout_json)");
+    $stmt->bind_param('iss', $currentUserId, $pane, $json);
+    $stmt->execute();
+    echo json_encode(['success' => true]);
+    exit;
+}
+
 // The entire Statistics & Forecasting tab — read-only, derived-on-render
 // content with no client-side state to preserve, so it renders the whole tab
 // body rather than being split row-by-row like the functions above. Pulls
 // its ~15 $stats_* inputs via `global` rather than a long parameter list.
 function renderStatsSection(): string
 {
-    global $licenseValid;
+    global $licenseValid, $currentCron, $cronEnabled, $mysqli, $currentUserId;
     global $taxYearLabel, $stats_ty_invoiced, $stats_ty_paid, $stats_ty_outstanding,
     $stats_ty_invoiced_by_ccy, $stats_ty_paid_by_ccy, $stats_ty_outstanding_by_ccy,
     $stats_all_time_revenue_by_ccy, $stats_outstanding_revenue, $stats_outstanding_revenue_by_ccy, $stats_overdue_count, $stats_mrr, $stats_mrr_by_ccy, $stats_avg_invoice_by_ccy,
@@ -91,9 +149,13 @@ function renderStatsSection(): string
     $stats_expense_categories, $stats_expense_monthly, $stats_db_size_bytes, $stats_invoices_dir_size_bytes,
     $stats_backups_dir_size_bytes, $stats_webhook_unmatched_total, $stats_webhook_unmatched_30d,
     $stats_php_version, $stats_mysql_version, $stats_default_ccy, $stats_has_other_currency;
+    $statsLayouts = invoxaGetStatsLayouts($mysqli, $currentUserId);
     ob_start();
     ?>
     <h2 class="page-title">Data Statistics &amp; Forecasting</h2>
+    <?php // A data attribute (not a <script> tag) because refreshStatsSection() swaps
+    // this markup in via innerHTML, which never executes embedded <script> tags. ?>
+    <div id="statsLayoutData" data-layouts="<?= htmlspecialchars(json_encode($statsLayouts), ENT_QUOTES) ?>" style="display:none"></div>
     <?php if ($stats_has_other_currency): ?>
         <div class="card" style="border-left:3px solid var(--warning); margin: 0 1.5rem 1.75rem;">
             <div class="card-body" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
@@ -144,138 +206,144 @@ function renderStatsSection(): string
 
             <!-- Revenue -->
             <div class="subnav-pane active" id="stats-pane-revenue">
-                <div class="mobile-grid" style="display:grid; grid-template-columns:1.3fr 1fr; gap:1rem; align-items:stretch;">
-                <div class="card" style="margin-bottom:0;">
-                    <div class="card-header">
-                        <h3>Tax Year Summary (<?= $taxYearLabel ?>)</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="stats-grid" style="margin-bottom: 0;">
-                            <div class="stat-card" style="border-top: 3px solid #3b82f6;">
-                                <div class="label">Total Invoiced</div>
-                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_invoiced_by_ccy) ?></div>
-                            </div>
-                            <div class="stat-card" style="border-top: 3px solid #10b981;">
-                                <div class="label">Total Paid</div>
-                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_paid_by_ccy) ?></div>
-                            </div>
-                            <div class="stat-card"
-                                style="border-top: 3px solid <?= $stats_ty_outstanding > 0 ? '#f59e0b' : '#10b981' ?>;">
-                                <div class="label">Outstanding</div>
-                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_outstanding_by_ccy) ?></div>
-                            </div>
+                <div class="stats-columns" data-stats-pane="revenue">
+                    <div class="card" data-card-id="rev-tax-year-summary" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Tax Year Summary (<?= $taxYearLabel ?>)</h3>
                         </div>
-                    </div>
-                </div>
-
-                <div class="card" style="margin-bottom:0;">
-                    <div class="card-header">
-                        <h3>Revenue Breakdown</h3>
-                    </div>
-                    <div class="card-body">
-                        <div style="height:200px; position:relative;"><canvas id="revenueBreakdownChart"></canvas></div>
-                    </div>
-                    <script>
-                        window.__revenueBreakdownData = {
-                            invoiced: <?= json_encode((float) $stats_ty_invoiced) ?>,
-                            paid: <?= json_encode((float) $stats_ty_paid) ?>,
-                            outstanding: <?= json_encode((float) $stats_ty_outstanding) ?>
-                        };
-                    </script>
-                </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Financial Summary (All-Time)</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="stats-grid" style="margin-bottom: 0;">
-                            <div class="stat-card" style="border-top: 3px solid #10b981;">
-                                <div class="label">All-Time Revenue</div>
-                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_all_time_revenue_by_ccy) ?></div>
-                            </div>
-                            <div class="stat-card" style="border-top: 3px solid #ef4444;">
-                                <div class="label">Outstanding Receivables</div>
-                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_outstanding_revenue_by_ccy) ?> <span
-                                        style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_overdue_count ?>
-                                        overdue)</span></div>
-                            </div>
-                            <div class="stat-card" style="border-top: 3px solid var(--warning);">
-                                <div class="label">Monthly Recurring (<span class="has-tooltip"
-                                        data-tip="Monthly Recurring Revenue — total fixed monthly fees from active clients">MRR</span>)
-                                </div>
-                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_mrr_by_ccy) ?></div>
-                            </div>
-                            <div class="stat-card" style="border-top: 3px solid #3b82f6;">
-                                <div class="label">Average Invoice Value</div>
-                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_avg_invoice_by_ccy) ?></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Quotes &amp; Voided Invoices</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="stats-grid" style="margin-bottom: 0;">
-                            <div class="stat-card" style="border-top: 3px solid #8b5cf6;">
-                                <div class="label">Open Quote Pipeline</div>
-                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_quote_pipeline_value_by_ccy) ?> <span
-                                        style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_quote_pipeline_count ?>
-                                        open)</span></div>
-                            </div>
-                            <div class="stat-card" style="border-top: 3px solid var(--text-secondary);">
-                                <div class="label">Voided (All-Time)</div>
-                                <div class="value"><?= invoxaFormatMoneyByCurrency($stats_void_amount_by_ccy) ?> <span
-                                        style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_void_count ?>
-                                        invoice<?= $stats_void_count === 1 ? '' : 's' ?>)</span></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mobile-grid" style="display:grid; grid-template-columns:1fr 1.3fr; gap:1rem; align-items:stretch;">
-                <div class="card" style="margin-bottom:0;">
-                    <div class="card-header">
-                        <h3>Invoice Status Breakdown</h3>
-                    </div>
-                    <?php if (!empty($stats_invoice_status)): ?>
                         <div class="card-body">
-                            <div style="height:220px; position:relative;"><canvas id="invoiceStatusChart"></canvas></div>
+                            <div class="stats-grid" style="margin-bottom: 0;">
+                                <div class="stat-card" style="border-top: 3px solid #3b82f6;">
+                                    <div class="label">Total Invoiced</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_invoiced_by_ccy) ?></div>
+                                </div>
+                                <div class="stat-card" style="border-top: 3px solid #10b981;">
+                                    <div class="label">Total Paid</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_paid_by_ccy) ?></div>
+                                </div>
+                                <div class="stat-card"
+                                    style="border-top: 3px solid <?= $stats_ty_outstanding > 0 ? '#f59e0b' : '#10b981' ?>;">
+                                    <div class="label">Outstanding</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_outstanding_by_ccy) ?></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" data-card-id="rev-financial-summary" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Financial Summary (All-Time)</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="stats-grid" style="margin-bottom: 0;">
+                                <div class="stat-card" style="border-top: 3px solid #10b981;">
+                                    <div class="label">All-Time Revenue</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_all_time_revenue_by_ccy) ?></div>
+                                </div>
+                                <div class="stat-card" style="border-top: 3px solid #ef4444;">
+                                    <div class="label">Outstanding Receivables</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_outstanding_revenue_by_ccy) ?> <span
+                                            style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_overdue_count ?>
+                                            overdue)</span></div>
+                                </div>
+                                <div class="stat-card" style="border-top: 3px solid var(--warning);">
+                                    <div class="label">Monthly Recurring (<span class="has-tooltip"
+                                            data-tip="Monthly Recurring Revenue — total fixed monthly fees from active clients">MRR</span>)
+                                    </div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_mrr_by_ccy) ?></div>
+                                </div>
+                                <div class="stat-card" style="border-top: 3px solid #3b82f6;">
+                                    <div class="label">Average Invoice Value</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_avg_invoice_by_ccy) ?></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" data-card-id="rev-quotes-voided" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Quotes &amp; Voided Invoices</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="stats-grid" style="margin-bottom: 0;">
+                                <div class="stat-card" style="border-top: 3px solid #8b5cf6;">
+                                    <div class="label">Open Quote Pipeline</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_quote_pipeline_value_by_ccy) ?> <span
+                                            style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_quote_pipeline_count ?>
+                                            open)</span></div>
+                                </div>
+                                <div class="stat-card" style="border-top: 3px solid var(--text-secondary);">
+                                    <div class="label">Voided (All-Time)</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_void_amount_by_ccy) ?> <span
+                                            style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_void_count ?>
+                                            invoice<?= $stats_void_count === 1 ? '' : 's' ?>)</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" data-card-id="rev-trend" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Revenue Trend (Last 12 Months)</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="height:220px; position:relative;"><canvas id="revenueTrendChart"></canvas></div>
                         </div>
                         <script>
-                            window.__invoiceStatusData = <?= json_encode($stats_invoice_status) ?>;
+                            window.__revenueTrendData = <?= json_encode($stats_revenue_trend) ?>;
                         </script>
-                    <?php else: ?>
-                        <div class="card-body">
-                            <p style="color:var(--text-secondary); margin:0;">No invoices yet.</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
+                    </div>
 
-                <div class="card" style="margin-bottom:0;">
-                    <div class="card-header">
-                        <h3>Revenue Trend (Last 12 Months)</h3>
+                    <div class="card" data-card-id="rev-breakdown" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Revenue Breakdown</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="height:200px; position:relative;"><canvas id="revenueBreakdownChart"></canvas></div>
+                        </div>
+                        <script>
+                            window.__revenueBreakdownData = {
+                                invoiced: <?= json_encode((float) $stats_ty_invoiced) ?>,
+                                paid: <?= json_encode((float) $stats_ty_paid) ?>,
+                                outstanding: <?= json_encode((float) $stats_ty_outstanding) ?>
+                            };
+                        </script>
                     </div>
-                    <div class="card-body">
-                        <div style="height:220px; position:relative;"><canvas id="revenueTrendChart"></canvas></div>
+
+                    <div class="card" data-card-id="rev-invoice-status" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Invoice Status Breakdown</h3>
+                        </div>
+                        <?php if (!empty($stats_invoice_status)): ?>
+                            <div class="card-body">
+                                <div style="height:220px; position:relative;"><canvas id="invoiceStatusChart"></canvas></div>
+                            </div>
+                            <script>
+                                window.__invoiceStatusData = <?= json_encode($stats_invoice_status) ?>;
+                            </script>
+                        <?php else: ?>
+                            <div class="card-body">
+                                <p style="color:var(--text-secondary); margin:0;">No invoices yet.</p>
+                            </div>
+                        <?php endif; ?>
                     </div>
-                    <script>
-                        window.__revenueTrendData = <?= json_encode($stats_revenue_trend) ?>;
-                    </script>
-                </div>
                 </div>
             </div>
 
             <!-- Forecasting -->
             <div class="subnav-pane" id="stats-pane-forecasting">
-                <div class="card">
-                    <div class="card-header">
-                        <h3>12-Month Forecasting</h3>
-                    </div>
+                <div class="stats-columns" data-stats-pane="forecasting">
+                    <div class="card" data-card-id="fc-12month" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>12-Month Forecasting</h3>
+                        </div>
                     <div class="card-body">
                         <p style="color:var(--text-secondary); margin-bottom: 1rem; font-size:0.875rem;">Projected
                             earnings based on
@@ -316,10 +384,11 @@ function renderStatsSection(): string
                     </div>
                 </div>
 
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Accounts Receivable Aging</h3>
-                    </div>
+                    <div class="card" data-card-id="fc-ar-aging" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Accounts Receivable Aging</h3>
+                        </div>
                     <div class="card-body">
                         <p style="color:var(--text-secondary); margin-bottom: 1rem; font-size:0.875rem;">How overdue
                             the currently outstanding balance is, bucketed by days past due date.</p>
@@ -347,13 +416,14 @@ function renderStatsSection(): string
                         </ul>
                     </div>
                 </div>
+                </div>
             </div>
 
             <!-- Clients -->
             <div class="subnav-pane" id="stats-pane-clients">
-                <div style="display: grid; grid-template-columns: 1fr; gap: 1.5rem;">
-                <div class="mobile-grid" style="display:grid; grid-template-columns:1fr 1.2fr; gap:1.5rem; align-items:start;">
-                    <div class="card" style="margin-bottom:0;">
+                <div class="stats-columns" data-stats-pane="clients">
+                    <div class="card" data-card-id="cl-payment-insights" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
                             <h3>Client & Payment Insights</h3>
                         </div>
@@ -405,54 +475,8 @@ function renderStatsSection(): string
                         </div>
                     </div>
 
-                    <div class="card" style="margin-bottom:0;">
-                        <div class="card-header">
-                            <h3>Top 5 Clients (By Paid Revenue)</h3>
-                        </div>
-                        <?php if (!empty($top_clients)): ?>
-                            <div class="card-body">
-                                <div style="height:<?= max(140, count($top_clients) * 44) ?>px; position:relative;"><canvas id="topClientsChart"></canvas></div>
-                            </div>
-                            <script>
-                                window.__topClientsData = <?= json_encode(array_map(fn($tc) => ['name' => $tc['client_name'], 'revenue' => (float) $tc['total_revenue']], $top_clients)) ?>;
-                            </script>
-                        <?php endif; ?>
-                        <div class="card-body" style="padding: 0; <?= !empty($top_clients) ? 'border-top:1px solid var(--border);' : '' ?>">
-                            <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                                <thead>
-                                    <tr
-                                        style="border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase;">
-                                        <th style="padding: 1rem;">Client Name</th>
-                                        <th style="padding: 1rem; text-align: right;">Total Paid Revenue</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (empty($top_clients)): ?>
-                                        <tr>
-                                            <td colspan="2"
-                                                style="padding: 1rem; text-align: center; color: var(--text-secondary);">No data
-                                                yet</td>
-                                        </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($top_clients as $index => $tc): ?>
-                                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                                <td style="padding: 1rem;">
-                                                    <?= ($index == 0) ? '<i class="fa-solid fa-crown" style="color: #f59e0b; margin-right: 0.5rem;"></i>' : '' ?>
-                                                    <?= htmlspecialchars($tc['client_name']) ?>
-                                                </td>
-                                                <td style="padding: 1rem; text-align: right; font-weight: 600; color: #10b981;">
-                                                    <?= invoxaFormatMoneyByCurrency($tc['by_ccy']) ?>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                    <div class="card">
+                    <div class="card" data-card-id="cl-needing-attention" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
                             <h3>Clients Needing Attention <span class="has-tooltip"
                                     data-tip="Active clients with no invoice in the last 60+ days">?</span></h3>
@@ -487,92 +511,145 @@ function renderStatsSection(): string
                             </table>
                         </div>
                     </div>
+
+                    <div class="card" data-card-id="cl-top-clients" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Top 5 Clients (By Paid Revenue)</h3>
+                        </div>
+                    <?php if (!empty($top_clients)): ?>
+                        <div class="card-body">
+                            <div style="height:<?= max(140, count($top_clients) * 44) ?>px; position:relative;"><canvas id="topClientsChart"></canvas></div>
+                        </div>
+                        <script>
+                            window.__topClientsData = <?= json_encode(array_map(fn($tc) => ['name' => $tc['client_name'], 'revenue' => (float) $tc['total_revenue']], $top_clients)) ?>;
+                        </script>
+                    <?php endif; ?>
+                    <div class="card-body" style="padding: 0; <?= !empty($top_clients) ? 'border-top:1px solid var(--border);' : '' ?>">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead>
+                                <tr
+                                    style="border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase;">
+                                    <th style="padding: 1rem;">Client Name</th>
+                                    <th style="padding: 1rem; text-align: right;">Total Paid Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($top_clients)): ?>
+                                    <tr>
+                                        <td colspan="2"
+                                            style="padding: 1rem; text-align: center; color: var(--text-secondary);">No data
+                                            yet</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($top_clients as $index => $tc): ?>
+                                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                            <td style="padding: 1rem;">
+                                                <?= ($index == 0) ? '<i class="fa-solid fa-crown" style="color: #f59e0b; margin-right: 0.5rem;"></i>' : '' ?>
+                                                <?= htmlspecialchars($tc['client_name']) ?>
+                                            </td>
+                                            <td style="padding: 1rem; text-align: right; font-weight: 600; color: #10b981;">
+                                                <?= invoxaFormatMoneyByCurrency($tc['by_ccy']) ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
+            </div>
             </div>
 
             <!-- Expenses -->
             <div class="subnav-pane" id="stats-pane-expenses">
-                <div class="mobile-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:stretch;">
-                <div class="card" style="margin-bottom:0;">
-                    <div class="card-header">
-                        <h3>Profit &amp; Loss (<?= htmlspecialchars($taxYearLabel) ?>)</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="stats-grid" style="margin-bottom: 0;">
-                            <div class="stat-card" style="border-top: 3px solid #10b981;">
-                                <div class="label">Revenue Received</div>
-                                <div class="value">$<?= number_format($stats_ty_paid, 2) ?></div>
-                            </div>
-                            <div class="stat-card" style="border-top: 3px solid #ef4444;">
-                                <div class="label">Expenses</div>
-                                <div class="value">$<?= number_format($stats_expense_ty_total, 2) ?></div>
-                            </div>
-                            <div class="stat-card"
-                                style="border-top: 3px solid <?= $stats_net_income_ty >= 0 ? '#10b981' : '#ef4444' ?>;">
-                                <div class="label">Net Income</div>
-                                <div class="value">$<?= number_format($stats_net_income_ty, 2) ?></div>
+                <div class="stats-columns" data-stats-pane="expenses">
+                    <div class="card" data-card-id="ex-pl-summary" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Profit &amp; Loss (<?= htmlspecialchars($taxYearLabel) ?>)</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="stats-grid" style="margin-bottom: 0;">
+                                <div class="stat-card" style="border-top: 3px solid #10b981;">
+                                    <div class="label">Revenue Received</div>
+                                    <div class="value">$<?= number_format($stats_ty_paid, 2) ?></div>
+                                </div>
+                                <div class="stat-card" style="border-top: 3px solid #ef4444;">
+                                    <div class="label">Expenses</div>
+                                    <div class="value">$<?= number_format($stats_expense_ty_total, 2) ?></div>
+                                </div>
+                                <div class="stat-card"
+                                    style="border-top: 3px solid <?= $stats_net_income_ty >= 0 ? '#10b981' : '#ef4444' ?>;">
+                                    <div class="label">Net Income</div>
+                                    <div class="value">$<?= number_format($stats_net_income_ty, 2) ?></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="card" style="margin-bottom:0;">
-                    <div class="card-header">
-                        <h3>Expenses by Category</h3>
+                    <div class="card" data-card-id="ex-over-time" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Expenses Over Time</h3>
+                        </div>
+                        <?php if (!empty($stats_expense_monthly)): ?>
+                            <div class="card-body">
+                                <div style="height:220px; position:relative;"><canvas id="expenseTrendChart"></canvas></div>
+                            </div>
+                            <script>
+                                window.__expenseTrendData = <?= json_encode($stats_expense_monthly) ?>;
+                            </script>
+                        <?php else: ?>
+                            <div class="card-body">
+                                <p style="color:var(--text-secondary); margin:0;">No expenses logged this tax year.</p>
+                            </div>
+                        <?php endif; ?>
                     </div>
-                    <?php if (!empty($stats_expense_categories)): ?>
-                        <div class="card-body">
-                            <div style="height:220px; position:relative;"><canvas id="expenseCategoryChart"></canvas></div>
-                        </div>
-                        <script>
-                            window.__expenseCategoryData = <?= json_encode($stats_expense_categories) ?>;
-                        </script>
-                    <?php else: ?>
-                        <div class="card-body">
-                            <p style="color:var(--text-secondary); margin:0;">No expenses logged this tax year.</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-                </div>
 
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Expenses Over Time</h3>
+                    <div class="card" data-card-id="ex-by-category" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Expenses by Category</h3>
+                        </div>
+                        <?php if (!empty($stats_expense_categories)): ?>
+                            <div class="card-body">
+                                <div style="height:220px; position:relative;"><canvas id="expenseCategoryChart"></canvas></div>
+                            </div>
+                            <script>
+                                window.__expenseCategoryData = <?= json_encode($stats_expense_categories) ?>;
+                            </script>
+                        <?php else: ?>
+                            <div class="card-body">
+                                <p style="color:var(--text-secondary); margin:0;">No expenses logged this tax year.</p>
+                            </div>
+                        <?php endif; ?>
                     </div>
-                    <?php if (!empty($stats_expense_monthly)): ?>
-                        <div class="card-body">
-                            <div style="height:220px; position:relative;"><canvas id="expenseTrendChart"></canvas></div>
-                        </div>
-                        <script>
-                            window.__expenseTrendData = <?= json_encode($stats_expense_monthly) ?>;
-                        </script>
-                    <?php else: ?>
-                        <div class="card-body">
-                            <p style="color:var(--text-secondary); margin:0;">No expenses logged this tax year.</p>
-                        </div>
-                    <?php endif; ?>
                 </div>
             </div>
 
             <!-- Tax & Compliance -->
             <div class="subnav-pane" id="stats-pane-tax">
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Tax Year Progress (<?= htmlspecialchars($taxYearLabel) ?>)</h3>
-                    </div>
-                    <div class="card-body">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:0.4rem; font-size:0.85rem; color:var(--text-secondary);">
-                            <span>Day <?= $stats_tax_year_days_elapsed ?> of <?= $stats_tax_year_days_total ?></span>
-                            <span><?= $stats_tax_year_progress_pct ?>% elapsed</span>
+                <div class="stats-columns" data-stats-pane="tax">
+                    <div class="card" data-card-id="tax-year-progress" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Tax Year Progress (<?= htmlspecialchars($taxYearLabel) ?>)</h3>
                         </div>
-                        <div style="background:var(--surface-hover); border-radius:4px; height:10px; overflow:hidden;">
-                            <div style="background:var(--accent); height:100%; width:<?= $stats_tax_year_progress_pct ?>%;">
+                        <div class="card-body">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:0.4rem; font-size:0.85rem; color:var(--text-secondary);">
+                                <span>Day <?= $stats_tax_year_days_elapsed ?> of <?= $stats_tax_year_days_total ?></span>
+                                <span><?= $stats_tax_year_progress_pct ?>% elapsed</span>
+                            </div>
+                            <div style="background:var(--surface-hover); border-radius:4px; height:10px; overflow:hidden;">
+                                <div style="background:var(--accent); height:100%; width:<?= $stats_tax_year_progress_pct ?>%;">
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="card">
+                    <div class="card" data-card-id="tax-monthly-breakdown" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                     <div class="card-header">
                         <h3>Monthly Breakdown</h3>
                     </div>
@@ -615,15 +692,18 @@ function renderStatsSection(): string
                             </tbody>
                         </table>
                     </div>
+                    </div>
                 </div>
             </div>
 
             <!-- Activity -->
             <div class="subnav-pane" id="stats-pane-activity">
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Recurring Billing</h3>
-                    </div>
+                <div class="stats-columns" data-stats-pane="activity">
+                    <div class="card" data-card-id="act-recurring-billing" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Recurring Billing</h3>
+                        </div>
                     <div class="card-body">
                         <?php if ($stats_last_recurring_run): ?>
                             <p style="color:var(--text-secondary); font-size:0.8rem; margin-bottom:0.3rem;">Last run:
@@ -652,7 +732,8 @@ function renderStatsSection(): string
                     </div>
                 </div>
 
-                <div class="card">
+                    <div class="card" data-card-id="act-most-active-clients" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                     <div class="card-header">
                         <h3>Most Active Clients (By Invoice Count)</h3>
                     </div>
@@ -692,165 +773,185 @@ function renderStatsSection(): string
                             </tbody>
                         </table>
                     </div>
+                    </div>
                 </div>
             </div>
 
             <!-- System -->
             <div class="subnav-pane" id="stats-pane-system">
-                <div class="mobile-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:stretch;">
-                <div class="card" style="margin-bottom:0;">
-                    <div class="card-header">
-                        <h3>Email Delivery Health</h3>
-                    </div>
-                    <div class="card-body">
-                        <div style="display: flex; gap: 2rem; flex-wrap: wrap; align-items:center;">
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Success Rate (All-Time):</p>
-                                <div style="font-size: 1.5rem; font-weight: 700; color: <?= $stats_email_success_rate >= 95 ? '#10b981' : ($stats_email_success_rate >= 80 ? 'var(--warning)' : 'var(--danger)') ?>;">
-                                    <?= $stats_email_success_rate ?>%</div>
-                            </div>
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Sent:</p>
-                                <div style="font-size: 1.2rem; font-weight: 700; color:#10b981;"><?= number_format($stats_email_sent) ?></div>
-                            </div>
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Failed:</p>
-                                <div style="font-size: 1.2rem; font-weight: 700; color:<?= $stats_email_failed > 0 ? 'var(--danger)' : 'var(--text-secondary)' ?>;">
-                                    <?= number_format($stats_email_failed) ?></div>
-                            </div>
-                            <?php if ($stats_email_total > 0): ?>
-                                <div style="height:110px; width:110px; position:relative; margin-left:auto;">
-                                    <canvas id="emailHealthChart"></canvas>
+                <div class="stats-columns" data-stats-pane="system">
+                    <div class="card" data-card-id="sys-email-health" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Email Delivery Health</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: flex; gap: 2rem; flex-wrap: wrap; align-items:center;">
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Success Rate (All-Time):</p>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: <?= $stats_email_success_rate >= 95 ? '#10b981' : ($stats_email_success_rate >= 80 ? 'var(--warning)' : 'var(--danger)') ?>;">
+                                        <?= $stats_email_success_rate ?>%</div>
                                 </div>
-                                <script>
-                                    window.__emailHealthData = { sent: <?= (int) $stats_email_sent ?>, failed: <?= (int) $stats_email_failed ?> };
-                                </script>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Sent:</p>
+                                    <div style="font-size: 1.2rem; font-weight: 700; color:#10b981;"><?= number_format($stats_email_sent) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Failed:</p>
+                                    <div style="font-size: 1.2rem; font-weight: 700; color:<?= $stats_email_failed > 0 ? 'var(--danger)' : 'var(--text-secondary)' ?>;">
+                                        <?= number_format($stats_email_failed) ?></div>
+                                </div>
+                                <?php if ($stats_email_total > 0): ?>
+                                    <div style="height:110px; width:110px; position:relative; margin-left:auto;">
+                                        <canvas id="emailHealthChart"></canvas>
+                                    </div>
+                                    <script>
+                                        window.__emailHealthData = { sent: <?= (int) $stats_email_sent ?>, failed: <?= (int) $stats_email_failed ?> };
+                                    </script>
+                                <?php endif; ?>
+                            </div>
+                            <?php if ($stats_email_failed > 0): ?>
+                                <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:1rem; margin-bottom:0;">
+                                    Check the Audit Log for individual <code>email_failed</code> entries — usually an SMTP
+                                    config or bad recipient address issue.</p>
                             <?php endif; ?>
                         </div>
-                        <?php if ($stats_email_failed > 0): ?>
-                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:1rem; margin-bottom:0;">
-                                Check the Audit Log for individual <code>email_failed</code> entries — usually an SMTP
-                                config or bad recipient address issue.</p>
-                        <?php endif; ?>
                     </div>
-                </div>
 
-                <div class="card" style="margin-bottom:0;">
-                    <div class="card-header">
-                        <h3>Webhook Health</h3>
-                    </div>
-                    <div class="card-body">
-                        <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (Last 30 Days):</p>
-                                <div style="font-size: 1.5rem; font-weight: 700; color:<?= $stats_webhook_unmatched_30d > 0 ? 'var(--warning)' : '#10b981' ?>;">
-                                    <?= number_format($stats_webhook_unmatched_30d) ?></div>
-                            </div>
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (All-Time):</p>
-                                <div style="font-size: 1.2rem; font-weight: 700;"><?= number_format($stats_webhook_unmatched_total) ?></div>
-                            </div>
+                    <div class="card" data-card-id="sys-system-health" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>System Health</h3>
                         </div>
-                        <?php if ($stats_webhook_unmatched_30d > 0): ?>
-                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:1rem; margin-bottom:0;">
-                                Check the Audit Log for individual <code>webhook_unmatched</code> entries — usually a Stripe/PayPal event referencing an invoice that was deleted or never existed here.</p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h3>System Health</h3>
-                    </div>
-                    <div class="card-body">
-                        <div style="display: flex; gap: 2rem; margin-bottom: 1.5rem;">
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Database Rows Evaluated:
-                                </p>
-                                <div style="font-size: 1.5rem; font-weight: 700;"><?= number_format($stats_db_rows) ?>
+                        <div class="card-body">
+                            <div style="display: flex; gap: 2rem; margin-bottom: 1.5rem;">
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Database Rows Evaluated:
+                                    </p>
+                                    <div style="font-size: 1.5rem; font-weight: 700;"><?= number_format($stats_db_rows) ?>
+                                    </div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Backup Storage Health:
+                                    </p>
+                                    <div style="font-size: 1.2rem; font-weight: 700; color: #10b981;"><?= $backup_count ?>
+                                        Files</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Last Backup:
+                                        <?= $latest_backup ?>
+                                    </div>
                                 </div>
                             </div>
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Backup Storage Health:
-                                </p>
-                                <div style="font-size: 1.2rem; font-weight: 700; color: #10b981;"><?= $backup_count ?>
-                                    Files</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Last Backup:
-                                    <?= $latest_backup ?>
+
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <p style="color:var(--text-secondary); margin: 0; font-weight: 600;">Tables in Database:</p>
+                                <label
+                                    style="font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem;">
+                                    <input type="checkbox" onchange="toggleOtherTables('stats', this.checked)"> Show all
+                                    tables
+                                </label>
+                            </div>
+                            <div
+                                style="max-height: 480px; overflow-y: auto; background: var(--surface-hover); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border);">
+                                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;">
+                                    <?php foreach ($all_tables_info as $tName => $tRows): ?>
+                                        <?php $isInvoxa = (strpos($tName, 'invoxa_') === 0); ?>
+                                        <li class="stat-table-item <?= $isInvoxa ? 'invoxa-table' : 'other-table' ?>"
+                                            style="<?= !$isInvoxa ? 'display:none;' : 'display:flex;' ?> justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid var(--border);">
+                                            <span style="color: var(--text-primary);"><?= htmlspecialchars($tName) ?></span>
+                                            <span style="color: #10b981; font-weight: 600;"><?= number_format($tRows) ?></span>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" data-card-id="sys-webhook-health" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Webhook Health</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (Last 30 Days):</p>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color:<?= $stats_webhook_unmatched_30d > 0 ? 'var(--warning)' : '#10b981' ?>;">
+                                        <?= number_format($stats_webhook_unmatched_30d) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (All-Time):</p>
+                                    <div style="font-size: 1.2rem; font-weight: 700;"><?= number_format($stats_webhook_unmatched_total) ?></div>
+                                </div>
+                            </div>
+                            <?php if ($stats_webhook_unmatched_30d > 0): ?>
+                                <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:1rem; margin-bottom:0;">
+                                    Check the Audit Log for individual <code>webhook_unmatched</code> entries — usually a Stripe/PayPal event referencing an invoice that was deleted or never existed here.</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <div class="card" data-card-id="sys-storage-footprint" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Storage Footprint</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="height:150px; position:relative; margin-bottom:0.75rem;"><canvas id="storageFootprintChart"></canvas></div>
+                            <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Total: <?= htmlspecialchars(invoxaFormatBytes($stats_db_size_bytes + $stats_invoices_dir_size_bytes + $stats_backups_dir_size_bytes)) ?></p>
+                        </div>
+                        <script>
+                            window.__storageFootprintData = {
+                                db: <?= (int) $stats_db_size_bytes ?>,
+                                invoices: <?= (int) $stats_invoices_dir_size_bytes ?>,
+                                backups: <?= (int) $stats_backups_dir_size_bytes ?>,
+                                labels: {
+                                    db: <?= json_encode('Database (' . invoxaFormatBytes($stats_db_size_bytes) . ')') ?>,
+                                    invoices: <?= json_encode('Invoices (' . invoxaFormatBytes($stats_invoices_dir_size_bytes) . ')') ?>,
+                                    backups: <?= json_encode('Backups (' . invoxaFormatBytes($stats_backups_dir_size_bytes) . ')') ?>
+                                }
+                            };
+                        </script>
+                    </div>
+
+                    <div class="card" data-card-id="sys-environment" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Environment</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">PHP Version:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars($stats_php_version) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">MySQL Version:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars($stats_mysql_version) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">App Version:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars(APP_VERSION) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Timezone:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars(date_default_timezone_get()) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">License:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700; color:<?= $licenseValid ? '#10b981' : 'var(--warning)' ?>;">
+                                        <?= $licenseValid ? 'Licensed' : 'Unlicensed' ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Recurring Billing Cron:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700;"><code><?= htmlspecialchars($currentCron) ?></code>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color:<?= $cronEnabled ? '#10b981' : 'var(--text-secondary)' ?>;">
+                                        <?= $cronEnabled ? 'Enabled' : 'Disabled' ?></div>
                                 </div>
                             </div>
                         </div>
-
-                        <div
-                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <p style="color:var(--text-secondary); margin: 0; font-weight: 600;">Tables in Database:</p>
-                            <label
-                                style="font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem;">
-                                <input type="checkbox" onchange="toggleOtherTables('stats', this.checked)"> Show all
-                                tables
-                            </label>
-                        </div>
-                        <div
-                            style="max-height: 480px; overflow-y: auto; background: var(--surface-hover); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border);">
-                            <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;">
-                                <?php foreach ($all_tables_info as $tName => $tRows): ?>
-                                    <?php $isInvoxa = (strpos($tName, 'invoxa_') === 0); ?>
-                                    <li class="stat-table-item <?= $isInvoxa ? 'invoxa-table' : 'other-table' ?>"
-                                        style="<?= !$isInvoxa ? 'display:none;' : 'display:flex;' ?> justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid var(--border);">
-                                        <span style="color: var(--text-primary);"><?= htmlspecialchars($tName) ?></span>
-                                        <span style="color: #10b981; font-weight: 600;"><?= number_format($tRows) ?></span>
-                                    </li>
-                                <?php endforeach; ?>
-                            </ul>
-                        </div>
                     </div>
-                </div>
-
-                <div class="mobile-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:stretch;">
-                <div class="card" style="margin-bottom:0;">
-                    <div class="card-header">
-                        <h3>Storage Footprint</h3>
-                    </div>
-                    <div class="card-body">
-                        <div style="height:150px; position:relative; margin-bottom:0.75rem;"><canvas id="storageFootprintChart"></canvas></div>
-                        <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Total: <?= htmlspecialchars(invoxaFormatBytes($stats_db_size_bytes + $stats_invoices_dir_size_bytes + $stats_backups_dir_size_bytes)) ?></p>
-                    </div>
-                    <script>
-                        window.__storageFootprintData = {
-                            db: <?= (int) $stats_db_size_bytes ?>,
-                            invoices: <?= (int) $stats_invoices_dir_size_bytes ?>,
-                            backups: <?= (int) $stats_backups_dir_size_bytes ?>,
-                            labels: {
-                                db: <?= json_encode('Database (' . invoxaFormatBytes($stats_db_size_bytes) . ')') ?>,
-                                invoices: <?= json_encode('Invoices (' . invoxaFormatBytes($stats_invoices_dir_size_bytes) . ')') ?>,
-                                backups: <?= json_encode('Backups (' . invoxaFormatBytes($stats_backups_dir_size_bytes) . ')') ?>
-                            }
-                        };
-                    </script>
-                </div>
-
-                <div class="card" style="margin-bottom:0;">
-                    <div class="card-header">
-                        <h3>Environment</h3>
-                    </div>
-                    <div class="card-body">
-                        <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">PHP Version:</p>
-                                <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars($stats_php_version) ?></div>
-                            </div>
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">MySQL Version:</p>
-                                <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars($stats_mysql_version) ?></div>
-                            </div>
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">App Version:</p>
-                                <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars(APP_VERSION) ?></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
                 </div>
             </div>
 

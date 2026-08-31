@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.29');
+define('APP_VERSION', '2.11.30');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -1738,6 +1738,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'revoke_api_token') { invoxaHandleRevokeApiToken($mysqli, $settings); }
         if ($_POST['action'] === 'delete_api_token') { invoxaHandleDeleteApiToken($mysqli); }
         if ($_POST['action'] === 'update_profile') { invoxaHandleUpdateProfile($mysqli, $currentUserId); }
+        if ($_POST['action'] === 'save_stats_layout') { invoxaHandleSaveStatsLayout($mysqli, $currentUserId); }
         if ($_POST['action'] === 'totp_setup_init') { invoxaHandleTotpSetupInit($mysqli, $currentUserId); }
         if ($_POST['action'] === 'totp_setup_confirm') { invoxaHandleTotpSetupConfirm($mysqli, $currentUserId, $settings); }
         if ($_POST['action'] === 'totp_regenerate_backup_codes') { invoxaHandleTotpRegenerateBackupCodes($mysqli, $currentUserId, $settings); }
