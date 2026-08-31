@@ -84,7 +84,7 @@ function renderDashboardStats($mysqli, int $currentUserId, array $settings, arra
         <?php endforeach; ?>
     </div>
     <div class="dashboard-chart-row" data-dash-pane="dashboard-charts">
-        <div class="card" data-card-id="dash-revenue-chart" data-card-width="3" data-card-label="Revenue Over Time" draggable="true" style="margin-bottom:0;">
+        <div class="card" data-card-id="dash-revenue-chart" data-card-width="4" data-card-label="Revenue Over Time" draggable="true" style="margin-bottom:0;">
             <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleDashboardChartWidth(this)" title="Cycle width (1/3, 1/2, 2/3, full)"><i class="fa-solid fa-arrows-left-right"></i><span class="width-label">1/2</span></button><button type="button" class="card-hide-toggle" onclick="hideDashboardCard(this)" title="Hide this widget"><i class="fa-solid fa-eye-slash"></i></button></div>
             <div class="card-header">
                 <h3 style="margin:0; font-size:1rem;"><i class="fa-solid fa-chart-line"
@@ -101,7 +101,7 @@ function renderDashboardStats($mysqli, int $currentUserId, array $settings, arra
                 <div style="height:420px; position:relative;"><canvas id="revenueChart"></canvas></div>
             </div>
         </div>
-        <div class="card" data-card-id="dash-client-share-chart" data-card-width="3" data-card-label="Client Share" draggable="true" style="margin-bottom:0; display:flex; flex-direction:column;">
+        <div class="card" data-card-id="dash-client-share-chart" data-card-width="2" data-card-label="Client Share" draggable="true" style="margin-bottom:0; display:flex; flex-direction:column;">
             <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleDashboardChartWidth(this)" title="Cycle width (1/3, 1/2, 2/3, full)"><i class="fa-solid fa-arrows-left-right"></i><span class="width-label">1/2</span></button><button type="button" class="card-hide-toggle" onclick="hideDashboardCard(this)" title="Hide this widget"><i class="fa-solid fa-eye-slash"></i></button></div>
             <div class="card-header">
                 <h3 style="margin:0; font-size:1rem;"><i class="fa-solid fa-chart-pie"
@@ -266,31 +266,7 @@ function renderStatsSection(): string
             <!-- Revenue -->
             <div class="subnav-pane active" id="stats-pane-revenue">
                 <div class="stats-columns" data-stats-pane="revenue">
-                    <div class="card" data-card-id="rev-tax-year-summary" data-card-width="1" draggable="true" style="margin-bottom:0;">
-                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
-                        <div class="card-header">
-                            <h3>Tax Year Summary (<?= $taxYearLabel ?>)</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="stats-grid" style="margin-bottom: 0;">
-                                <div class="stat-card" style="border-top: 3px solid #3b82f6;">
-                                    <div class="label">Total Invoiced</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_invoiced_by_ccy) ?></div>
-                                </div>
-                                <div class="stat-card" style="border-top: 3px solid #10b981;">
-                                    <div class="label">Total Paid</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_paid_by_ccy) ?></div>
-                                </div>
-                                <div class="stat-card"
-                                    style="border-top: 3px solid <?= $stats_ty_outstanding > 0 ? '#f59e0b' : '#10b981' ?>;">
-                                    <div class="label">Outstanding</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_outstanding_by_ccy) ?></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card" data-card-id="rev-financial-summary" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                    <div class="card" data-card-id="rev-financial-summary" data-card-width="1" data-card-col="0" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
                             <h3>Financial Summary (All-Time)</h3>
@@ -321,7 +297,20 @@ function renderStatsSection(): string
                         </div>
                     </div>
 
-                    <div class="card" data-card-id="rev-quotes-voided" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                    <div class="card" data-card-id="rev-trend" data-card-width="1" data-card-col="0" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Revenue Trend (Last 12 Months)</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="height:220px; position:relative;"><canvas id="revenueTrendChart"></canvas></div>
+                        </div>
+                        <script>
+                            window.__revenueTrendData = <?= json_encode($stats_revenue_trend) ?>;
+                        </script>
+                    </div>
+
+                    <div class="card" data-card-id="rev-quotes-voided" data-card-width="1" data-card-col="0" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
                             <h3>Quotes &amp; Voided Invoices</h3>
@@ -344,20 +333,31 @@ function renderStatsSection(): string
                         </div>
                     </div>
 
-                    <div class="card" data-card-id="rev-trend" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                    <div class="card" data-card-id="rev-tax-year-summary" data-card-width="1" data-card-col="1" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
-                            <h3>Revenue Trend (Last 12 Months)</h3>
+                            <h3>Tax Year Summary (<?= $taxYearLabel ?>)</h3>
                         </div>
                         <div class="card-body">
-                            <div style="height:220px; position:relative;"><canvas id="revenueTrendChart"></canvas></div>
+                            <div class="stats-grid" style="margin-bottom: 0;">
+                                <div class="stat-card" style="border-top: 3px solid #3b82f6;">
+                                    <div class="label">Total Invoiced</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_invoiced_by_ccy) ?></div>
+                                </div>
+                                <div class="stat-card" style="border-top: 3px solid #10b981;">
+                                    <div class="label">Total Paid</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_paid_by_ccy) ?></div>
+                                </div>
+                                <div class="stat-card"
+                                    style="border-top: 3px solid <?= $stats_ty_outstanding > 0 ? '#f59e0b' : '#10b981' ?>;">
+                                    <div class="label">Outstanding</div>
+                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_outstanding_by_ccy) ?></div>
+                                </div>
+                            </div>
                         </div>
-                        <script>
-                            window.__revenueTrendData = <?= json_encode($stats_revenue_trend) ?>;
-                        </script>
                     </div>
 
-                    <div class="card" data-card-id="rev-breakdown" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                    <div class="card" data-card-id="rev-breakdown" data-card-width="1" data-card-col="1" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
                             <h3>Revenue Breakdown</h3>
@@ -374,7 +374,7 @@ function renderStatsSection(): string
                         </script>
                     </div>
 
-                    <div class="card" data-card-id="rev-invoice-status" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                    <div class="card" data-card-id="rev-invoice-status" data-card-width="1" data-card-col="1" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
                             <h3>Invoice Status Breakdown</h3>
@@ -534,43 +534,6 @@ function renderStatsSection(): string
                         </div>
                     </div>
 
-                    <div class="card" data-card-id="cl-needing-attention" data-card-width="1" draggable="true" style="margin-bottom:0;">
-                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
-                        <div class="card-header">
-                            <h3>Clients Needing Attention <span class="has-tooltip"
-                                    data-tip="Active clients with no invoice in the last 60+ days">?</span></h3>
-                        </div>
-                        <div class="card-body" style="padding: 0;">
-                            <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                                <thead>
-                                    <tr
-                                        style="border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase;">
-                                        <th style="padding: 1rem;">Client Name</th>
-                                        <th style="padding: 1rem; text-align: right;">Last Invoice</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (empty($clients_needing_attention)): ?>
-                                        <tr>
-                                            <td colspan="2"
-                                                style="padding: 1rem; text-align: center; color: var(--text-secondary);">
-                                                Every active client has been invoiced within the last 60 days.</td>
-                                        </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($clients_needing_attention as $ca): ?>
-                                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                                <td style="padding: 1rem;"><?= htmlspecialchars($ca['client_name']) ?></td>
-                                                <td style="padding: 1rem; text-align: right; color: var(--warning);">
-                                                    <?= $ca['last_invoice'] ? htmlspecialchars(date('Y-m-d', strtotime($ca['last_invoice']))) : 'Never' ?>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
                     <div class="card" data-card-id="cl-top-clients" data-card-width="1" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
@@ -617,13 +580,50 @@ function renderStatsSection(): string
                         </table>
                     </div>
                 </div>
+
+                    <div class="card" data-card-id="cl-needing-attention" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Clients Needing Attention <span class="has-tooltip"
+                                    data-tip="Active clients with no invoice in the last 60+ days">?</span></h3>
+                        </div>
+                        <div class="card-body" style="padding: 0;">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                                <thead>
+                                    <tr
+                                        style="border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase;">
+                                        <th style="padding: 1rem;">Client Name</th>
+                                        <th style="padding: 1rem; text-align: right;">Last Invoice</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($clients_needing_attention)): ?>
+                                        <tr>
+                                            <td colspan="2"
+                                                style="padding: 1rem; text-align: center; color: var(--text-secondary);">
+                                                Every active client has been invoiced within the last 60 days.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($clients_needing_attention as $ca): ?>
+                                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                                <td style="padding: 1rem;"><?= htmlspecialchars($ca['client_name']) ?></td>
+                                                <td style="padding: 1rem; text-align: right; color: var(--warning);">
+                                                    <?= $ca['last_invoice'] ? htmlspecialchars(date('Y-m-d', strtotime($ca['last_invoice']))) : 'Never' ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
             </div>
             </div>
 
             <!-- Expenses -->
             <div class="subnav-pane" id="stats-pane-expenses">
                 <div class="stats-columns" data-stats-pane="expenses">
-                    <div class="card" data-card-id="ex-pl-summary" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                    <div class="card" data-card-id="ex-pl-summary" data-card-width="2" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
                             <h3>Profit &amp; Loss (<?= htmlspecialchars($taxYearLabel) ?>)</h3>
@@ -647,25 +647,6 @@ function renderStatsSection(): string
                         </div>
                     </div>
 
-                    <div class="card" data-card-id="ex-over-time" data-card-width="1" draggable="true" style="margin-bottom:0;">
-                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
-                        <div class="card-header">
-                            <h3>Expenses Over Time</h3>
-                        </div>
-                        <?php if (!empty($stats_expense_monthly)): ?>
-                            <div class="card-body">
-                                <div style="height:220px; position:relative;"><canvas id="expenseTrendChart"></canvas></div>
-                            </div>
-                            <script>
-                                window.__expenseTrendData = <?= json_encode($stats_expense_monthly) ?>;
-                            </script>
-                        <?php else: ?>
-                            <div class="card-body">
-                                <p style="color:var(--text-secondary); margin:0;">No expenses logged this tax year.</p>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
                     <div class="card" data-card-id="ex-by-category" data-card-width="1" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
@@ -684,13 +665,32 @@ function renderStatsSection(): string
                             </div>
                         <?php endif; ?>
                     </div>
+
+                    <div class="card" data-card-id="ex-over-time" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Expenses Over Time</h3>
+                        </div>
+                        <?php if (!empty($stats_expense_monthly)): ?>
+                            <div class="card-body">
+                                <div style="height:220px; position:relative;"><canvas id="expenseTrendChart"></canvas></div>
+                            </div>
+                            <script>
+                                window.__expenseTrendData = <?= json_encode($stats_expense_monthly) ?>;
+                            </script>
+                        <?php else: ?>
+                            <div class="card-body">
+                                <p style="color:var(--text-secondary); margin:0;">No expenses logged this tax year.</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
 
             <!-- Tax & Compliance -->
             <div class="subnav-pane" id="stats-pane-tax">
                 <div class="stats-columns" data-stats-pane="tax">
-                    <div class="card" data-card-id="tax-year-progress" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                    <div class="card" data-card-id="tax-year-progress" data-card-width="2" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
                             <h3>Tax Year Progress (<?= htmlspecialchars($taxYearLabel) ?>)</h3>
@@ -707,7 +707,7 @@ function renderStatsSection(): string
                         </div>
                     </div>
 
-                    <div class="card" data-card-id="tax-monthly-breakdown" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                    <div class="card" data-card-id="tax-monthly-breakdown" data-card-width="2" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                     <div class="card-header">
                         <h3>Monthly Breakdown</h3>
@@ -758,39 +758,6 @@ function renderStatsSection(): string
             <!-- Activity -->
             <div class="subnav-pane" id="stats-pane-activity">
                 <div class="stats-columns" data-stats-pane="activity">
-                    <div class="card" data-card-id="act-recurring-billing" data-card-width="1" draggable="true" style="margin-bottom:0;">
-                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
-                        <div class="card-header">
-                            <h3>Recurring Billing</h3>
-                        </div>
-                    <div class="card-body">
-                        <?php if ($stats_last_recurring_run): ?>
-                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-bottom:0.3rem;">Last run:
-                                <?= htmlspecialchars($stats_last_recurring_run['performed_at']) ?></p>
-                            <p style="margin:0 0 1rem;"><?= htmlspecialchars($stats_last_recurring_run['notes']) ?></p>
-                        <?php else: ?>
-                            <p style="color:var(--text-secondary); margin-bottom:1rem;">Recurring billing hasn't run
-                                yet — see Settings &gt; Billing.</p>
-                        <?php endif; ?>
-                        <div style="display:flex; gap:2rem; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:1rem;">
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom:0.5rem;">Reminders Sent (All-Time):</p>
-                                <div style="font-size:1.2rem; font-weight:700;"><?= number_format($stats_reminders_sent) ?>
-                                    <?php if ($stats_reminders_failed > 0): ?>
-                                        <span style="font-size:0.9rem; font-weight:400; color:var(--danger);"><?= $stats_reminders_failed ?>
-                                            failed</span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            <div>
-                                <p style="color:var(--text-secondary); margin-bottom:0.5rem;">Late Fees Charged (All-Time):</p>
-                                <div style="font-size:1.2rem; font-weight:700;"><?= number_format($stats_late_fees_charged) ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                     <div class="card" data-card-id="act-most-active-clients" data-card-width="1" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                     <div class="card-header">
@@ -833,13 +800,46 @@ function renderStatsSection(): string
                         </table>
                     </div>
                     </div>
+
+                    <div class="card" data-card-id="act-recurring-billing" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Recurring Billing</h3>
+                        </div>
+                    <div class="card-body">
+                        <?php if ($stats_last_recurring_run): ?>
+                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-bottom:0.3rem;">Last run:
+                                <?= htmlspecialchars($stats_last_recurring_run['performed_at']) ?></p>
+                            <p style="margin:0 0 1rem;"><?= htmlspecialchars($stats_last_recurring_run['notes']) ?></p>
+                        <?php else: ?>
+                            <p style="color:var(--text-secondary); margin-bottom:1rem;">Recurring billing hasn't run
+                                yet — see Settings &gt; Billing.</p>
+                        <?php endif; ?>
+                        <div style="display:flex; gap:2rem; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:1rem;">
+                            <div>
+                                <p style="color:var(--text-secondary); margin-bottom:0.5rem;">Reminders Sent (All-Time):</p>
+                                <div style="font-size:1.2rem; font-weight:700;"><?= number_format($stats_reminders_sent) ?>
+                                    <?php if ($stats_reminders_failed > 0): ?>
+                                        <span style="font-size:0.9rem; font-weight:400; color:var(--danger);"><?= $stats_reminders_failed ?>
+                                            failed</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div>
+                                <p style="color:var(--text-secondary); margin-bottom:0.5rem;">Late Fees Charged (All-Time):</p>
+                                <div style="font-size:1.2rem; font-weight:700;"><?= number_format($stats_late_fees_charged) ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 </div>
             </div>
 
             <!-- System -->
             <div class="subnav-pane" id="stats-pane-system">
                 <div class="stats-columns" data-stats-pane="system">
-                    <div class="card" data-card-id="sys-email-health" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                    <div class="card" data-card-id="sys-email-health" data-card-width="1" data-card-col="0" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
                             <h3>Email Delivery Health</h3>
@@ -877,7 +877,93 @@ function renderStatsSection(): string
                         </div>
                     </div>
 
-                    <div class="card" data-card-id="sys-system-health" data-card-width="1" draggable="true" style="margin-bottom:0;">
+                    <div class="card" data-card-id="sys-environment" data-card-width="1" data-card-col="0" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Environment</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">PHP Version:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars($stats_php_version) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">MySQL Version:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars($stats_mysql_version) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">App Version:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars(APP_VERSION) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Timezone:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars(date_default_timezone_get()) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">License:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700; color:<?= $licenseValid ? '#10b981' : 'var(--warning)' ?>;">
+                                        <?= $licenseValid ? 'Licensed' : 'Unlicensed' ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Recurring Billing Cron:</p>
+                                    <div style="font-size: 1.1rem; font-weight: 700;"><code><?= htmlspecialchars($currentCron) ?></code>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color:<?= $cronEnabled ? '#10b981' : 'var(--text-secondary)' ?>;">
+                                        <?= $cronEnabled ? 'Enabled' : 'Disabled' ?></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" data-card-id="sys-storage-footprint" data-card-width="1" data-card-col="0" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Storage Footprint</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="height:150px; position:relative; margin-bottom:0.75rem;"><canvas id="storageFootprintChart"></canvas></div>
+                            <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Total: <?= htmlspecialchars(invoxaFormatBytes($stats_db_size_bytes + $stats_invoices_dir_size_bytes + $stats_backups_dir_size_bytes)) ?></p>
+                        </div>
+                        <script>
+                            window.__storageFootprintData = {
+                                db: <?= (int) $stats_db_size_bytes ?>,
+                                invoices: <?= (int) $stats_invoices_dir_size_bytes ?>,
+                                backups: <?= (int) $stats_backups_dir_size_bytes ?>,
+                                labels: {
+                                    db: <?= json_encode('Database (' . invoxaFormatBytes($stats_db_size_bytes) . ')') ?>,
+                                    invoices: <?= json_encode('Invoices (' . invoxaFormatBytes($stats_invoices_dir_size_bytes) . ')') ?>,
+                                    backups: <?= json_encode('Backups (' . invoxaFormatBytes($stats_backups_dir_size_bytes) . ')') ?>
+                                }
+                            };
+                        </script>
+                    </div>
+
+                    <div class="card" data-card-id="sys-webhook-health" data-card-width="1" data-card-col="1" draggable="true" style="margin-bottom:0;">
+                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
+                        <div class="card-header">
+                            <h3>Webhook Health</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (Last 30 Days):</p>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color:<?= $stats_webhook_unmatched_30d > 0 ? 'var(--warning)' : '#10b981' ?>;">
+                                        <?= number_format($stats_webhook_unmatched_30d) ?></div>
+                                </div>
+                                <div>
+                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (All-Time):</p>
+                                    <div style="font-size: 1.2rem; font-weight: 700;"><?= number_format($stats_webhook_unmatched_total) ?></div>
+                                </div>
+                            </div>
+                            <?php if ($stats_webhook_unmatched_30d > 0): ?>
+                                <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:1rem; margin-bottom:0;">
+                                    Check the Audit Log for individual <code>webhook_unmatched</code> entries — usually a Stripe/PayPal event referencing an invoice that was deleted or never existed here.</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <div class="card" data-card-id="sys-system-health" data-card-width="1" data-card-col="1" draggable="true" style="margin-bottom:0;">
                         <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
                         <div class="card-header">
                             <h3>System Health</h3>
@@ -922,92 +1008,6 @@ function renderStatsSection(): string
                                         </li>
                                     <?php endforeach; ?>
                                 </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card" data-card-id="sys-webhook-health" data-card-width="1" draggable="true" style="margin-bottom:0;">
-                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
-                        <div class="card-header">
-                            <h3>Webhook Health</h3>
-                        </div>
-                        <div class="card-body">
-                            <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
-                                <div>
-                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (Last 30 Days):</p>
-                                    <div style="font-size: 1.5rem; font-weight: 700; color:<?= $stats_webhook_unmatched_30d > 0 ? 'var(--warning)' : '#10b981' ?>;">
-                                        <?= number_format($stats_webhook_unmatched_30d) ?></div>
-                                </div>
-                                <div>
-                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (All-Time):</p>
-                                    <div style="font-size: 1.2rem; font-weight: 700;"><?= number_format($stats_webhook_unmatched_total) ?></div>
-                                </div>
-                            </div>
-                            <?php if ($stats_webhook_unmatched_30d > 0): ?>
-                                <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:1rem; margin-bottom:0;">
-                                    Check the Audit Log for individual <code>webhook_unmatched</code> entries — usually a Stripe/PayPal event referencing an invoice that was deleted or never existed here.</p>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <div class="card" data-card-id="sys-storage-footprint" data-card-width="1" draggable="true" style="margin-bottom:0;">
-                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
-                        <div class="card-header">
-                            <h3>Storage Footprint</h3>
-                        </div>
-                        <div class="card-body">
-                            <div style="height:150px; position:relative; margin-bottom:0.75rem;"><canvas id="storageFootprintChart"></canvas></div>
-                            <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Total: <?= htmlspecialchars(invoxaFormatBytes($stats_db_size_bytes + $stats_invoices_dir_size_bytes + $stats_backups_dir_size_bytes)) ?></p>
-                        </div>
-                        <script>
-                            window.__storageFootprintData = {
-                                db: <?= (int) $stats_db_size_bytes ?>,
-                                invoices: <?= (int) $stats_invoices_dir_size_bytes ?>,
-                                backups: <?= (int) $stats_backups_dir_size_bytes ?>,
-                                labels: {
-                                    db: <?= json_encode('Database (' . invoxaFormatBytes($stats_db_size_bytes) . ')') ?>,
-                                    invoices: <?= json_encode('Invoices (' . invoxaFormatBytes($stats_invoices_dir_size_bytes) . ')') ?>,
-                                    backups: <?= json_encode('Backups (' . invoxaFormatBytes($stats_backups_dir_size_bytes) . ')') ?>
-                                }
-                            };
-                        </script>
-                    </div>
-
-                    <div class="card" data-card-id="sys-environment" data-card-width="1" draggable="true" style="margin-bottom:0;">
-                        <div class="card-drag-controls"><i class="fa-solid fa-grip-vertical drag-handle" title="Drag to reorder"></i><button type="button" class="card-width-toggle" onclick="toggleStatsCardWidth(this)" title="Toggle full width"><i class="fa-solid fa-expand"></i></button></div>
-                        <div class="card-header">
-                            <h3>Environment</h3>
-                        </div>
-                        <div class="card-body">
-                            <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
-                                <div>
-                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">PHP Version:</p>
-                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars($stats_php_version) ?></div>
-                                </div>
-                                <div>
-                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">MySQL Version:</p>
-                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars($stats_mysql_version) ?></div>
-                                </div>
-                                <div>
-                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">App Version:</p>
-                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars(APP_VERSION) ?></div>
-                                </div>
-                                <div>
-                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Timezone:</p>
-                                    <div style="font-size: 1.1rem; font-weight: 700;"><?= htmlspecialchars(date_default_timezone_get()) ?></div>
-                                </div>
-                                <div>
-                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">License:</p>
-                                    <div style="font-size: 1.1rem; font-weight: 700; color:<?= $licenseValid ? '#10b981' : 'var(--warning)' ?>;">
-                                        <?= $licenseValid ? 'Licensed' : 'Unlicensed' ?></div>
-                                </div>
-                                <div>
-                                    <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Recurring Billing Cron:</p>
-                                    <div style="font-size: 1.1rem; font-weight: 700;"><code><?= htmlspecialchars($currentCron) ?></code>
-                                    </div>
-                                    <div style="font-size: 0.8rem; color:<?= $cronEnabled ? '#10b981' : 'var(--text-secondary)' ?>;">
-                                        <?= $cronEnabled ? 'Enabled' : 'Disabled' ?></div>
-                                </div>
                             </div>
                         </div>
                     </div>

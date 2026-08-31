@@ -2,6 +2,14 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.39] - 2026-09-01
+
+### Changed
+- Statistics/Dashboard's default card layout (order and widths, for a fresh install or any user with no saved customization) now matches the arrangement actually in use, instead of the original ad-hoc default: Revenue, Clients, Expenses, Tax, Activity, and System panes reordered/resized, and the Dashboard's Revenue Over Time / Client Share charts changed from an even 3/3 width split to 4/2.
+
+### Fixed
+- Revenue and System panes' default (unsaved) layout put cards in the wrong columns — `layoutStatsPane()` only respects a card's column when it carries an explicit `data-card-col` attribute, falling back to plain left-right alternating by position otherwise, so those two panes' grouped-by-column arrangement (all of one group left, all of another right, rather than alternating) could never be reproduced by DOM order alone. Added the missing `data-card-col` attributes to both panes' cards to match.
+
 ## [2.11.38] - 2026-09-01
 
 ### Added
