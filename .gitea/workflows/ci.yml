@@ -7,15 +7,14 @@ on:
 jobs:
   php-lint:
     runs-on: ubuntu-latest
-    container:
-      image: php:8.3-cli
     steps:
       - uses: actions/checkout@v4
       - name: php -l across src/
         run: |
-          set -e
-          status=0
-          while IFS= read -r -d '' file; do
-            php -l "$file" || status=1
-          done < <(find src -name '*.php' -print0)
-          exit $status
+          docker run --rm -v "$PWD":/workspace -w /workspace php:8.3-cli sh -c '
+            set -e
+            status=0
+            while IFS= read -r -d "" file; do
+              php -l "$file" || status=1
+            done < <(find src -name "*.php" -print0)
+            exit $status'
