@@ -11,8 +11,14 @@
     <meta name="theme-color" content="#0a0f1c" />
     <title>Invoxa<?= INSTANCE_LABEL ? ' (' . htmlspecialchars(INSTANCE_LABEL) . ')' : '' ?></title>
     <script>
-        const savedTheme = localStorage.getItem('invoxa_theme') || 'light';
-        document.documentElement.setAttribute('data-theme', savedTheme);
+        function invoxaResolveTheme() {
+            const pref = localStorage.getItem('invoxa_theme') || 'system';
+            if (pref === 'light' || pref === 'dark') return pref;
+            return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', invoxaResolveTheme());
+        document.documentElement.setAttribute('data-density', localStorage.getItem('invoxa_density') || 'comfortable');
+        document.documentElement.setAttribute('data-corners', localStorage.getItem('invoxa_corners') || 'rounded');
         const savedAccent = localStorage.getItem('invoxa_accent');
         if (savedAccent) {
             document.documentElement.style.setProperty('--accent', savedAccent);
@@ -637,6 +643,84 @@
 
         #sec-settings .subnav-pane {
             gap: 0;
+        }
+
+        [data-corners="sharp"] {
+            --radius-sm: 3px;
+            --radius-md: 3px;
+            --radius-lg: 3px;
+        }
+
+        [data-density="compact"] .card {
+            margin-bottom: 1.1rem;
+        }
+
+        [data-density="compact"] .card-header {
+            padding: 0.7rem 1.1rem;
+        }
+
+        [data-density="compact"] .card-body {
+            padding: 1rem;
+        }
+
+        [data-density="compact"] .form-group {
+            margin-bottom: 0.6rem;
+        }
+
+        [data-density="compact"] .form-control {
+            padding: 0.45rem 0.65rem;
+        }
+
+        [data-density="compact"] .btn {
+            padding: 0.4rem 0.8rem;
+        }
+
+        [data-density="compact"] .datatable-table th,
+        [data-density="compact"] .datatable-table td {
+            padding: 0.55rem 0.75rem;
+        }
+
+        .pref-item {
+            padding: 1.1rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .pref-item:first-child {
+            padding-top: 0;
+        }
+
+        .pref-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .segmented-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .segmented-btn {
+            padding: 0.4rem 0.9rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text-primary);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+
+        .segmented-btn:hover {
+            background: var(--surface-hover);
+        }
+
+        .segmented-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
         }
 
         #sec-stats .card {
@@ -1958,4 +2042,13 @@
             }
         }
     </style>
+    <script>
+        const savedCustomCss = localStorage.getItem('invoxa_custom_css');
+        if (savedCustomCss) {
+            const invoxaCustomCssStyle = document.createElement('style');
+            invoxaCustomCssStyle.id = 'invoxaCustomCssStyle';
+            invoxaCustomCssStyle.textContent = savedCustomCss;
+            document.head.appendChild(invoxaCustomCssStyle);
+        }
+    </script>
 </head>

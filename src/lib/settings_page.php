@@ -83,44 +83,56 @@
                                         style="color:var(--accent); margin-right:0.5rem;"></i>Preferences</h3>
                             </div>
                             <div class="card-body">
-                                <label
-                                    style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-primary); font-weight: 500;">
-                                    <input type="checkbox" id="hideTestToggle" <?= $hideTest ? 'checked' : '' ?>
-                                        onchange="toggleTestClients(this.checked)" style="width:18px;height:18px;"> Hide
-                                    Test Clients Globally
-                                </label>
-                                <p
-                                    style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem; margin-bottom: 1.5rem;">
-                                    When checked, all dummy/test clients and their invoices will be hidden.</p>
+                                <div class="pref-item">
+                                    <label
+                                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-primary); font-weight: 500;">
+                                        <input type="checkbox" id="hideTestToggle" <?= $hideTest ? 'checked' : '' ?>
+                                            onchange="toggleTestClients(this.checked)" style="width:18px;height:18px;"> Hide
+                                        Test Clients Globally
+                                    </label>
+                                    <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem;">When checked, all dummy/test clients and their invoices will be hidden.</p>
+                                </div>
 
-                                <label
-                                    style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-primary); font-weight: 500;">
-                                    <input type="checkbox" id="showTestOnlyToggle" <?= $showTestOnly ? 'checked' : '' ?>
-                                        onchange="toggleShowTestOnly(this.checked)" style="width:18px;height:18px;"> Show
-                                    Only Test/Dummy Data
-                                </label>
-                                <p
-                                    style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem; margin-bottom: 1.5rem;">
-                                    Flips every list/chart to show <strong>only</strong> dummy/test data instead of your
-                                    real data — for safely previewing Demo Data (Data Management &gt; Demo Data) without
-                                    it mixing in with your own clients and invoices. Overrides "Hide Test Clients
-                                    Globally" above while it's on; turn it back off to return to your normal view.</p>
+                                <div class="pref-item">
+                                    <label
+                                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-primary); font-weight: 500;">
+                                        <input type="checkbox" id="showTestOnlyToggle" <?= $showTestOnly ? 'checked' : '' ?>
+                                            onchange="toggleShowTestOnly(this.checked)" style="width:18px;height:18px;"> Show
+                                        Only Test/Dummy Data
+                                    </label>
+                                    <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem;">Flips every list/chart to show <strong>only</strong> dummy/test data instead of your real data — for safely previewing Demo Data (Data Management &gt; Demo Data) without it mixing in with your own clients and invoices. Overrides "Hide Test Clients Globally" above while it's on; turn it back off to return to your normal view.</p>
+                                </div>
 
-                                <label
-                                    style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-primary); font-weight: 500;">
-                                    <input type="checkbox" id="lightModeToggle" onchange="toggleTheme(this.checked)"
-                                        style="width:18px;height:18px;"> Enable Light Mode
-                                </label>
-                                <script>
-                                    document.getElementById('lightModeToggle').checked = document.documentElement.getAttribute('data-theme') === 'light';
-                                </script>
-                                <p
-                                    style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem; margin-bottom: 1.5rem;">
-                                    Switch between light and dark themes.</p>
+                                <div class="pref-item">
+                                    <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Theme</label>
+                                    <div id="themeModeGroup" class="segmented-group">
+                                        <button type="button" class="segmented-btn" data-value="light" onclick="setThemeMode('light')">Light</button>
+                                        <button type="button" class="segmented-btn" data-value="dark" onclick="setThemeMode('dark')">Dark</button>
+                                        <button type="button" class="segmented-btn" data-value="system" onclick="setThemeMode('system')">Match System</button>
+                                    </div>
+                                    <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem;">"Match System" follows your OS or browser's light/dark setting and updates automatically if it changes.</p>
+                                </div>
 
-                                <div class="form-group" style="margin-bottom:1.5rem;">
-                                    <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">App
-                                        Accent Color</label>
+                                <div class="pref-item">
+                                    <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Density</label>
+                                    <div id="densityModeGroup" class="segmented-group">
+                                        <button type="button" class="segmented-btn" data-value="comfortable" onclick="setDensityMode('comfortable')">Comfortable</button>
+                                        <button type="button" class="segmented-btn" data-value="compact" onclick="setDensityMode('compact')">Compact</button>
+                                    </div>
+                                    <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem;">Compact tightens padding on cards, tables, and buttons app-wide, so more fits on screen at once.</p>
+                                </div>
+
+                                <div class="pref-item">
+                                    <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Corner Style</label>
+                                    <div id="cornerStyleGroup" class="segmented-group">
+                                        <button type="button" class="segmented-btn" data-value="rounded" onclick="setCornerStyle('rounded')">Rounded</button>
+                                        <button type="button" class="segmented-btn" data-value="sharp" onclick="setCornerStyle('sharp')">Sharp</button>
+                                    </div>
+                                    <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem;">Switches cards, buttons, and inputs between soft rounded corners and a squared-off look.</p>
+                                </div>
+
+                                <div class="pref-item">
+                                    <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">App Accent Color</label>
                                     <div id="accentPresetGrid" style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-top:0.5rem; align-items:center;">
                                         <?php foreach (invoxaBrandPresets() as $__accentName => $__accentHex): ?>
                                             <button type="button" class="accent-preset-swatch" data-color="<?= htmlspecialchars($__accentHex) ?>"
@@ -132,62 +144,70 @@
                                             style="width:auto; margin:0; padding:0.35rem 0.75rem; font-size:0.78rem;"
                                             onclick="resetAccentColor()">Reset to Theme Default</button>
                                     </div>
-                                    <script>
-                                        markActiveAccentSwatch(localStorage.getItem('invoxa_accent'));
-                                    </script>
-                                    <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.5rem;">
-                                        Recolors the Invoxa interface itself — buttons, links, highlights — separate
-                                        from Branding, which only affects invoices and the Client Portal your clients
-                                        see. Stored on this browser only.</p>
+                                    <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.5rem;">Recolors the Invoxa interface itself — buttons, links, highlights — separate from Branding, which only affects invoices and the Client Portal your clients see.</p>
                                 </div>
 
-                                <label
-                                    style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-primary); font-weight: 500;">
-                                    <input type="checkbox" id="welcomeFlashToggle" checked
-                                        onchange="localStorage.setItem('invoxa_show_welcome', this.checked ? '1' : '0')"
-                                        style="width:18px;height:18px;"> Show Welcome Message on Login
-                                </label>
-                                <script>
-                                    document.getElementById('welcomeFlashToggle').checked = localStorage.getItem('invoxa_show_welcome') !== '0';
-                                </script>
-                                <p
-                                    style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem; margin-bottom: 1.5rem;">
-                                    The brief "Welcome back" card shown right after signing in.</p>
-
-                                <div class="form-group" style="max-width:320px;">
-                                    <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Default
-                                        Landing Tab</label>
-                                    <select id="defaultTabSelect" class="form-control"
-                                        onchange="localStorage.setItem('invoxa_default_tab', this.value)">
-                                        <option value="dashboard">Dashboard</option>
-                                        <option value="invoices">Invoices</option>
-                                        <option value="clients">Clients</option>
-                                        <option value="stats">Statistics</option>
-                                        <option value="billing">Ad Hoc Invoice</option>
-                                    </select>
+                                <div class="pref-item">
+                                    <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Custom CSS</label>
+                                    <textarea id="customCssInput" class="form-control" rows="6" spellcheck="false"
+                                        style="font-family:monospace; font-size:0.8rem; white-space:pre; margin-top:0.5rem;"
+                                        placeholder="/* Any CSS you write here is injected into the app immediately, on this browser only. */"></textarea>
                                     <script>
-                                        document.getElementById('defaultTabSelect').value = localStorage.getItem('invoxa_default_tab') || 'dashboard';
+                                        document.getElementById('customCssInput').value = localStorage.getItem('invoxa_custom_css') || '';
                                     </script>
-                                    <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem; margin-bottom:1.5rem;">
-                                        Which tab opens right after you log in.</p>
+                                    <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                                        <button type="button" class="btn" onclick="applyCustomCss()"><i class="fa-solid fa-check"></i> Apply Custom CSS</button>
+                                        <button type="button" class="btn" onclick="clearCustomCss()"><i class="fa-solid fa-xmark"></i> Clear</button>
+                                    </div>
+                                    <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem;">Advanced: raw CSS injected into the app on this browser only, for tweaks beyond the presets above.</p>
                                 </div>
 
-                                <div class="form-group" style="max-width:320px;">
-                                    <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Default
-                                        Table Page Size</label>
-                                    <select id="defaultPageSizeSelect" class="form-control"
-                                        onchange="localStorage.setItem('invoxa_table_page_size', this.value)">
-                                        <option value="12">12 rows</option>
-                                        <option value="30">30 rows</option>
-                                        <option value="50">50 rows</option>
-                                        <option value="99999">All</option>
-                                    </select>
+                                <div class="pref-item">
+                                    <label
+                                        style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-primary); font-weight: 500;">
+                                        <input type="checkbox" id="welcomeFlashToggle" checked
+                                            onchange="localStorage.setItem('invoxa_show_welcome', this.checked ? '1' : '0')"
+                                            style="width:18px;height:18px;"> Show Welcome Message on Login
+                                    </label>
                                     <script>
-                                        document.getElementById('defaultPageSizeSelect').value = localStorage.getItem('invoxa_table_page_size') || '12';
+                                        document.getElementById('welcomeFlashToggle').checked = localStorage.getItem('invoxa_show_welcome') !== '0';
                                     </script>
-                                    <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
-                                        Applies to Invoices, Clients, and Quotes — takes effect on your next visit to
-                                        each tab.</p>
+                                    <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem;">The brief "Welcome back" card shown right after signing in.</p>
+                                </div>
+
+                                <div class="pref-item">
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Default Landing Tab</label>
+                                        <select id="defaultTabSelect" class="form-control" style="max-width:320px;"
+                                            onchange="localStorage.setItem('invoxa_default_tab', this.value)">
+                                            <option value="dashboard">Dashboard</option>
+                                            <option value="invoices">Invoices</option>
+                                            <option value="clients">Clients</option>
+                                            <option value="stats">Statistics</option>
+                                            <option value="billing">Ad Hoc Invoice</option>
+                                        </select>
+                                        <script>
+                                            document.getElementById('defaultTabSelect').value = localStorage.getItem('invoxa_default_tab') || 'dashboard';
+                                        </script>
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Which tab opens right after you log in.</p>
+                                    </div>
+                                </div>
+
+                                <div class="pref-item">
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Default Table Page Size</label>
+                                        <select id="defaultPageSizeSelect" class="form-control" style="max-width:320px;"
+                                            onchange="localStorage.setItem('invoxa_table_page_size', this.value)">
+                                            <option value="12">12 rows</option>
+                                            <option value="30">30 rows</option>
+                                            <option value="50">50 rows</option>
+                                            <option value="99999">All</option>
+                                        </select>
+                                        <script>
+                                            document.getElementById('defaultPageSizeSelect').value = localStorage.getItem('invoxa_table_page_size') || '12';
+                                        </script>
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Applies to Invoices, Clients, and Quotes — takes effect on your next visit to each tab.</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -984,28 +1004,23 @@
                             </div>
                             <div class="card-body">
                                 <form id="businessIdentityForm" onsubmit="event.preventDefault(); saveBusinessIdentity();">
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="businessName">Business Name</label>
                                         <input type="text" id="businessName" name="business_name" class="form-control"
                                             value="<?= htmlspecialchars($settings['business_name'] ?? '') ?>"
                                             placeholder="Your Business Name">
-                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Used as
-                                            the sender name and subject line on invoices sent to your clients. Leave blank
-                                            to use "Invoxa".</p>
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Used as the sender name and subject line on invoices sent to your clients. Leave blank to use "Invoxa".</p>
                                     </div>
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="vatNumber">GST / VAT Number</label>
                                         <input type="text" id="vatNumber" name="vat_number" class="form-control"
                                             value="<?= htmlspecialchars($settings['vat_number'] ?? '') ?>"
                                             placeholder="e.g. 123-456-789">
-                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Shown
-                                            on invoices and quotes when set. Leave blank to omit it.</p>
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Shown on invoices and quotes when set. Leave blank to omit it.</p>
                                     </div>
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="brandColor">Primary Brand Color</label>
-                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin:-0.25rem 0 0.75rem;">
-                                            Pick a preset or choose your own — carries through to invoices, quotes, and
-                                            the Client Portal.</p>
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin:-0.25rem 0 0.75rem;">Pick a preset or choose your own — carries through to invoices, quotes, and the Client Portal.</p>
                                         <div id="brandPresetGrid" style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.85rem; align-items:center;">
                                             <?php foreach (invoxaBrandPresets() as $__presetName => $__presetHex): ?>
                                                 <button type="button" class="brand-preset-swatch" data-color="<?= htmlspecialchars($__presetHex) ?>"
@@ -1030,11 +1045,8 @@
                                                 <span id="brandPreviewBtn" style="border:none; border-radius:6px; padding:0.4rem 0.85rem; font-size:0.8rem; font-weight:600; color:#fff;">Pay Now</span>
                                             </div>
                                         </div>
-                                        <script>
-                                            updateBrandPreview(document.getElementById('brandColor').value);
-                                        </script>
                                     </div>
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: <?= $licenseValid ? 'pointer' : 'not-allowed' ?>;">
                                             <input type="checkbox" id="hidePoweredByToggle" name="hide_powered_by"
                                                 value="1" <?= ($settings['hide_powered_by'] ?? '0') === '1' ? 'checked' : '' ?>
@@ -1047,7 +1059,7 @@
                                                 : 'Requires a license — <a href="#" onclick="navSettings(\'license\'); return false;">add a key</a> to unlock.' ?>
                                         </p>
                                     </div>
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="logoUpload">Invoice Logo</label>
                                         <input type="file" id="logoUpload" name="logo" class="form-control" accept="image/*"
                                             style="padding:0.5rem;">
@@ -1056,7 +1068,7 @@
                                                     class="fa-solid fa-check"></i> Custom logo uploaded</div>
                                         <?php endif; ?>
                                     </div>
-                                    <button type="submit" class="btn primary" id="saveBusinessIdentityBtn"><i
+                                    <button type="submit" style="margin-top:1rem;" class="btn primary" id="saveBusinessIdentityBtn"><i
                                             class="fa-solid fa-save"></i> Save Business Identity</button>
                                 </form>
                             </div>
@@ -1069,7 +1081,7 @@
                             </div>
                             <div class="card-body">
                                 <form id="invoiceTemplateForm" onsubmit="event.preventDefault(); saveInvoiceTemplate();">
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="invoiceTemplate">Layout</label>
                                         <div style="display:flex; gap:0.5rem; align-items:flex-start;">
                                             <select id="invoiceTemplate" name="invoice_template" class="form-control"
@@ -1092,7 +1104,7 @@
                                             dummy invoice in the selected layout without saving anything.</p>
                                     </div>
                                     <div id="customTemplateGroup" style="display: <?= $__invTpl === 'custom' ? '' : 'none' ?>;">
-                                        <div class="form-group">
+                                        <div class="pref-item">
                                             <label class="form-label" for="customInvoiceTemplate">Custom Template HTML</label>
                                             <textarea id="customInvoiceTemplate" name="custom_invoice_template" class="form-control"
                                                 rows="14" spellcheck="false"
@@ -1105,7 +1117,7 @@
                                                         class="fa-solid fa-eye"></i> Preview Sample</button>
                                             </div>
                                         </div>
-                                        <div class="form-group">
+                                        <div class="pref-item">
                                             <details style="color:var(--text-secondary); font-size:0.8rem;">
                                                 <summary class="form-label" style="cursor:pointer; display:inline;">Available
                                                     template variables</summary>
@@ -1135,7 +1147,7 @@
                                             </details>
                                         </div>
                                     </div>
-                                    <button type="submit" class="btn primary" id="saveInvoiceTemplateBtn"><i
+                                    <button type="submit" style="margin-top:1rem;" class="btn primary" id="saveInvoiceTemplateBtn"><i
                                             class="fa-solid fa-save"></i> Save Invoice Template</button>
                                 </form>
                             </div>
@@ -1148,7 +1160,7 @@
                             </div>
                             <div class="card-body">
                                 <form id="invoiceDefaultsForm" onsubmit="event.preventDefault(); saveInvoiceDefaults();">
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="currency">Currency Code</label>
                                         <input type="text" id="currency" name="currency" class="form-control" maxlength="3"
                                             style="text-transform:uppercase; max-width:100px;"
@@ -1156,7 +1168,7 @@
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">3-letter
                                             code shown on invoices (e.g. USD, NZD, GBP, EUR).</p>
                                     </div>
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="taxYearStartMonth">Tax Year Starts</label>
                                         <select id="taxYearStartMonth" name="tax_year_start_month" class="form-control">
                                             <?php
@@ -1171,7 +1183,7 @@
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Used by
                                             the Tax Year report. Choose January for a calendar-year default.</p>
                                     </div>
-                                    <button type="submit" class="btn primary" id="saveInvoiceDefaultsBtn"><i
+                                    <button type="submit" style="margin-top:1rem;" class="btn primary" id="saveInvoiceDefaultsBtn"><i
                                             class="fa-solid fa-save"></i> Save Invoice Defaults</button>
                                 </form>
                             </div>
@@ -1186,23 +1198,23 @@
                                 <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0; margin-bottom:1rem;">
                                     Used whenever a client doesn't have their own account details set.</p>
                                 <form id="paymentDetailsForm" onsubmit="event.preventDefault(); savePaymentDetails();">
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="footerText">Footer Text</label>
                                         <textarea id="footerText" name="footer_text" class="form-control" rows="2"
                                             placeholder="Payment instructions..."><?= htmlspecialchars($settings['footer_text'] ?? '') ?></textarea>
                                     </div>
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="defaultAccountName">Default Account Name</label>
                                         <input type="text" id="defaultAccountName" name="default_account_name"
                                             class="form-control" value="<?= htmlspecialchars($settings['default_account_name'] ?? '') ?>"
                                             placeholder="Used when a client has no account details set">
                                     </div>
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="defaultAccountNumber">Default Account Number</label>
                                         <input type="text" id="defaultAccountNumber" name="default_account_number"
                                             class="form-control" value="<?= htmlspecialchars($settings['default_account_number'] ?? '') ?>">
                                     </div>
-                                    <button type="submit" class="btn primary" id="savePaymentDetailsBtn"><i
+                                    <button type="submit" style="margin-top:1rem;" class="btn primary" id="savePaymentDetailsBtn"><i
                                             class="fa-solid fa-save"></i> Save Payment Details</button>
                                 </form>
                             </div>
@@ -1220,12 +1232,12 @@
                                     something different. Available placeholders: <code>{key}</code> (client key)
                                     <code>{seq}</code> (sequence number) <code>{year}</code> <code>{month}</code>.</p>
                                 <form id="invoiceNumberingForm" onsubmit="event.preventDefault(); saveInvoiceNumbering();">
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="invoiceNumberTemplate">Number Format</label>
                                         <input type="text" id="invoiceNumberTemplate" name="invoice_number_template" class="form-control"
                                             value="<?= htmlspecialchars($settings['invoice_number_template'] ?? '{key}{seq}') ?>">
                                     </div>
-                                    <div class="form-group">
+                                    <div class="pref-item">
                                         <label class="form-label" for="invoiceNumberPadding">Sequence Padding (digits)</label>
                                         <input type="number" id="invoiceNumberPadding" name="invoice_number_padding" class="form-control"
                                             step="1" min="1" max="10"
@@ -1233,7 +1245,7 @@
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
                                             3 = 010, 4 = 0010, etc.</p>
                                     </div>
-                                    <button type="submit" class="btn primary" id="saveInvoiceNumberingBtn"><i
+                                    <button type="submit" style="margin-top:1rem;" class="btn primary" id="saveInvoiceNumberingBtn"><i
                                             class="fa-solid fa-save"></i> Save Numbering Format</button>
                                 </form>
                             </div>

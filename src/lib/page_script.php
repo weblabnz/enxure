@@ -1889,12 +1889,63 @@
                     document.getElementById('showTestOnlyToggle').checked = !show;
                 }
             }
-            function toggleTheme(isLight) {
-                const theme = isLight ? 'light' : 'dark';
-                document.documentElement.setAttribute('data-theme', theme);
-                localStorage.setItem('invoxa_theme', theme);
+            function applyResolvedTheme() {
+                document.documentElement.setAttribute('data-theme', invoxaResolveTheme());
                 if (chartAllData) renderChart();
             }
+            function setThemeMode(mode) {
+                localStorage.setItem('invoxa_theme', mode);
+                applyResolvedTheme();
+                markActiveSegment('themeModeGroup', mode);
+            }
+            if (window.matchMedia) {
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                    if ((localStorage.getItem('invoxa_theme') || 'system') === 'system') applyResolvedTheme();
+                });
+            }
+            function setDensityMode(mode) {
+                localStorage.setItem('invoxa_density', mode);
+                document.documentElement.setAttribute('data-density', mode);
+                markActiveSegment('densityModeGroup', mode);
+            }
+            function setCornerStyle(mode) {
+                localStorage.setItem('invoxa_corners', mode);
+                document.documentElement.setAttribute('data-corners', mode);
+                markActiveSegment('cornerStyleGroup', mode);
+            }
+            function markActiveSegment(groupId, value) {
+                document.querySelectorAll('#' + groupId + ' .segmented-btn').forEach((btn) => {
+                    btn.classList.toggle('active', btn.dataset.value === value);
+                });
+            }
+            function injectCustomCss(css) {
+                let styleEl = document.getElementById('invoxaCustomCssStyle');
+                if (!styleEl) {
+                    styleEl = document.createElement('style');
+                    styleEl.id = 'invoxaCustomCssStyle';
+                    document.head.appendChild(styleEl);
+                }
+                styleEl.textContent = css;
+            }
+            function applyCustomCss() {
+                const css = document.getElementById('customCssInput').value;
+                localStorage.setItem('invoxa_custom_css', css);
+                injectCustomCss(css);
+                showToast('Custom CSS applied');
+            }
+            function clearCustomCss() {
+                document.getElementById('customCssInput').value = '';
+                localStorage.removeItem('invoxa_custom_css');
+                injectCustomCss('');
+                showToast('Custom CSS cleared');
+            }
+
+            markActiveSegment('themeModeGroup', localStorage.getItem('invoxa_theme') || 'system');
+            markActiveSegment('densityModeGroup', localStorage.getItem('invoxa_density') || 'comfortable');
+            markActiveSegment('cornerStyleGroup', localStorage.getItem('invoxa_corners') || 'rounded');
+            markActiveAccentSwatch(localStorage.getItem('invoxa_accent'));
+            const _brandColorInput = document.getElementById('brandColor');
+            if (_brandColorInput) updateBrandPreview(_brandColorInput.value);
 
             // ── Branding & Accent color helpers ───────────────────────────
             function shadeColor(hex, percent) {

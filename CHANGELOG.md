@@ -2,6 +2,23 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.34] - 2026-08-31
+
+### Changed
+- Settings > Branding's five cards (Business Identity, Invoice Template, Invoice Defaults, Default Payment Details, Invoice Numbering) get the same per-field dividers Preferences just got — each field now sits in its own bordered row instead of the fields running into each other with only a small margin between them.
+
+## [2.11.33] - 2026-08-31
+
+### Added
+- Settings > Preferences' theme toggle is now a three-way Light/Dark/Match System choice instead of a Light-Mode checkbox — "Match System" follows the OS/browser's `prefers-color-scheme` and switches live if it changes while the app is open. New installs (and anyone who's never touched the toggle) now default to Match System instead of a hardcoded Light.
+- Settings > Preferences gains a Density option (Comfortable/Compact) that tightens padding on cards, tables, and buttons app-wide for fitting more on screen, a Corner Style option (Rounded/Sharp) that swaps the app's border-radius tokens, and a Custom CSS textarea for raw overrides beyond the built-in presets — all three, like Accent Color, are stored per-browser and independent of each other and of Branding.
+
+### Changed
+- Settings > Preferences now has a visible divider between each preference, so toggles and their description text read as distinct rows instead of running into each other.
+
+### Fixed
+- The new Accent Color swatches, Custom Brand Color live preview, and (this release) the new Theme/Density/Corner Style controls were silently failing to show their active/selected state on page load — their init calls lived in inline `<script>` tags inside `settings_page.php`, which renders and executes before `page_script.php` (where the functions they call are defined) loads, so every call threw `ReferenceError` and was dropped. Moved all of this init into `page_script.php` itself, after the relevant functions are defined.
+
 ## [2.11.32] - 2026-08-31
 
 ### Added
