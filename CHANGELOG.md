@@ -2,6 +2,12 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.37] - 2026-08-31
+
+### Fixed
+- The Dashboard's "Revenue Over Time" card hid its "Last 12 Months"/"All Time" range buttons right up against the top-right corner, which on hover is also where that card's drag-handle, width-cycle, and hide-widget icons render — the two controls crowded each other. Gave the range buttons a fixed right margin so they clear that icon row.
+- Audit Log entries now have a subtle left border between each field (type, notes, performed-by, client) instead of relying on the gap alone, so a dense row reads as distinct columns rather than one run-on line.
+
 ## [2.11.36] - 2026-08-31
 
 ### Added

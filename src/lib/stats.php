@@ -90,7 +90,7 @@ function renderDashboardStats($mysqli, int $currentUserId, array $settings, arra
                 <h3 style="margin:0; font-size:1rem;"><i class="fa-solid fa-chart-line"
                         style="color:var(--accent); margin-right:0.5rem;"></i>Revenue Over Time (Cumulative)
                 </h3>
-                <div style="display:flex; gap:0.5rem; align-items:center;">
+                <div style="display:flex; gap:0.5rem; align-items:center; margin-right:6rem;">
                     <button id="chartRange12" class="btn small primary" onclick="setChartRange('12')">Last 12
                         Months</button>
                     <button id="chartRangeAll" class="btn small" onclick="setChartRange('all')">All

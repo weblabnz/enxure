@@ -1324,6 +1324,11 @@
             white-space: nowrap;
         }
 
+        .timeline-content > div:not(:first-child) {
+            border-left: 1px solid var(--border);
+            padding-left: 1rem;
+        }
+
         .form-group {
             margin-bottom: 1rem;
         }
