@@ -1919,6 +1919,7 @@
             border-radius: var(--radius-sm);
         }
 
+        .datatable-dropdown,
         .datatable-info,
         .datatable-pagination a {
             color: var(--text-secondary);
