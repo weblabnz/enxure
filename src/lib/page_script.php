@@ -1126,7 +1126,7 @@
                 document.getElementById('toastMsg').textContent = msg;
                 document.getElementById('toastIcon').className = 'fa-solid toast-icon ' + (isError ? 'fa-circle-exclamation' : 'fa-circle-check');
                 t.className = 'toast show' + (isError ? ' error' : '');
-                setTimeout(() => t.className = 'toast', 3000);
+                setTimeout(() => t.classList.remove('show'), 3000);
             }
 
             function animateCountUp(el) {
@@ -2677,14 +2677,45 @@
                 const res = await fetch('', { method: 'POST', body: data });
                 const json = await res.json();
                 if (json.success) {
-                    showToast(`Imported ${json.imported} files!`);
-                    if (json.mismatches && json.mismatches.length > 0) {
-                        alert("WARNING: The following files were skipped because their filename does not match the Invoice Number inside the file:\n\n" + json.mismatches.join("\n"));
+                    const skipped = (json.failures ? json.failures.length : 0) + (json.mismatches ? json.mismatches.length : 0);
+                    if (json.failures && json.failures.length > 0) {
+                        showToast(`${json.imported} imported, ${json.failures.length} skipped — client needs to be created first`, true);
+                    } else if (json.mismatches && json.mismatches.length > 0) {
+                        showToast(`${json.imported} imported, ${json.mismatches.length} skipped — invoice number mismatch`, true);
+                    } else {
+                        showToast(`Imported ${json.imported} files!`);
                     }
-                    setTimeout(() => window.location.reload(), json.mismatches && json.mismatches.length > 0 ? 3000 : 1500);
+                    setTimeout(() => window.location.reload(), skipped > 0 ? 3000 : 1500);
                 } else {
                     showToast(json.error, true);
-                    btn.innerHTML = '<i class="fa-solid fa-download"></i> Import All Missing';
+                    btn.innerHTML = '<i class="fa-solid fa-download"></i> Import All';
+                    btn.disabled = false;
+                }
+            }
+
+            async function deleteUntrackedFile(filePath) {
+                if (!confirm(`This will permanently delete '${filePath}' from disk. This cannot be undone! Proceed?`)) return;
+                const data = new URLSearchParams({ action: 'delete_untracked_file', file: filePath });
+                const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
+                if (json.success) { showToast('File deleted!'); setTimeout(() => window.location.reload(), 1500); }
+                else { showToast(json.error, true); }
+            }
+
+            async function deleteAllUntrackedFiles() {
+                if (!confirm(`This will permanently delete all ${missingFiles.length} untracked file${missingFiles.length === 1 ? '' : 's'} from disk. This cannot be undone! Proceed?`)) return;
+                const btn = document.getElementById('deleteAllUntrackedBtn');
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
+                btn.disabled = true;
+                const data = new URLSearchParams({ action: 'delete_all_untracked_files', files: JSON.stringify(missingFiles) });
+                const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
+                if (json.success) {
+                    let msg = `Deleted ${json.deleted} file${json.deleted === 1 ? '' : 's'}.`;
+                    if (json.errors > 0) msg += ` ${json.errors} failed to delete.`;
+                    showToast(msg, json.deleted === 0 && json.errors > 0);
+                    setTimeout(() => window.location.reload(), json.errors > 0 ? 3000 : 1500);
+                } else {
+                    showToast(json.error, true);
+                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete All';
                     btn.disabled = false;
                 }
             }
@@ -2700,8 +2731,12 @@
                     if (json.no_content > 0) {
                         msg += ` ${json.no_content} had no stored content to rebuild from — likely historical records imported without an original invoice file. Their database records (client, amount, dates, paid status) are still intact for reporting; delete them below only if you don't need that history.`;
                     }
-                    showToast(msg, json.restored === 0 && json.no_content > 0);
-                    setTimeout(() => window.location.reload(), json.no_content > 0 ? 4000 : 1500);
+                    if (json.errors > 0) {
+                        msg += ` ${json.errors} failed to write to disk — check file permissions on invoxa-invoices/.`;
+                    }
+                    const hasIssue = json.no_content > 0 || json.errors > 0;
+                    showToast(msg, json.restored === 0 && hasIssue);
+                    setTimeout(() => window.location.reload(), hasIssue ? 4000 : 1500);
                 }
                 else { showToast(json.error, true); btn.innerHTML = '<i class="fa-solid fa-file-export"></i> Rebuild HTML Files'; btn.disabled = false; }
             }
@@ -2711,7 +2746,7 @@
                 const data = new URLSearchParams({ action: 'delete_missing_db', ids: JSON.stringify(missingDiskIds) });
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                 if (json.success) { showToast(`Deleted ${json.deleted} records!`); setTimeout(() => window.location.reload(), 1500); }
-                else { showToast(json.error, true); btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete DB Entries'; btn.disabled = false; }
+                else { showToast(json.error, true); btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete All'; btn.disabled = false; }
             }
 
             async function initChart(force = false) {

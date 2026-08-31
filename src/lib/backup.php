@@ -15,9 +15,14 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
         <div class="card" style="margin-bottom: 0;">
             <div class="card-header">
                 <h3 style="margin:0; font-size: 1rem;">Untracked HTML Invoices</h3>
-                <?php if (count($missingFiles) > 0): ?><button class="btn primary" id="syncBtn"
-                        onclick="syncFiles()"><i class="fa-solid fa-download"></i> Import All
-                        Missing</button><?php endif; ?>
+                <?php if (count($missingFiles) > 0): ?>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button class="btn primary" id="syncBtn" onclick="syncFiles()"><i
+                                class="fa-solid fa-download"></i> Import All</button>
+                        <button class="btn danger" id="deleteAllUntrackedBtn" onclick="deleteAllUntrackedFiles()"><i
+                                class="fa-solid fa-trash"></i> Delete All</button>
+                    </div>
+                <?php endif; ?>
             </div>
             <table class="datatable-table">
                 <thead>
@@ -60,7 +65,7 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
                 <?php if (count($missingDiskData) > 0): ?>
                     <div style="display:flex; gap:0.5rem;">
                         <button class="btn danger" id="delDbBtn" onclick="deleteMissingDb()"><i
-                                class="fa-solid fa-trash"></i> Delete All DB Entries</button>
+                                class="fa-solid fa-trash"></i> Delete All</button>
                         <button class="btn primary" id="restoreBtn" onclick="restoreMissingFiles()"><i
                                 class="fa-solid fa-file-export"></i> Rebuild HTML Files</button>
                     </div>
@@ -1755,6 +1760,7 @@ function invoxaHandleSyncMissing($mysqli, array $settings): void
     $errors = 0;
     $skipped = 0;
     $mismatches = [];
+    $failures = [];
     $clientMap = [];
     $res = $mysqli->query("SELECT * FROM invoxa_clients");
     while ($row = $res->fetch_assoc()) {
@@ -1773,7 +1779,9 @@ function invoxaHandleSyncMissing($mysqli, array $settings): void
         $filename = basename($fullPath);
         $client = $clientMap[strtolower($folderName)] ?? null;
         if (!$client) {
-            $client = ['client_key' => strtolower($folderName), 'client_name' => $folderName, 'email' => ''];
+            $failures[] = "File '$filename': no client found for folder '$folderName' — create a matching client first, then re-run the import";
+            $errors++;
+            continue;
         }
         $html = file_get_contents($fullPath);
         $amount = (float) preg_replace('/[^0-9.]/', '', extractField($html, 'Amount Due') ?? '0');
@@ -1799,10 +1807,11 @@ function invoxaHandleSyncMissing($mysqli, array $settings): void
                 $imported++;
             }
         } catch (Exception $e) {
+            $failures[] = "File '$filename': " . $e->getMessage();
             $errors++;
         }
     }
-    echo json_encode(['success' => true, 'imported' => $imported, 'skipped' => $skipped, 'errors' => $errors, 'mismatches' => $mismatches]);
+    echo json_encode(['success' => true, 'imported' => $imported, 'skipped' => $skipped, 'errors' => $errors, 'mismatches' => $mismatches, 'failures' => $failures]);
     exit;
 }
 
@@ -1863,6 +1872,27 @@ function invoxaHandleDeleteUntrackedFile(): void
     } else {
         echo json_encode(['success' => false, 'error' => 'File not found']);
     }
+    exit;
+}
+
+function invoxaHandleDeleteAllUntrackedFiles(): void
+{
+    $files = json_decode($_POST['files'] ?? '[]', true) ?: [];
+    $deleted = 0;
+    $errors = 0;
+    foreach ($files as $filePath) {
+        if (!preg_match('#^invoices/[\w\-]+/[\w\-]+\.html$#', $filePath)) {
+            $errors++;
+            continue;
+        }
+        $fullPath = '/usr/share/nginx/html/invoxa-invoices/' . preg_replace('#^invoices/#', '', $filePath);
+        if (file_exists($fullPath) && @unlink($fullPath)) {
+            $deleted++;
+        } else {
+            $errors++;
+        }
+    }
+    echo json_encode(['success' => true, 'deleted' => $deleted, 'errors' => $errors]);
     exit;
 }
 

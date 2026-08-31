@@ -217,7 +217,7 @@
         </div>
 
         <div id="viewModal" class="modal-overlay">
-            <div class="modal large">
+            <div class="modal large" style="height:75vh;">
                 <div class="modal-header">
                     <h2 id="viewModalTitle">Invoice</h2>
                     <div style="display:flex; gap:0.5rem; align-items:center;">
@@ -234,10 +234,10 @@
                             onclick="closeModal('viewModal')"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                 </div>
-                <div class="modal-body" style="padding: 0; overflow: hidden; position: relative;">
-                    <iframe id="invoicePreview" style="width:100%; height:70vh; border:none; background:white;"></iframe>
+                <div class="modal-body" style="padding: 0; overflow: hidden; position: relative; flex: 1; min-height: 0;">
+                    <iframe id="invoicePreview" style="width:100%; height:100%; border:none; background:white;"></iframe>
                     <div id="invoiceMissingWarning"
-                        style="display:none; height:70vh; align-items:center; justify-content:center; text-align:center; padding:2rem; box-sizing:border-box;">
+                        style="display:none; height:100%; align-items:center; justify-content:center; text-align:center; padding:2rem; box-sizing:border-box;">
                         <div>
                             <div style="font-size:2rem; margin-bottom:0.75rem; color:var(--warning);"><i
                                     class="fa-solid fa-triangle-exclamation"></i></div>

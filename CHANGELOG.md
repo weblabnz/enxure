@@ -2,6 +2,20 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.38] - 2026-09-01
+
+### Added
+- Untracked HTML Invoices now has a "Delete All" bulk action alongside "Import All", removing every currently-listed untracked file from disk in one go (new `delete_all_untracked_files` admin action). The per-row trash icon on that same table now actually works too — it called a `deleteUntrackedFile()` JS function that was never written, so clicking it silently threw a `ReferenceError` and did nothing.
+
+### Changed
+- "Import All Missing" and "Delete All DB Entries" relabeled to "Import All" and "Delete All" — the panel headers ("Untracked HTML Invoices", "Missing HTML Files") already say what's being acted on, so the buttons didn't need to repeat it.
+
+### Fixed
+- Untracked HTML Invoices import: when a file's folder didn't match any existing client, the code fabricated a stand-in client and attempted the insert anyway using the full folder name as `client_key` — a column capped at `VARCHAR(10)`, so the insert threw a strict-mode SQL error on any realistic folder name. That error was caught and counted but never sent to the frontend, so the button reported success while quietly importing nothing. Now skips those files and reports "no client found for folder 'X' — create a matching client first" instead.
+- `showToast()`'s auto-hide reset `className` to the base `toast` class in one step, dropping the `error` class (and its red background) instantly while the 0.25–0.35s fade-out transition was still playing — every error toast in the app flashed green right at the end of its fade. Now only the `show` class is removed on auto-hide, so the color stays consistent through the whole animation.
+- "Rebuild HTML Files" (Missing HTML Files panel) tracked disk-write failures server-side (`errors`) but never included that count in its summary toast, so a failed rebuild could look identical to a full success. Now surfaced alongside the existing no-content-to-rebuild-from message.
+- The invoice preview modal's iframe was hardcoded to `height:70vh` while its outer `.modal` only capped at `max-height:75vh` — header height on top of that pushed the real total past 75vh, and with `.modal-body` set to `overflow:hidden` (not the class's default `auto`), the excess was clipped with no way to scroll to it (the iframe's own scrollbar only moved its internal document, not the outer clip line). `.modal-body` now flexes to fill whatever space remains under the header, and the iframe fills `100%` of that instead of an independent, non-additive viewport value.
+
 ## [2.11.37] - 2026-08-31
 
 ### Fixed
