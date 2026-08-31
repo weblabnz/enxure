@@ -314,8 +314,9 @@
 
         .user-panel {
             margin-top: auto;
-            padding: 1.25rem;
+            padding: 1.75rem 1.5rem;
             border-top: 1px solid var(--border);
+            background: var(--surface-2);
         }
 
         .mid-panel {
@@ -2089,6 +2090,10 @@
 
             .global-search-wrap kbd {
                 display: none;
+            }
+
+            .global-search-wrap {
+                margin-bottom: 2rem;
             }
 
             .nav-subnav-toggle {

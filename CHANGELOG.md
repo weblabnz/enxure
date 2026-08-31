@@ -2,6 +2,14 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.40] - 2026-09-01
+
+### Changed
+- Sidebar's bottom panel (Logout button, version/changelog line) now has more padding and a subtle `--surface-2` background tint to set it apart from the nav list above, and on mobile the gap between the global search box and that panel is wider too.
+
+### Removed
+- "Bulk CSV import for Invoices and Expenses" and "Dashboard customization" dropped from the in-app Roadmap doc — both shipped already (CSV import in 2.11.36; drag-reorder/resize/hide for Dashboard cards previously).
+
 ## [2.11.39] - 2026-09-01
 
 ### Changed
