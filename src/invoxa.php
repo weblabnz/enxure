@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.30');
+define('APP_VERSION', '2.11.31');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -1020,7 +1020,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // not on this list). $isCron requests bypass this the same way they
         // bypass the $isAuth gate above — a cron-triggered run has no user at
         // all, and CRON_SECRET is its own, separate authorization.
-        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'get_db_stats', 'import_backup', 'import_clients_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_recurring', 'run_test_suite', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
+        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'get_db_stats', 'import_backup', 'import_clients_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
         if (!$isCron && !$isAdmin && in_array($_POST['action'], $__adminOnlyActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This requires an admin account — see Settings > Users.']);
             exit;
@@ -1758,6 +1758,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'save_invoice_numbering') { invoxaHandleSaveInvoiceNumbering($mysqli); }
         if ($_POST['action'] === 'save_offsite_backup') { invoxaHandleSaveOffsiteBackup($mysqli); }
         if ($_POST['action'] === 'backup_db') { invoxaHandleBackupDb($mysqli, $settings); }
+        if ($_POST['action'] === 'run_auto_backup') {
+            // Fired by its own cron entry (see cron/entrypoint.sh), independent of
+            // run_recurring — backups aren't a licensed feature, so this can't ride
+            // the same trigger as billing (see invoxaRunAutoBackup()'s docblock).
+            if (($settings['auto_backup_enabled'] ?? '0') !== '1') {
+                echo json_encode(['success' => true, 'skipped' => true]);
+                exit;
+            }
+            $result = invoxaRunAutoBackup($mysqli, $settings);
+            echo json_encode($result);
+            exit;
+        }
+        if ($_POST['action'] === 'toggle_auto_backup') {
+            $enable = ($_POST['enabled'] ?? '1') === '1';
+            $val = $enable ? '1' : '0';
+            $stmt = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('auto_backup_enabled', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt->bind_param("s", $val);
+            $stmt->execute();
+            echo json_encode(['success' => true, 'enabled' => $enable]);
+            exit;
+        }
         if ($_POST['action'] === 'get_db_stats') { invoxaHandleGetDbStats($mysqli); }
         if ($_POST['action'] === 'list_backups') { invoxaHandleListBackups(); }
         if ($_POST['action'] === 'import_backup') { invoxaHandleImportBackup(); }
@@ -1936,6 +1957,7 @@ if (file_exists($cronFile)) {
 
 $remindersEnabled = ($settings['reminders_enabled'] ?? '0') === '1';
 $lateFeesEnabled = ($settings['late_fee_enabled'] ?? '0') === '1';
+$autoBackupEnabled = ($settings['auto_backup_enabled'] ?? '0') === '1';
 $recurringBypassGuard = ($settings['recurring_bypass_guard'] ?? '0') === '1';
 
 $total_invoiced_by_ccy = [];

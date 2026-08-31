@@ -541,11 +541,13 @@
                                     timestamped file you can download. To bring one back, pick a backup and run
                                     <strong>Test Restore (Dry Run)</strong> first — it shows exactly what would
                                     change (rows/tables created, dropped, inserted) without touching the database —
-                                    then <strong>Restore Selected</strong> to actually apply it. A local retention
-                                    setting prunes old backups down to a configured count automatically after each
-                                    new one, and an optional Offsite Push panel can send new backups to a remote
-                                    destination via rclone, with credentials kept out of the app itself and living on
-                                    the cron container instead.</p>
+                                    then <strong>Restore Selected</strong> to actually apply it. <strong>Automatic
+                                        Backups</strong> — off by default — runs that same backup once a day on its
+                                    own fixed schedule with no license required; a local retention setting prunes old
+                                    backups (manual or automatic) down to a configured count after each new one, and
+                                    an optional Offsite Push panel can send new backups to a remote destination via
+                                    rclone, with credentials kept out of the app itself and living on the cron
+                                    container instead.</p>
                                 <h2>Demo Data</h2>
                                 <p>Seeds a handful of sample clients, invoices, and quotes spread across recent
                                     months, every one of them flagged with the client-level <strong>Is Test

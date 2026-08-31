@@ -2,6 +2,14 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.31] - 2026-08-31
+
+### Fixed
+- "Create Backup" wrote every backup on a given day to the same `backup_YYYY-MM-DD.sql` filename, so a second manual backup taken the same day silently overwrote the first instead of adding a new file — `local_backup_retention_count` looked broken (backups stuck at whatever count you already had) when it was actually the missing file just never existing in the first place. New backups now get a numeric suffix (`backup_YYYY-MM-DD_1.sql`, `_2.sql`, ...) when that day already has one, the same shape `import_backup` already accepted.
+
+### Added
+- Automatic local backups (Data Management > Backup & Restore) — **off by default**. When enabled, runs the same backup as the manual "Create Backup" button once a day on its own fixed cron schedule (02:30 server time, independent of Recurring Billing's schedule), no license required. Manual and automatic backups share the same `invoxa-backups/` folder and both now obey `local_backup_retention_count` through the same shared prune step.
+
 ## [2.11.30] - 2026-08-31
 
 ### Added

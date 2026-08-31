@@ -74,11 +74,25 @@
                                 </div>
 
                                 <div style="border-top:1px solid var(--border); padding-top:1.5rem; margin-bottom:1.5rem;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                                        <h4 style="margin:0;">Automatic Backups</h4>
+                                        <label
+                                            style="display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; color:var(--text-secondary); cursor:pointer;">
+                                            <input type="checkbox" id="autoBackupEnabledToggle" <?= $autoBackupEnabled ? 'checked' : '' ?>
+                                                onchange="toggleAutoBackup(this.checked)"> Active
+                                        </label>
+                                    </div>
+                                    <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0; margin-bottom:1rem;">
+                                        <strong>Off by default.</strong> When active, runs the same backup as the
+                                        <strong>Create Backup</strong> button once a day, on its own cron schedule
+                                        (fixed at 02:30 server time, independent of Recurring Billing's schedule
+                                        above) — no license required. Manual and automatic backups share the same
+                                        <code>invoxa-backups/</code> folder and the same retention count below.</p>
                                     <h4 style="margin-top:0; margin-bottom:0.5rem;">Local Backup Retention</h4>
                                     <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0; margin-bottom:1rem;">
-                                        After each new backup, automatically delete older ones beyond this count from
-                                        <code>invoxa-backups/</code>. <strong>0 = keep every backup forever</strong>
-                                        (today's default).</p>
+                                        After each new backup — manual or automatic — delete older ones beyond this
+                                        count from <code>invoxa-backups/</code>. <strong>0 = keep every backup
+                                            forever</strong> (today's default).</p>
                                     <div style="display:flex; align-items:center; gap:0.75rem;">
                                         <input type="number" id="localBackupRetentionCount" class="form-control" min="0"
                                             max="365" style="max-width:120px;"

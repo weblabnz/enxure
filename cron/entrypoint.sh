@@ -37,6 +37,17 @@ if [ ! -f "$CRONTAB_FILE" ] || ! grep -q "run_recurring" "$CRONTAB_FILE" 2>/dev/
     echo "$CRON_SCHEDULE curl -s -S -X POST -d \"action=run_recurring&cron_key=$CRON_SECRET\" http://nginx/invoxa.php >> /var/log/invoxa-cron.log 2>&1" >>"$CRONTAB_FILE"
 fi
 
+# Automatic backups get their own fixed daily line rather than sharing the
+# schedule above: run_recurring's action is rejected outright without a
+# license (see invoxa.php's $__licensePaidActions), but backups aren't a
+# licensed feature and must keep working either way. Whether this actually
+# does anything each time it fires is decided server-side by the
+# auto_backup_enabled setting (Data Management > Backup & Restore) — off by
+# default — not by this schedule.
+if [ ! -f "$CRONTAB_FILE" ] || ! grep -q "run_auto_backup" "$CRONTAB_FILE" 2>/dev/null; then
+    echo "30 2 * * * curl -s -S -X POST -d \"action=run_auto_backup&cron_key=$CRON_SECRET\" http://nginx/invoxa.php >> /var/log/invoxa-cron.log 2>&1" >>"$CRONTAB_FILE"
+fi
+
 # The app saves schedule changes to this file as www-data, not root — fix
 # ownership on every boot so busybox crond (which refuses to load a crontab
 # it doesn't own as root) can always load it. Group is www-data's gid (33,

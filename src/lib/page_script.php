@@ -2037,6 +2037,24 @@
                 }
                 toggle.disabled = false;
             }
+            async function toggleAutoBackup(enabled) {
+                const toggle = document.getElementById('autoBackupEnabledToggle');
+                toggle.disabled = true;
+                try {
+                    const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'toggle_auto_backup', enabled: enabled ? '1' : '0' }) });
+                    const json = await res.json();
+                    if (json.success) {
+                        showToast(enabled ? 'Automatic backups enabled' : 'Automatic backups paused');
+                    } else {
+                        showToast(json.error || 'Failed to update', true);
+                        toggle.checked = !enabled;
+                    }
+                } catch (e) {
+                    showToast('Failed to update (network error)', true);
+                    toggle.checked = !enabled;
+                }
+                toggle.disabled = false;
+            }
             async function saveLateFeeSettings() {
                 const btn = document.getElementById('saveLateFeeSettingsBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; btn.disabled = true;
                 const form = document.getElementById('lateFeeSettingsForm');

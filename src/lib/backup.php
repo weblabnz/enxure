@@ -148,11 +148,11 @@ function invoxaHandleSaveScreenshot(): void
 // client-side state worth preserving across a refresh).
 function invoxaAuditIcons(): array
 {
-    return ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban', 'quote_accepted' => 'fa-file-circle-check', 'quote_converted' => 'fa-file-invoice', 'user_created' => 'fa-user-plus', 'user_role_changed' => 'fa-user-gear', 'user_password_reset' => 'fa-key', 'user_deleted' => 'fa-user-xmark'];
+    return ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban', 'quote_accepted' => 'fa-file-circle-check', 'quote_converted' => 'fa-file-invoice', 'user_created' => 'fa-user-plus', 'user_role_changed' => 'fa-user-gear', 'user_password_reset' => 'fa-key', 'user_deleted' => 'fa-user-xmark', 'backup_created' => 'fa-database', 'backup_failed' => 'fa-circle-xmark'];
 }
 
 // Short category tag for the Type column — every action type gets one,
-// grouping the 26 granular action_type values (already shown in full in the
+// grouping the 28 granular action_type values (already shown in full in the
 // Details badge) into the handful of subsystems a reader actually scans for.
 function invoxaAuditTypeLabel(string $actionType): string
 {
@@ -185,6 +185,8 @@ function invoxaAuditTypeLabel(string $actionType): string
         'user_role_changed' => 'USR',
         'user_password_reset' => 'USR',
         'user_deleted' => 'USR',
+        'backup_created' => 'SYS',
+        'backup_failed' => 'SYS',
     ];
     return $types[$actionType] ?? 'SYS';
 }
@@ -1401,6 +1403,93 @@ function invoxaHandleSaveOffsiteBackup($mysqli): void
     exit;
 }
 
+// backup_YYYY-MM-DD.sql, or backup_YYYY-MM-DD_1.sql, _2.sql, ... if that day
+// already has one — so a second backup taken on the same day (a manual click
+// after an automatic run, or two manual clicks) gets its own file instead of
+// silently overwriting the first. invoxaHandleImportBackup()'s filename regex
+// already accepts this suffixed shape.
+function invoxaNextBackupFilename(): string
+{
+    $base = 'backup_' . date('Y-m-d');
+    $filename = $base . '.sql';
+    $suffix = 1;
+    while (is_file(BACKUPS_DIR . $filename)) {
+        $filename = $base . '_' . $suffix . '.sql';
+        $suffix++;
+    }
+    return $filename;
+}
+
+// Deletes local backups beyond 'local_backup_retention_count' (0 = keep
+// forever), newest first. Shared by the manual "Create Backup" button and the
+// automatic cron-driven backup so the limit is enforced identically either way.
+function invoxaPruneLocalBackups(array $settings): void
+{
+    $retainCount = (int) ($settings['local_backup_retention_count'] ?? 0);
+    if ($retainCount <= 0) {
+        return;
+    }
+    $backupFiles = glob(BACKUPS_DIR . 'backup_*.sql') ?: [];
+    usort($backupFiles, fn($a, $b) => filemtime($b) - filemtime($a));
+    foreach (array_slice($backupFiles, $retainCount) as $oldFile) {
+        @unlink($oldFile);
+    }
+}
+
+// Dumps $tables (every table when empty) to a new file in BACKUPS_DIR via
+// invoxaNextBackupFilename(), then prunes older backups down to
+// 'local_backup_retention_count'. Shared by the manual "Create Backup" button
+// (invoxaHandleBackupDb) and the automatic cron-driven backup
+// (invoxaRunAutoBackup) so both create files the same way and obey the same
+// retention limit. Returns the filename written.
+function invoxaCreateDatabaseBackup($mysqli, array $settings, array $tables = []): string
+{
+    if (!$tables) {
+        $result = $mysqli->query("SHOW TABLES");
+        while ($row = $result->fetch_row()) {
+            $tables[] = $row[0];
+        }
+    }
+    $sql = "";
+    foreach ($tables as $table) {
+        $result = $mysqli->query("SHOW CREATE TABLE " . $table);
+        $row = $result->fetch_row();
+        $sql .= "DROP TABLE IF EXISTS " . $table . ";\n";
+        $sql .= $row[1] . ";\n\n";
+        $result = $mysqli->query("SELECT * FROM " . $table);
+        $num_fields = $result->field_count;
+        while ($row = $result->fetch_row()) {
+            $sql .= "INSERT INTO " . $table . " VALUES(";
+            for ($j = 0; $j < $num_fields; $j++) {
+                if (isset($row[$j])) {
+                    $val = addslashes($row[$j]);
+                    $val = str_replace("\n", "\\n", $val);
+                    $sql .= '"' . $val . '"';
+                } else {
+                    $sql .= 'NULL';
+                }
+                if ($j < ($num_fields - 1)) {
+                    $sql .= ',';
+                }
+            }
+            $sql .= ");\n";
+        }
+        $sql .= "\n\n";
+    }
+
+    if (!is_dir(BACKUPS_DIR)) {
+        @mkdir(BACKUPS_DIR, 0777, true);
+    }
+    $filename = invoxaNextBackupFilename();
+    if (file_put_contents(BACKUPS_DIR . $filename, $sql) === false) {
+        throw new Exception("Failed to write to file.");
+    }
+
+    invoxaPruneLocalBackups($settings);
+
+    return $filename;
+}
+
 function invoxaHandleBackupDb($mysqli, array $settings): void
 {
     error_reporting(0);
@@ -1415,58 +1504,8 @@ function invoxaHandleBackupDb($mysqli, array $settings): void
                     $tables[] = $row[0];
                 }
             }
-        } else {
-            $result = $mysqli->query("SHOW TABLES");
-            while ($row = $result->fetch_row()) {
-                $tables[] = $row[0];
-            }
         }
-        $sql = "";
-        foreach ($tables as $table) {
-            $result = $mysqli->query("SHOW CREATE TABLE " . $table);
-            $row = $result->fetch_row();
-            $sql .= "DROP TABLE IF EXISTS " . $table . ";\n";
-            $sql .= $row[1] . ";\n\n";
-            $result = $mysqli->query("SELECT * FROM " . $table);
-            $num_fields = $result->field_count;
-            for ($i = 0; $i < $num_fields; $i++) {
-                while ($row = $result->fetch_row()) {
-                    $sql .= "INSERT INTO " . $table . " VALUES(";
-                    for ($j = 0; $j < $num_fields; $j++) {
-                        if (isset($row[$j])) {
-                            $val = addslashes($row[$j]);
-                            $val = str_replace("\n", "\\n", $val);
-                            $sql .= '"' . $val . '"';
-                        } else {
-                            $sql .= 'NULL';
-                        }
-                        if ($j < ($num_fields - 1)) {
-                            $sql .= ',';
-                        }
-                    }
-                    $sql .= ");\n";
-                }
-            }
-            $sql .= "\n\n";
-        }
-
-        $filename = "backup_" . date("Y-m-d") . ".sql";
-        if (!is_dir(BACKUPS_DIR)) {
-            @mkdir(BACKUPS_DIR, 0777, true);
-        }
-        if (file_put_contents(BACKUPS_DIR . $filename, $sql) === false) {
-            throw new Exception("Failed to write to file.");
-        }
-
-        $retainCount = (int) ($settings['local_backup_retention_count'] ?? 0);
-        if ($retainCount > 0) {
-            $backupFiles = glob(BACKUPS_DIR . 'backup_*.sql') ?: [];
-            usort($backupFiles, fn($a, $b) => filemtime($b) - filemtime($a));
-            foreach (array_slice($backupFiles, $retainCount) as $oldFile) {
-                @unlink($oldFile);
-            }
-        }
-
+        $filename = invoxaCreateDatabaseBackup($mysqli, $settings, $tables);
         ob_clean();
         echo json_encode(['success' => true, 'downloadUrl' => '/invoxa-backups/' . $filename]);
     } catch (Throwable $e) {
@@ -1474,6 +1513,26 @@ function invoxaHandleBackupDb($mysqli, array $settings): void
         echo json_encode(['success' => false, 'error' => $e->getMessage() . ' on line ' . $e->getLine()]);
     }
     exit;
+}
+
+// The automatic counterpart to the manual "Create Backup" button — off by
+// default (auto_backup_enabled), fired by its own cron entry (see
+// cron/entrypoint.sh) rather than riding run_recurring's, since backups
+// aren't a licensed feature and run_recurring's action is rejected outright
+// without a valid license (see the $__licensePaidActions check in
+// invoxa.php). Uses the same invoxaCreateDatabaseBackup(), so it obeys
+// local_backup_retention_count exactly like a manual backup does.
+function invoxaRunAutoBackup($mysqli, array $settings): array
+{
+    try {
+        $filename = invoxaCreateDatabaseBackup($mysqli, $settings);
+        invoxaLogAction($mysqli, null, '', 'backup_created', "Automatic backup created: {$filename}");
+        return ['success' => true, 'filename' => $filename];
+    } catch (Throwable $e) {
+        $error = $e->getMessage();
+        invoxaLogAction($mysqli, null, '', 'backup_failed', "Automatic backup failed: {$error}");
+        return ['success' => false, 'error' => $error];
+    }
 }
 
 function invoxaHandleListBackups(): void
