@@ -2,6 +2,19 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.36] - 2026-08-31
+
+### Added
+- Invoices and Expenses now support the same bulk CSV import Clients already had, so migrating off a spreadsheet is a single upload for all three record types instead of just Clients. Invoice import matches each row's Client Name against an existing client (case-insensitive), auto-generates the invoice number via the existing `generateInvoiceNumber()` when the CSV leaves it blank, and — when a Paid Amount is given — writes a matching `invoxa_payments` ledger row (not just the cached `invoxa_invoices.paid_amount`) so Data Repair's "Reconcile Payment Totals" doesn't zero it back out later. Expense import matches Category by either its internal key or its human-readable label (e.g. "Software & Subscriptions"). Both new imports are admin-gated the same way `import_clients_csv` already is, and a bad row is skipped with an error rather than aborting the whole file.
+
+### Changed
+- The Clients/Invoices/Expenses toolbars' Export/Import controls were relabeled to stop repeating the same words between a group's header and its buttons (a header reading "Export / Import" next to a "CSV" button and an "Import" button was redundant) — headers now name the shared subject ("CSV") and buttons name the action ("Export"/"Import"). Invoices' Import button was also pulled out of the multi-format Export dropdown's toolbar group into its own "CSV" group, since it only ever accepts CSV regardless of what the export-format dropdown has selected.
+- Every table's search box no longer shows a redundant "Search" label next to its "Search..." placeholder (`labels.searchLabel` in the shared `getTblOpts()`).
+
+### Fixed
+- Dashboard's Customize button sat slightly low relative to the "Next Auto-Run" text beside it — nudged up 2px.
+- The "entries per page" text next to each table's page-size dropdown rendered in full primary text color instead of the secondary grey used for the rest of the table chrome (search placeholder, pagination info) — it lived in an unstyled `<label>` that `.datatable-info`'s color rule didn't reach.
+
 ## [2.11.35] - 2026-08-31
 
 ### Added
