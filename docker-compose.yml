@@ -23,8 +23,6 @@ services:
       - ./sql/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     networks:
       - invoxa-net
-    labels:
-      wud.watch: "false"
 
   php:
     build:
@@ -77,8 +75,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    labels:
-      wud.watch: "false"
 
   nginx:
     image: nginx:1.27-alpine
@@ -110,8 +106,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    labels:
-      wud.watch: "false"
 
   cron:
     build:
@@ -131,8 +125,6 @@ services:
       - crontab-data:/etc/crontabs
     networks:
       - invoxa-net    
-    labels:
-      wud.watch: "false"
 
 volumes:
   db-data:
