@@ -972,7 +972,7 @@
                     if (dataTables[which]) dataTables[which].destroy();
                     tabTbody(which).innerHTML = html;
                     dataTables[which] = new simpleDatatables.DataTable('#' + which + 'Table', getTblOpts(which));
-                    document.querySelectorAll('#sec-' + which + ' .datatable-selector option').forEach(opt => { if (opt.value == "99999") opt.textContent = "All"; });
+                    setTimeout(() => { document.querySelectorAll('#sec-' + which + ' .datatable-selector option').forEach(opt => { if (opt.value == "99999") opt.textContent = "All"; }); }, 100);
                 } catch (e) {
                     // Silent by design — a failed background refresh leaves the existing,
                     // still-valid (if slightly stale) table in place rather than surfacing
@@ -998,6 +998,7 @@
                     ]);
                     document.getElementById('dashboardStatsWrap').innerHTML = statsHtml;
                     document.getElementById('activityTbody').innerHTML = activityHtml;
+                    syncChartRangeButtons();
                     applyDashboardLayouts();
                     initDashboardDragDrop();
                     const menu = document.getElementById('dashboardWidgetMenu');
@@ -2763,13 +2764,17 @@
 
             function setChartRange(range) {
                 chartRange = range;
-                document.getElementById('chartRange12').className = 'btn small' + (range === '12' ? ' primary' : '');
-                document.getElementById('chartRangeAll').className = 'btn small' + (range === 'all' ? ' primary' : '');
                 renderChart();
+            }
+
+            function syncChartRangeButtons() {
+                document.getElementById('chartRange12').className = 'btn small' + (chartRange === '12' ? ' primary' : '');
+                document.getElementById('chartRangeAll').className = 'btn small' + (chartRange === 'all' ? ' primary' : '');
             }
 
             function renderChart() {
                 if (!chartAllData) return;
+                syncChartRangeButtons();
                 const { clients, data: allData } = chartAllData;
                 const displayData = chartRange === '12' ? allData.slice(-12) : allData;
                 const labels = displayData.map(d => d.month);

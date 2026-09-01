@@ -2,6 +2,12 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.42] - 2026-09-01
+
+### Fixed
+- Dashboard's Revenue Over Time chart range buttons ("Last 12 Months" / "All Time") always re-highlighted "Last 12 Months" after navigating away from Dashboard and back, even if "All Time" had been selected — `refreshDashboard()` swaps in a fresh server render of the chart card, which always defaults to the "Last 12 Months" button styled active, and nothing re-synced the highlight to the JS-side `chartRange` state (which itself was tracked correctly) until the next manual click. Button state is now re-applied from `chartRange` on every chart (re)render via a shared `syncChartRangeButtons()`, called immediately when the fresh HTML lands rather than only after the chart data re-fetch completes, removing the visible flash back to the wrong button.
+- Invoices/Clients/Quotes/Expenses tabs' page-size dropdown ("All" option) visibly redrew and widened right after a background refresh (see 2.11.41) — `refreshTable()` relabeled the `99999` option to "All" synchronously right after recreating the DataTable, before the library had finished laying out the selector, so the wider "99999" text rendered first. Matched the same 100ms-delayed relabel already used at initial page load.
+
 ## [2.11.41] - 2026-09-01
 
 ### Fixed
