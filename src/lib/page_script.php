@@ -3170,6 +3170,7 @@
                 const json = await res.json();
                 if (json.success) {
                     showToast('Backup generated and saved to the backups folder!');
+                    loadBackupList();
                 } else {
                     showToast(json.error || 'Failed to generate backup', true);
                 }

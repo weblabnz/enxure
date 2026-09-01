@@ -61,11 +61,15 @@ function renderDashboardStats($mysqli, int $currentUserId, array $settings, arra
     // the row growing unbounded. The last 3 start hidden; a saved layout (see
     // $dashboardLayouts above) overrides these defaults once the user's
     // customized anything.
+    $outstanding_total = array_sum($outstanding_by_ccy);
     $tidbits = [
         ['id' => 'dash-total-invoiced', 'label' => 'Total Invoiced (All Time)', 'icon' => 'fa-sack-dollar', 'iconClass' => '', 'valueStyle' => '', 'value' => invoxaFormatMoneyByCurrency($total_invoiced_by_ccy), 'hidden' => false],
-        ['id' => 'dash-this-month', 'label' => 'This Month', 'icon' => 'fa-calendar-check', 'iconClass' => 'success', 'valueStyle' => 'color: var(--success)', 'value' => invoxaFormatMoneyByCurrency($total_monthly_by_ccy), 'hidden' => false],
-        ['id' => 'dash-total-outstanding', 'label' => 'Total Outstanding', 'icon' => 'fa-hourglass-half', 'iconClass' => 'warning', 'valueStyle' => 'color: var(--warning)', 'value' => invoxaFormatMoneyByCurrency($outstanding_by_ccy), 'hidden' => false],
-        ['id' => 'dash-active-clients', 'label' => 'Active Clients', 'icon' => 'fa-users', 'iconClass' => '', 'valueStyle' => '', 'value' => (string) $client_count, 'hidden' => false],
+        // Invoiced-this-month, not paid-this-month — same "neutral volume" bucket
+        // as Total Invoiced above, not the "money received" green used for
+        // Total Paid, since nothing here confirms it's actually been collected.
+        ['id' => 'dash-this-month', 'label' => 'This Month', 'icon' => 'fa-calendar-check', 'iconClass' => '', 'valueStyle' => '', 'value' => invoxaFormatMoneyByCurrency($total_monthly_by_ccy), 'hidden' => false],
+        ['id' => 'dash-total-outstanding', 'label' => 'Total Outstanding', 'icon' => 'fa-hourglass-half', 'iconClass' => $outstanding_total > 0 ? 'warning' : 'success', 'valueStyle' => 'color: var(--' . ($outstanding_total > 0 ? 'warning' : 'success') . ')', 'value' => invoxaFormatMoneyByCurrency($outstanding_by_ccy), 'hidden' => false],
+        ['id' => 'dash-active-clients', 'label' => 'Active Clients', 'icon' => 'fa-users', 'iconClass' => 'success', 'valueStyle' => 'color: var(--success)', 'value' => (string) $client_count, 'hidden' => false],
         ['id' => 'dash-total-paid', 'label' => 'Total Paid (All Time)', 'icon' => 'fa-circle-check', 'iconClass' => 'success', 'valueStyle' => 'color: var(--success)', 'value' => invoxaFormatMoneyByCurrency($total_paid_by_ccy), 'hidden' => true],
         ['id' => 'dash-overdue-count', 'label' => 'Overdue Invoices', 'icon' => 'fa-circle-exclamation', 'iconClass' => 'danger', 'valueStyle' => 'color: var(--danger)', 'value' => (string) count($overdueInvoices), 'hidden' => true],
         ['id' => 'dash-failed-emails', 'label' => 'Failed Emails', 'icon' => 'fa-triangle-exclamation', 'iconClass' => 'danger', 'valueStyle' => 'color: var(--danger)', 'value' => (string) count($failedInvoices), 'hidden' => true],
@@ -273,23 +277,24 @@ function renderStatsSection(): string
                         </div>
                         <div class="card-body">
                             <div class="stats-grid" style="margin-bottom: 0;">
-                                <div class="stat-card" style="border-top: 3px solid #10b981;">
+                                <div class="stat-card" style="border-top: 3px solid var(--success);">
                                     <div class="label">All-Time Revenue</div>
                                     <div class="value"><?= invoxaFormatMoneyByCurrency($stats_all_time_revenue_by_ccy) ?></div>
                                 </div>
-                                <div class="stat-card" style="border-top: 3px solid #ef4444;">
+                                <div class="stat-card"
+                                    style="border-top: 3px solid <?= $stats_outstanding_revenue > 0 ? 'var(--warning)' : 'var(--success)' ?>;">
                                     <div class="label">Outstanding Receivables</div>
                                     <div class="value"><?= invoxaFormatMoneyByCurrency($stats_outstanding_revenue_by_ccy) ?> <span
                                             style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_overdue_count ?>
                                             overdue)</span></div>
                                 </div>
-                                <div class="stat-card" style="border-top: 3px solid var(--warning);">
+                                <div class="stat-card" style="border-top: 3px solid var(--success);">
                                     <div class="label">Monthly Recurring (<span class="has-tooltip"
                                             data-tip="Monthly Recurring Revenue — total fixed monthly fees from active clients">MRR</span>)
                                     </div>
                                     <div class="value"><?= invoxaFormatMoneyByCurrency($stats_mrr_by_ccy) ?></div>
                                 </div>
-                                <div class="stat-card" style="border-top: 3px solid #3b82f6;">
+                                <div class="stat-card" style="border-top: 3px solid var(--accent);">
                                     <div class="label">Average Invoice Value</div>
                                     <div class="value"><?= invoxaFormatMoneyByCurrency($stats_avg_invoice_by_ccy) ?></div>
                                 </div>
@@ -340,16 +345,16 @@ function renderStatsSection(): string
                         </div>
                         <div class="card-body">
                             <div class="stats-grid" style="margin-bottom: 0;">
-                                <div class="stat-card" style="border-top: 3px solid #3b82f6;">
+                                <div class="stat-card" style="border-top: 3px solid var(--accent);">
                                     <div class="label">Total Invoiced</div>
                                     <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_invoiced_by_ccy) ?></div>
                                 </div>
-                                <div class="stat-card" style="border-top: 3px solid #10b981;">
+                                <div class="stat-card" style="border-top: 3px solid var(--success);">
                                     <div class="label">Total Paid</div>
                                     <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_paid_by_ccy) ?></div>
                                 </div>
                                 <div class="stat-card"
-                                    style="border-top: 3px solid <?= $stats_ty_outstanding > 0 ? '#f59e0b' : '#10b981' ?>;">
+                                    style="border-top: 3px solid <?= $stats_ty_outstanding > 0 ? 'var(--warning)' : 'var(--success)' ?>;">
                                     <div class="label">Outstanding</div>
                                     <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_outstanding_by_ccy) ?></div>
                                 </div>
@@ -410,28 +415,28 @@ function renderStatsSection(): string
                         <ul
                             style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:0.75rem;">
                             <li
-                                style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(16,185,129,0.3); padding-bottom:0.6rem; background:rgba(16,185,129,0.08); border-radius:6px; padding:0.5rem 0.6rem; margin-bottom:0.25rem;">
-                                <span style="color:#10b981; font-weight:600;">Expected Yearly Value:</span>
-                                <strong style="color:#10b981;">$<?= number_format($stats_12m_projected, 2) ?></strong>
+                                style="display:flex; justify-content:space-between; border-bottom:1px solid color-mix(in srgb, var(--success) 30%, transparent); padding-bottom:0.6rem; background:color-mix(in srgb, var(--success) 8%, transparent); border-radius:6px; padding:0.5rem 0.6rem; margin-bottom:0.25rem;">
+                                <span style="color:var(--success); font-weight:600;">Expected Yearly Value:</span>
+                                <strong style="color:var(--success);">$<?= number_format($stats_12m_projected, 2) ?></strong>
                             </li>
                             <li
                                 style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.6rem;">
                                 <span style="color:var(--text-secondary);">Recurring (<span class="has-tooltip"
                                         data-tip="Monthly Recurring Revenue × 12 months">MRR</span> × 12):</span>
-                                <strong style="color:var(--warning);">$<?= number_format($stats_mrr * 12, 2) ?></strong>
+                                <strong style="color:var(--success);">$<?= number_format($stats_mrr * 12, 2) ?></strong>
                             </li>
                             <li
                                 style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.6rem;">
                                 <span style="color:var(--text-secondary);">Outstanding Invoices:</span>
                                 <strong
-                                    style="color:#f59e0b;">$<?= number_format($stats_outstanding_revenue, 2) ?></strong>
+                                    style="color:var(--warning);">$<?= number_format($stats_outstanding_revenue, 2) ?></strong>
                             </li>
                             <li
                                 style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.6rem;">
                                 <span style="color:var(--text-secondary);"><span class="has-tooltip"
                                         data-tip="MRR alone — what you'd expect month-to-month once the current outstanding balance is collected, not a smoothed average of the one-off backlog">Recurring
                                         Monthly Avg</span>:</span>
-                                <strong style="color:#10b981;">$<?= number_format($stats_mrr, 2) ?></strong>
+                                <strong style="color:var(--success);">$<?= number_format($stats_mrr, 2) ?></strong>
                             </li>
                             <li style="display:flex; justify-content:space-between;">
                                 <span style="color:var(--text-secondary);"><span class="has-tooltip"
@@ -499,12 +504,12 @@ function renderStatsSection(): string
                                 <li
                                     style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">
                                     <span style="color:var(--text-secondary);">Active Clients:</span>
-                                    <strong style="color:#10b981;"><?= $stats_active_clients ?></strong>
+                                    <strong style="color:var(--success);"><?= $stats_active_clients ?></strong>
                                 </li>
                                 <li
                                     style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">
                                     <span style="color:var(--text-secondary);">Inactive Clients:</span>
-                                    <strong style="color:#ef4444;"><?= $stats_inactive_clients ?></strong>
+                                    <strong style="color:var(--danger);"><?= $stats_inactive_clients ?></strong>
                                 </li>
                                 <li
                                     style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">
@@ -514,7 +519,7 @@ function renderStatsSection(): string
                                 <li
                                     style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">
                                     <span style="color:var(--text-secondary);">New Clients This Month:</span>
-                                    <strong style="color:#10b981;">+<?= $stats_new_clients_month ?></strong>
+                                    <strong style="color:var(--success);">+<?= $stats_new_clients_month ?></strong>
                                 </li>
                                 <li style="display: flex; justify-content: space-between; align-items:flex-start;">
                                     <span style="color:var(--text-secondary); padding-top:0.15rem;">Billing Frequency:</span>
@@ -567,10 +572,10 @@ function renderStatsSection(): string
                                     <?php foreach ($top_clients as $index => $tc): ?>
                                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                                             <td style="padding: 1rem;">
-                                                <?= ($index == 0) ? '<i class="fa-solid fa-crown" style="color: #f59e0b; margin-right: 0.5rem;"></i>' : '' ?>
+                                                <?= ($index == 0) ? '<i class="fa-solid fa-crown" style="color: var(--warning); margin-right: 0.5rem;"></i>' : '' ?>
                                                 <?= htmlspecialchars($tc['client_name']) ?>
                                             </td>
-                                            <td style="padding: 1rem; text-align: right; font-weight: 600; color: #10b981;">
+                                            <td style="padding: 1rem; text-align: right; font-weight: 600; color: var(--success);">
                                                 <?= invoxaFormatMoneyByCurrency($tc['by_ccy']) ?>
                                             </td>
                                         </tr>
@@ -630,16 +635,16 @@ function renderStatsSection(): string
                         </div>
                         <div class="card-body">
                             <div class="stats-grid" style="margin-bottom: 0;">
-                                <div class="stat-card" style="border-top: 3px solid #10b981;">
+                                <div class="stat-card" style="border-top: 3px solid var(--success);">
                                     <div class="label">Revenue Received</div>
                                     <div class="value">$<?= number_format($stats_ty_paid, 2) ?></div>
                                 </div>
-                                <div class="stat-card" style="border-top: 3px solid #ef4444;">
+                                <div class="stat-card" style="border-top: 3px solid var(--danger);">
                                     <div class="label">Expenses</div>
                                     <div class="value">$<?= number_format($stats_expense_ty_total, 2) ?></div>
                                 </div>
                                 <div class="stat-card"
-                                    style="border-top: 3px solid <?= $stats_net_income_ty >= 0 ? '#10b981' : '#ef4444' ?>;">
+                                    style="border-top: 3px solid <?= $stats_net_income_ty >= 0 ? 'var(--success)' : 'var(--danger)' ?>;">
                                     <div class="label">Net Income</div>
                                     <div class="value">$<?= number_format($stats_net_income_ty, 2) ?></div>
                                 </div>
@@ -742,7 +747,7 @@ function renderStatsSection(): string
                                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                                             <td style="padding: 1rem;"><?= htmlspecialchars($tym['month']) ?></td>
                                             <td style="padding: 1rem; text-align: right;"><?= invoxaFormatMoneyByCurrency($tym['by_ccy']['invoiced']) ?></td>
-                                            <td style="padding: 1rem; text-align: right; color:#10b981;"><?= invoxaFormatMoneyByCurrency($tym['by_ccy']['paid']) ?></td>
+                                            <td style="padding: 1rem; text-align: right; color:var(--success);"><?= invoxaFormatMoneyByCurrency($tym['by_ccy']['paid']) ?></td>
                                             <td style="padding: 1rem; text-align: right; color:var(--warning);"><?= invoxaFormatMoneyByCurrency($tym['by_ccy']['outstanding']) ?></td>
                                             <td style="padding: 1rem; text-align: right;"><?= (int) $tym['unpaid_count'] ?></td>
                                         </tr>
@@ -848,12 +853,12 @@ function renderStatsSection(): string
                             <div style="display: flex; gap: 2rem; flex-wrap: wrap; align-items:center;">
                                 <div>
                                     <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Success Rate (All-Time):</p>
-                                    <div style="font-size: 1.5rem; font-weight: 700; color: <?= $stats_email_success_rate >= 95 ? '#10b981' : ($stats_email_success_rate >= 80 ? 'var(--warning)' : 'var(--danger)') ?>;">
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: <?= $stats_email_success_rate >= 95 ? 'var(--success)' : ($stats_email_success_rate >= 80 ? 'var(--warning)' : 'var(--danger)') ?>;">
                                         <?= $stats_email_success_rate ?>%</div>
                                 </div>
                                 <div>
                                     <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Sent:</p>
-                                    <div style="font-size: 1.2rem; font-weight: 700; color:#10b981;"><?= number_format($stats_email_sent) ?></div>
+                                    <div style="font-size: 1.2rem; font-weight: 700; color:var(--success);"><?= number_format($stats_email_sent) ?></div>
                                 </div>
                                 <div>
                                     <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Failed:</p>
@@ -902,14 +907,14 @@ function renderStatsSection(): string
                                 </div>
                                 <div>
                                     <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">License:</p>
-                                    <div style="font-size: 1.1rem; font-weight: 700; color:<?= $licenseValid ? '#10b981' : 'var(--warning)' ?>;">
+                                    <div style="font-size: 1.1rem; font-weight: 700; color:<?= $licenseValid ? 'var(--success)' : 'var(--warning)' ?>;">
                                         <?= $licenseValid ? 'Licensed' : 'Unlicensed' ?></div>
                                 </div>
                                 <div>
                                     <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Recurring Billing Cron:</p>
                                     <div style="font-size: 1.1rem; font-weight: 700;"><code><?= htmlspecialchars($currentCron) ?></code>
                                     </div>
-                                    <div style="font-size: 0.8rem; color:<?= $cronEnabled ? '#10b981' : 'var(--text-secondary)' ?>;">
+                                    <div style="font-size: 0.8rem; color:<?= $cronEnabled ? 'var(--success)' : 'var(--text-secondary)' ?>;">
                                         <?= $cronEnabled ? 'Enabled' : 'Disabled' ?></div>
                                 </div>
                             </div>
@@ -948,7 +953,7 @@ function renderStatsSection(): string
                             <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
                                 <div>
                                     <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Unmatched (Last 30 Days):</p>
-                                    <div style="font-size: 1.5rem; font-weight: 700; color:<?= $stats_webhook_unmatched_30d > 0 ? 'var(--warning)' : '#10b981' ?>;">
+                                    <div style="font-size: 1.5rem; font-weight: 700; color:<?= $stats_webhook_unmatched_30d > 0 ? 'var(--warning)' : 'var(--success)' ?>;">
                                         <?= number_format($stats_webhook_unmatched_30d) ?></div>
                                 </div>
                                 <div>
@@ -979,7 +984,7 @@ function renderStatsSection(): string
                                 <div>
                                     <p style="color:var(--text-secondary); margin-bottom: 0.5rem;">Backup Storage Health:
                                     </p>
-                                    <div style="font-size: 1.2rem; font-weight: 700; color: #10b981;"><?= $backup_count ?>
+                                    <div style="font-size: 1.2rem; font-weight: 700; color: var(--success);"><?= $backup_count ?>
                                         Files</div>
                                     <div style="font-size: 0.8rem; color: var(--text-secondary);">Last Backup:
                                         <?= $latest_backup ?>
@@ -1004,7 +1009,7 @@ function renderStatsSection(): string
                                         <li class="stat-table-item <?= $isInvoxa ? 'invoxa-table' : 'other-table' ?>"
                                             style="<?= !$isInvoxa ? 'display:none;' : 'display:flex;' ?> justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid var(--border);">
                                             <span style="color: var(--text-primary);"><?= htmlspecialchars($tName) ?></span>
-                                            <span style="color: #10b981; font-weight: 600;"><?= number_format($tRows) ?></span>
+                                            <span style="color: var(--success); font-weight: 600;"><?= number_format($tRows) ?></span>
                                         </li>
                                     <?php endforeach; ?>
                                 </ul>

@@ -2,6 +2,14 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.44] - 2026-09-02
+
+### Fixed
+- "Create Backup" on the Backup & Restore page never refreshed the Restore Database dropdown after a successful backup — unlike Import Backup File, which already called `loadBackupList()` on success, `backupDatabase()` didn't, so a freshly created backup only showed up in the dropdown after a manual refresh click or a full page reload.
+
+### Changed
+- Statistics tab and Dashboard stat-card colors (top-border accents, tidbit icon badges, and assorted inline value colors) now follow one consistent rule instead of mixed hardcoded hex and ad hoc choices: green (`var(--success)`) for money actually received, amber (`var(--warning)`) for money still owed, red (`var(--danger)`) for costs/failures, blue (`var(--accent)`) for neutral volume metrics. This surfaced and fixed several real mismatches — "Outstanding Receivables" was hardcoded red while the equivalent Tax Year "Outstanding" card was amber/green; Monthly Recurring Revenue was colored amber (a caution color) despite being a positive metric; the Forecasting card showed MRR × 12 in amber directly above the same MRR figure in green; the Dashboard's "This Month" tidbit (invoiced, not yet paid) was colored green like actually-received revenue; the Dashboard's "Total Outstanding" never flipped to green at $0 the way the Statistics tab's equivalent cards now do; and "Active Clients" was green in the Statistics tab but uncolored on the Dashboard. Also converted the remaining hardcoded hex colors across `stats.php` to their matching theme variables so they track light/dark mode instead of staying pinned to the dark theme's shades.
+
 ## [2.11.43] - 2026-09-01
 
 ### Fixed
