@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.41] - 2026-09-01
+
+### Fixed
+- Invoices/Clients/Quotes/Expenses tabs' background refresh (clicking the nav item while data changed elsewhere) never actually worked: `simple-datatables` rebuilds each tab's `<tbody>` for its own pagination on page load, so the id `refreshTable()` looked up (e.g. `invoicesTbody`) no longer existed by the time it ran, throwing `TypeError: Cannot read properties of null (reading 'closest')` before the fetch ever fired. `refreshTable()` and `waitForTableRefresh()` now look the tbody up live via the table element instead of a stale id. Also added the missing `destroyable: true` DataTable option, without which `.destroy()` was a no-op and would have stacked a duplicate DataTable wrapper on every refresh once the crash above was fixed.
+
 ## [2.11.40] - 2026-09-01
 
 ### Changed

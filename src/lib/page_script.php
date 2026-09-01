@@ -144,10 +144,16 @@
             // before it lands) — waits for that tbody swap to actually happen before
             // filtering, instead of guessing at a fixed delay that could land either
             // side of it.
-            const __tbodyIdsByTab = { invoices: 'invoicesTbody', clients: 'clientsTbody', quotes: 'quotesTbody', expenses: 'expensesTbody' };
+            // simple-datatables rebuilds the table's <tbody> for its own pagination on
+            // construction, so a tbody id baked into the server-rendered HTML doesn't
+            // survive — look it up live under the table each time instead.
+            function tabTbody(which) {
+                const table = document.getElementById(which + 'Table');
+                return table ? table.querySelector('tbody') : null;
+            }
             function waitForTableRefresh(which, maxWaitMs = 1500) {
                 return new Promise(resolve => {
-                    const tbody = document.getElementById(__tbodyIdsByTab[which]);
+                    const tbody = tabTbody(which);
                     if (!tbody) return resolve();
                     let done = false;
                     const finish = () => { if (!done) { done = true; observer.disconnect(); resolve(); } };
@@ -943,7 +949,7 @@
             };
             function getTblOpts(which) {
                 const preferredPageSize = parseInt(localStorage.getItem('invoxa_table_page_size'), 10) || 12;
-                return { searchable: true, fixedHeight: false, perPage: preferredPageSize, perPageSelect: [12, 30, 50, 99999], labels: { noRows: tblEmptyMessages[which] || 'No entries found', searchLabel: '' } };
+                return { searchable: true, fixedHeight: false, destroyable: true, perPage: preferredPageSize, perPageSelect: [12, 30, 50, 99999], labels: { noRows: tblEmptyMessages[which] || 'No entries found', searchLabel: '' } };
             }
             const dataTables = {};
             if (document.getElementById("invoicesTable")) dataTables.invoices = new simpleDatatables.DataTable("#invoicesTable", getTblOpts('invoices'));
@@ -955,17 +961,16 @@
             // Background refresh for the Invoices/Clients/Quotes tabs (see nav() above) —
             // fetches the tab's <tr> rows from ?api=table_html, swaps them in, and
             // reinitializes the DataTable plugin (destroy+recreate, same as first init).
-            const tbodyIds = { invoices: 'invoicesTbody', clients: 'clientsTbody', quotes: 'quotesTbody', expenses: 'expensesTbody' };
             async function refreshTable(which) {
-                const tbodyId = tbodyIds[which];
-                if (!tbodyId) return;
-                const cardEl = document.getElementById(tbodyId).closest('.card');
+                const tbody = tabTbody(which);
+                if (!tbody) return;
+                const cardEl = tbody.closest('.card');
                 if (cardEl) cardEl.classList.add('table-refreshing');
                 try {
                     const res = await fetch('?api=table_html&which=' + which);
                     const html = await res.text();
                     if (dataTables[which]) dataTables[which].destroy();
-                    document.getElementById(tbodyId).innerHTML = html;
+                    tabTbody(which).innerHTML = html;
                     dataTables[which] = new simpleDatatables.DataTable('#' + which + 'Table', getTblOpts(which));
                     document.querySelectorAll('#sec-' + which + ' .datatable-selector option').forEach(opt => { if (opt.value == "99999") opt.textContent = "All"; });
                 } catch (e) {
