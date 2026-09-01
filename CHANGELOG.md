@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.43] - 2026-09-01
+
+### Fixed
+- 2.11.42's fix for the page-size dropdown's "All" option still relabeled it after the fact (just with better timing), which didn't eliminate the visible resize on refresh — the option briefly rendered as "99999" before being renamed. `simple-datatables` actually supports a `[label, value]` pair per `perPageSelect` entry, so `getTblOpts()` now passes `['All', 99999]` directly and the dropdown never renders the wrong text in the first place, on both initial load and background refresh. Removed the now-unnecessary relabeling `setTimeout` calls entirely.
+
 ## [2.11.42] - 2026-09-01
 
 ### Fixed

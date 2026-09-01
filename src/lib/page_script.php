@@ -949,14 +949,13 @@
             };
             function getTblOpts(which) {
                 const preferredPageSize = parseInt(localStorage.getItem('invoxa_table_page_size'), 10) || 12;
-                return { searchable: true, fixedHeight: false, destroyable: true, perPage: preferredPageSize, perPageSelect: [12, 30, 50, 99999], labels: { noRows: tblEmptyMessages[which] || 'No entries found', searchLabel: '' } };
+                return { searchable: true, fixedHeight: false, destroyable: true, perPage: preferredPageSize, perPageSelect: [12, 30, 50, ['All', 99999]], labels: { noRows: tblEmptyMessages[which] || 'No entries found', searchLabel: '' } };
             }
             const dataTables = {};
             if (document.getElementById("invoicesTable")) dataTables.invoices = new simpleDatatables.DataTable("#invoicesTable", getTblOpts('invoices'));
             if (document.getElementById("clientsTable")) dataTables.clients = new simpleDatatables.DataTable("#clientsTable", getTblOpts('clients'));
             if (document.getElementById("quotesTable")) dataTables.quotes = new simpleDatatables.DataTable("#quotesTable", getTblOpts('quotes'));
             if (document.getElementById("expensesTable")) dataTables.expenses = new simpleDatatables.DataTable("#expensesTable", getTblOpts('expenses'));
-            setTimeout(() => { document.querySelectorAll('.datatable-selector option').forEach(opt => { if (opt.value == "99999") opt.textContent = "All"; }); }, 100);
 
             // Background refresh for the Invoices/Clients/Quotes tabs (see nav() above) —
             // fetches the tab's <tr> rows from ?api=table_html, swaps them in, and
@@ -972,7 +971,6 @@
                     if (dataTables[which]) dataTables[which].destroy();
                     tabTbody(which).innerHTML = html;
                     dataTables[which] = new simpleDatatables.DataTable('#' + which + 'Table', getTblOpts(which));
-                    setTimeout(() => { document.querySelectorAll('#sec-' + which + ' .datatable-selector option').forEach(opt => { if (opt.value == "99999") opt.textContent = "All"; }); }, 100);
                 } catch (e) {
                     // Silent by design — a failed background refresh leaves the existing,
                     // still-valid (if slightly stale) table in place rather than surfacing
