@@ -25,7 +25,7 @@ function invoxaHandleTestEmail($mysqli, array $settings, string $emailPassword):
         $mail->isSMTP();
         $mail->Host = getenv('SMTP_HOST') ?: '';
         $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
-        $mail->SMTPAuth = true;
+        $mail->SMTPAuth = trim((string) (getenv('SMTP_USER') ?: '')) !== '';
         $mail->Username = getenv('SMTP_USER') ?: '';
         $mail->Password = $emailPassword;
         $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {

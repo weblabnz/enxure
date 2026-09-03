@@ -2,6 +2,14 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.47] - 2026-09-04
+
+### Fixed
+- Same `SMTPAuth`-hardcoded-`true` issue as 2.11.46, for the remaining send paths: password reset, welcome, and verification emails, and Settings > Email's "Send Test Email" button. All were forcing `AUTH LOGIN` even with no `SMTP_USER` configured, breaking no-auth relays like Mailpit.
+
+### Added
+- Settings > Email shows an "Open Mailpit" button next to the "Mail Sink" badge when `SMTP_HOST` is `mailpit`, linking straight to its web inbox instead of requiring the port to be looked up separately.
+
 ## [2.11.46] - 2026-09-04
 
 ### Fixed

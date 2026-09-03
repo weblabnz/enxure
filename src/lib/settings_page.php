@@ -476,7 +476,10 @@
                                 <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-envelope"
                                         style="color:var(--accent); margin-right:0.5rem;"></i>Test Email Server</h3>
                                 <?php if (getenv('SMTP_HOST') === 'mailpit'): ?>
-                                    <span class="badge" style="background:rgba(255,193,7,0.12); color:var(--warning); border:1px solid rgba(255,193,7,0.25);">Mail Sink</span>
+                                    <span>
+                                        <a href="http://<?= htmlspecialchars(explode(':', $_SERVER['HTTP_HOST'])[0]) ?>:8026" target="_blank" class="btn" style="padding:0.25rem 0.6rem; font-size:0.85rem;"><i class="fa-solid fa-inbox"></i> Open Mailpit</a>
+                                        <span class="badge" style="background:rgba(255,193,7,0.12); color:var(--warning); border:1px solid rgba(255,193,7,0.25);">Mail Sink</span>
+                                    </span>
                                 <?php elseif (trim((string) getenv('SMTP_HOST')) !== ''): ?>
                                     <span class="badge" style="background:rgba(40,167,69,0.12); color:var(--success); border:1px solid rgba(40,167,69,0.25);">Real SMTP</span>
                                 <?php else: ?>
