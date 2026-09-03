@@ -78,6 +78,58 @@ function renderClientRows(array $clients): string
     return ob_get_clean();
 }
 
+// Label + formatter for each editable invoxa_clients column, in the order
+// they should appear in a diff — used by invoxaHandleSaveClient() to turn an
+// old-row/new-values pair into the "Field: old → new" notes stored on the
+// client_updated audit entry.
+const INVOXA_CLIENT_DIFF_FIELDS = [
+    'client_name' => ['Name', null],
+    'email' => ['Email', null],
+    'phone' => ['Phone', null],
+    'address' => ['Address', null],
+    'account_name' => ['Account name', null],
+    'account_number' => ['Account number', null],
+    'monthly_rate' => ['Monthly rate', 'money'],
+    'payment_terms_days' => ['Payment terms (days)', null],
+    'billing_frequency' => ['Billing frequency', null],
+    'discount_pct' => ['Discount %', 'money'],
+    'tax_rate' => ['Tax rate %', 'money'],
+    'currency' => ['Currency', null],
+    'is_active' => ['Active', 'bool'],
+    'is_test' => ['Test client', 'bool'],
+];
+
+function invoxaFormatClientDiffValue($value, ?string $kind): string
+{
+    if ($kind === 'money') {
+        return number_format((float) $value, 2);
+    }
+    if ($kind === 'bool') {
+        return ((int) $value) ? 'Yes' : 'No';
+    }
+    $value = trim((string) $value);
+    return $value === '' ? '(empty)' : $value;
+}
+
+// Compares $old (a row fetched before the write) against $new (the
+// post-write values, keyed the same way) and returns one "Field: a → b"
+// string per changed column, skipping anything untouched.
+function invoxaClientFieldDiffs(array $old, array $new): array
+{
+    $diffs = [];
+    foreach (INVOXA_CLIENT_DIFF_FIELDS as $field => [$label, $kind]) {
+        $oldVal = $old[$field] ?? '';
+        $newVal = $new[$field] ?? '';
+        $changed = $kind === 'money'
+            ? abs((float) $oldVal - (float) $newVal) > 0.001
+            : (string) $oldVal !== (string) $newVal;
+        if ($changed) {
+            $diffs[] = $label . ': ' . invoxaFormatClientDiffValue($oldVal, $kind) . ' → ' . invoxaFormatClientDiffValue($newVal, $kind);
+        }
+    }
+    return $diffs;
+}
+
 function invoxaHandleSaveClient($mysqli): void
 {
 $id = (int) ($_POST['id'] ?? 0);
@@ -105,14 +157,27 @@ $taxRate = max(0, min(100, (float) ($_POST['tax_rate'] ?? 0)));
 $currency = invoxaNormalizeCurrencyCode($_POST['currency'] ?? '');
 $act = (int) ($_POST['is_active'] ?? 0);
 $test = (int) ($_POST['is_test'] ?? 0);
+$newValues = ['client_name' => $name, 'email' => $email, 'phone' => $phone, 'address' => $address, 'account_name' => $aname, 'account_number' => $anum, 'monthly_rate' => $rate, 'payment_terms_days' => $terms, 'billing_frequency' => $freq, 'discount_pct' => $discountPct, 'tax_rate' => $taxRate, 'currency' => $currency, 'is_active' => $act, 'is_test' => $test];
 if ($id > 0) {
+    $oldRow = $mysqli->prepare("SELECT * FROM invoxa_clients WHERE id = ?");
+    $oldRow->bind_param("i", $id);
+    $oldRow->execute();
+    $oldRow = $oldRow->get_result()->fetch_assoc();
     $stmt = $mysqli->prepare("UPDATE invoxa_clients SET client_name=?, email=?, phone=?, address=?, account_name=?, account_number=?, monthly_rate=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, currency=?, is_active=?, is_test=? WHERE id=?");
     $stmt->bind_param("ssssssdisddsiii", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $id);
+    $stmt->execute();
+    if ($oldRow) {
+        $diffs = invoxaClientFieldDiffs($oldRow, $newValues);
+        if ($diffs) {
+            invoxaLogAction($mysqli, null, '', 'client_updated', $name . ' — ' . implode('; ', $diffs));
+        }
+    }
 } else {
     $stmt = $mysqli->prepare("INSERT INTO invoxa_clients (client_name, email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, discount_pct, tax_rate, currency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("ssssssdisddsiis", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $key);
+    $stmt->execute();
+    invoxaLogAction($mysqli, null, '', 'client_created', $name . ' — ' . implode('; ', invoxaClientFieldDiffs(array_fill_keys(array_keys(INVOXA_CLIENT_DIFF_FIELDS), ''), $newValues)));
 }
-$stmt->execute();
 echo json_encode(['success' => true]);
 exit;
 }
@@ -135,9 +200,17 @@ if (!in_array($field, ['is_active', 'is_test'], true)) {
     exit;
 }
 $value = (int) ($_POST['value'] ?? 0);
+$before = $mysqli->prepare("SELECT client_name, $field AS current_value FROM invoxa_clients WHERE id = ?");
+$before->bind_param("i", $id);
+$before->execute();
+$before = $before->get_result()->fetch_assoc();
 $stmt = $mysqli->prepare("UPDATE invoxa_clients SET $field = ? WHERE id = ?");
 $stmt->bind_param("ii", $value, $id);
 $stmt->execute();
+if ($before && (int) $before['current_value'] !== $value) {
+    [$label] = INVOXA_CLIENT_DIFF_FIELDS[$field];
+    invoxaLogAction($mysqli, null, '', 'client_updated', $before['client_name'] . ' — ' . $label . ': ' . invoxaFormatClientDiffValue($before['current_value'], 'bool') . ' → ' . invoxaFormatClientDiffValue($value, 'bool'));
+}
 echo json_encode(['success' => true]);
 exit;
 }
@@ -173,11 +246,6 @@ exit;
 
 function invoxaHandleImportClientsCsv($mysqli): void
 {
-// Expects a CSV with header row: Client Name, Email, Rate, Billing
-// Frequency, Account Name, Account Number, Payment Terms Days, Phone,
-// Address — the Add Client fields, not the richer "Export Clients" CSV
-// format. Phone/Address are trailing and optional so CSVs written
-// before those fields existed still import cleanly.
 if (!isset($_FILES['clients_file']) || $_FILES['clients_file']['error'] !== UPLOAD_ERR_OK) {
     echo json_encode(['success' => false, 'error' => 'No file uploaded, or the upload failed.']);
     exit;
@@ -191,6 +259,17 @@ if ($fh === false) {
     echo json_encode(['success' => false, 'error' => 'Failed to read the uploaded file.']);
     exit;
 }
+echo json_encode(array_merge(['success' => true], invoxaImportClientsCsvRows($mysqli, $fh)));
+exit;
+}
+
+// Expects a CSV with header row: Client Name, Email, Rate, Billing
+// Frequency, Account Name, Account Number, Payment Terms Days, Phone,
+// Address — the Add Client fields, not the richer "Export Clients" CSV
+// format. Phone/Address are trailing and optional so CSVs written
+// before those fields existed still import cleanly.
+function invoxaImportClientsCsvRows($mysqli, $fh): array
+{
 $existingKeys = [];
 $keyRes = $mysqli->query("SELECT client_key FROM invoxa_clients");
 while ($kr = $keyRes->fetch_assoc())
@@ -214,7 +293,7 @@ while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
         continue;
     }
     $email = trim($row[1] ?? '');
-    $rate = (float) ($row[2] ?? 0);
+    $rate = invoxaParseAmount($row[2] ?? '0');
     $freq = in_array(strtolower(trim($row[3] ?? '')), ['weekly', 'monthly', 'quarterly', 'annually'], true)
         ? strtolower(trim($row[3])) : 'monthly';
     $aname = trim($row[4] ?? '');
@@ -250,8 +329,7 @@ while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
     }
 }
 fclose($fh);
-echo json_encode(['success' => true, 'imported' => $imported, 'skipped' => $skipped, 'errors' => $errors]);
-exit;
+return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
 }
 
 function invoxaHandleGetCrmData($mysqli): void

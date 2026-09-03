@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.45] - 2026-09-04
+
+### Added
+- Editing or creating a client now logs a `client_updated`/`client_created` audit entry listing exactly which fields changed, e.g. "Monthly rate: 500.00 → 550.00; Currency: USD → NZD" — previously the Audit Log only recorded that a client was touched, not what changed. Toggling a client's Active or Test status from the client list logs the same way.
+
 ## [2.11.44] - 2026-09-02
 
 ### Fixed
