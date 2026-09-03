@@ -132,4 +132,5 @@ volumes:
 
 networks:
   invoxa-net:
+    name: invoxa-net
     driver: bridge
