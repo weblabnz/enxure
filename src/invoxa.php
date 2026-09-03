@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.45');
+define('APP_VERSION', '2.11.46');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -382,7 +382,7 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
         $mail->isSMTP();
         $mail->Host = getenv('SMTP_HOST') ?: '';
         $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
-        $mail->SMTPAuth = true;
+        $mail->SMTPAuth = trim((string) (getenv('SMTP_USER') ?: '')) !== '';
         $mail->Username = getenv('SMTP_USER') ?: '';
         $mail->Password = $emailPassword;
         $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {
@@ -582,7 +582,7 @@ function sendOverdueReminders($mysqli, array $settings, string $emailPassword): 
             $mail->isSMTP();
             $mail->Host = getenv('SMTP_HOST') ?: '';
             $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
-            $mail->SMTPAuth = true;
+            $mail->SMTPAuth = trim((string) (getenv('SMTP_USER') ?: '')) !== '';
             $mail->Username = getenv('SMTP_USER') ?: '';
             $mail->Password = $emailPassword;
             $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {
@@ -852,7 +852,12 @@ if ($fh === false) {
     echo json_encode(['success' => false, 'error' => 'Failed to read the uploaded file.']);
     exit;
 }
+echo json_encode(array_merge(['success' => true], invoxaImportInvoicesCsvRows($mysqli, $fh, $settings)));
+exit;
+}
 
+function invoxaImportInvoicesCsvRows($mysqli, $fh, array $settings): array
+{
 $clientsByName = [];
 $cRes = $mysqli->query("SELECT client_key, client_name, email, currency, payment_terms_days FROM invoxa_clients");
 while ($cr = $cRes->fetch_assoc())
@@ -902,13 +907,13 @@ while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
     $dueDateTs = strtotime(trim($row[4] ?? ''));
     $termsDays = (int) ($client['payment_terms_days'] ?? 21);
     $dueDate = $dueDateTs ? date('Y-m-d', $dueDateTs) : date('Y-m-d', strtotime("$invoiceDate +{$termsDays} days"));
-    $amount = (float) ($row[5] ?? 0);
+    $amount = invoxaParseAmount($row[5] ?? '0');
     $currency = invoxaNormalizeCurrencyCode(trim($row[6] ?? '')) ?: ($client['currency'] ?? '');
     $status = strtolower(trim($row[7] ?? ''));
     if (!in_array($status, $validStatuses, true))
         $status = 'pending';
     $paidAmountRaw = trim($row[8] ?? '');
-    $paidAmount = $paidAmountRaw !== '' ? (float) $paidAmountRaw : 0.0;
+    $paidAmount = $paidAmountRaw !== '' ? invoxaParseAmount($paidAmountRaw) : 0.0;
     $paidAmountParam = $paidAmount > 0 ? $paidAmount : null;
     $paidAtTs = strtotime(trim($row[9] ?? ''));
     $paidAt = $paidAtTs ? date('Y-m-d H:i:s', $paidAtTs) : ($paidAmount > 0 ? $invoiceDate : null);
@@ -932,8 +937,7 @@ while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
     }
 }
 fclose($fh);
-echo json_encode(['success' => true, 'imported' => $imported, 'skipped' => $skipped, 'errors' => $errors]);
-exit;
+return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
 }
 
 // Same idea for the Quotes table — takes the mysqli result directly since the
@@ -1032,7 +1036,12 @@ if ($fh === false) {
     echo json_encode(['success' => false, 'error' => 'Failed to read the uploaded file.']);
     exit;
 }
+echo json_encode(array_merge(['success' => true], invoxaImportExpensesCsvRows($mysqli, $fh)));
+exit;
+}
 
+function invoxaImportExpensesCsvRows($mysqli, $fh): array
+{
 $categories = expenseCategories();
 $categoryByLabel = [];
 foreach ($categories as $catKey => $label)
@@ -1049,7 +1058,7 @@ while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
         continue;
     }
     $vendor = trim($row[1] ?? '');
-    $amount = (float) ($row[3] ?? 0);
+    $amount = invoxaParseAmount($row[3] ?? '0');
     if ($vendor === '' || $amount <= 0) {
         $skipped++;
         continue;
@@ -1076,8 +1085,7 @@ while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
     }
 }
 fclose($fh);
-echo json_encode(['success' => true, 'imported' => $imported, 'skipped' => $skipped, 'errors' => $errors]);
-exit;
+return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
 }
 
 // Recurring expense templates — the run_recurring cron action auto-logs one
@@ -1555,7 +1563,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 // Subtotal/Discount/Tax/Total breakdown matches theirs exactly. Clients
                 // saved before these columns existed have discount_pct/tax_rate = 0.00
                 // (see the ALTER TABLE migration above), so this is a no-op for them.
-                $recurLineItems = [['code' => 'WEB01', 'desc' => 'Website management', 'amount' => number_format((float) $c['monthly_rate'], 2)]];
+                $recurLineItems = [['code' => 'WEB01', 'desc' => 'Website management', 'amount' => (float) $c['monthly_rate']]];
                 $recurTotals = computeInvoiceTotals($recurLineItems, (float) ($c['discount_pct'] ?? 0), (float) ($c['tax_rate'] ?? 0));
                 $res = processInvoice($mysqli, $c, $recurTotals['total'], '', $emailPassword, $recurLineItems, null, null, $recurTotals['discount_pct'], $recurTotals['tax_rate']);
                 if ($res['success'])
@@ -1694,7 +1702,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $mail->isSMTP();
                 $mail->Host = getenv('SMTP_HOST') ?: '';
                 $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
-                $mail->SMTPAuth = true;
+                $mail->SMTPAuth = trim((string) (getenv('SMTP_USER') ?: '')) !== '';
                 $mail->Username = getenv('SMTP_USER') ?: '';
                 $mail->Password = $emailPassword;
                 $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {

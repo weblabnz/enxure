@@ -176,64 +176,68 @@
                         <div class="card">
                             <div class="card-header">
                                 <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-vial"
-                                        style="color:var(--accent); margin-right:0.5rem;"></i>Test Suite</h3>
+                                        style="color:var(--accent); margin-right:0.5rem;"></i>Test Suite
+                                    <span class="has-tooltip" data-tip="Each check creates its own disposable data and deletes it after, pass or fail — never calls real Stripe/PayPal/SMTP APIs or sends real notifications.">?</span>
+                                    <?php $__testDefs = invoxaTestDefinitions($mysqli, $settings); ?>
+                                    <span style="font-size:0.75rem; font-weight:400; color:var(--text-secondary);">(<?= count($__testDefs) ?> tests available)</span>
+                                </h3>
                             </div>
                             <div class="card-body">
-                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                                    Checks invoice math, TOTP, Stripe/PayPal conversion and webhook verification,
-                                    receipt OCR, user roles, and payment-ledger behavior. Each check creates its own
-                                    disposable data and deletes it after — nothing is left behind, pass or fail. Does
-                                    <strong>not</strong> call the real Stripe/PayPal/SMTP APIs, or send real
-                                    Telegram/Slack/webhook notifications even if you have those configured.
-                                </p>
                                 <?php
-                                $__testDefs = invoxaTestDefinitions($mysqli, $settings);
                                 $__testGroups = array_values(array_unique(array_column($__testDefs, 'group')));
                                 ?>
-                                <div style="margin-bottom:0.75rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-                                    <button class="btn primary" id="runTestSuiteBtn" onclick="runTestSuite()"><i
-                                            class="fa-solid fa-play"></i> Run Selected</button>
-                                    <button class="btn small" type="button" onclick="selectAllTests(true)">Select All</button>
-                                    <button class="btn small" type="button" onclick="selectAllTests(false)">Select None</button>
-                                    <div id="testSuiteSummary" style="font-size:0.9rem;"></div>
+                                <div class="test-suite-toolbar">
+                                    <div class="test-suite-toolbar-row">
+                                        <span class="test-suite-toolbar-label">Filter to a section</span>
+                                        <button type="button" class="pill-btn active" data-pill-group="__all__" onclick="selectAllTestsPill()">All</button>
+                                        <?php foreach ($__testGroups as $__g): ?>
+                                            <button type="button" class="pill-btn" data-pill-group="<?= htmlspecialchars($__g) ?>" onclick="selectTestGroupOnly('<?= htmlspecialchars(addslashes($__g)) ?>')"><?= htmlspecialchars($__g) ?></button>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <div class="test-suite-toolbar-row">
+                                        <span class="test-suite-toolbar-label">Selection</span>
+                                        <button class="btn small" type="button" onclick="selectAllTests(true)">Select All</button>
+                                        <button class="btn small" type="button" onclick="selectAllTests(false)">Select None</button>
+                                        <span style="font-size:0.8rem;">
+                                            <span id="testSuiteSelectedCount" style="color:var(--text-secondary);">All <?= count($__testDefs) ?> selected</span><span id="testSuiteSummary"></span>
+                                        </span>
+                                        <span style="flex:1;"></span>
+                                        <button class="btn primary" id="runTestSuiteBtn" onclick="runTestSuite()"><i
+                                                class="fa-solid fa-play"></i> Run Selected</button>
+                                    </div>
+                                    <div id="testSuiteProgressTrack" class="test-suite-progress-track" style="display:none;">
+                                        <div id="testSuiteProgressFill" class="test-suite-progress-fill"></div>
+                                    </div>
                                 </div>
-                                <div style="margin-bottom:1rem; display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
-                                    <span style="color:var(--text-secondary); font-size:0.8rem;">Section:</span>
-                                    <button type="button" class="pill-btn active" data-pill-group="__all__" onclick="selectAllTestsPill()">All</button>
-                                    <?php foreach ($__testGroups as $__g): ?>
-                                        <button type="button" class="pill-btn" data-pill-group="<?= htmlspecialchars($__g) ?>" onclick="selectTestGroupOnly('<?= htmlspecialchars(addslashes($__g)) ?>')"><?= htmlspecialchars($__g) ?></button>
-                                    <?php endforeach; ?>
-                                </div>
-                                <div style="overflow-x:auto;">
+                                <div class="test-suite-scroll">
                                     <table style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:0.85rem;">
                                         <thead>
-                                            <tr style="text-align:left; color:var(--text-secondary); border-bottom:1px solid var(--border);">
-                                                <th style="padding:0.55rem 0.5rem; width:48px;"></th>
-                                                <th style="padding:0.55rem 0.75rem; width:230px;">Category</th>
-                                                <th style="padding:0.55rem 0.75rem;">Case <span style="font-weight:400; text-transform:none;">(hover for detail)</span></th>
-                                                <th style="padding:0.55rem 0.75rem; text-align:right; width:70px;">Time</th>
-                                                <th style="padding:0.55rem 0.75rem; text-align:right; width:100px;">Status</th>
+                                            <tr style="text-align:left; color:var(--text-secondary);">
+                                                <th style="padding:0.6rem 0.5rem; width:48px;"></th>
+                                                <th style="padding:0.6rem 0.75rem; width:230px;">Category</th>
+                                                <th style="padding:0.6rem 0.75rem;">Case <span style="font-weight:400; text-transform:none;">(hover for detail)</span></th>
+                                                <th style="padding:0.6rem 0.75rem; text-align:right; width:70px;">Time</th>
+                                                <th style="padding:0.6rem 0.75rem; text-align:right; width:150px;">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody id="testSuiteList">
-                                            <?php $__lastGroup = null; $__firstGroup = true; foreach ($__testDefs as $__testName => $__test): ?>
+                                            <?php $__lastGroup = null; foreach ($__testDefs as $__testName => $__test): ?>
                                                 <?php if ($__test['group'] !== $__lastGroup): $__lastGroup = $__test['group']; ?>
                                                     <tr class="test-suite-group-row">
-                                                        <td colspan="5" style="padding:0.75rem 0.75rem 0.5rem; <?= $__firstGroup ? '' : 'border-top:2px solid var(--border);' ?>">
+                                                        <td colspan="5" style="padding:0.6rem 0.75rem;">
                                                             <label style="cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-weight:600; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--accent);">
                                                                 <input type="checkbox" class="test-suite-group-checkbox" data-group="<?= htmlspecialchars($__lastGroup) ?>" checked onclick="toggleTestGroup(this)">
                                                                 <?= htmlspecialchars($__lastGroup) ?>
                                                             </label>
                                                         </td>
                                                     </tr>
-                                                    <?php $__firstGroup = false; ?>
                                                 <?php endif; ?>
                                                 <tr class="test-suite-row" data-test-name="<?= htmlspecialchars($__testName) ?>" data-group="<?= htmlspecialchars($__test['group']) ?>" style="border-bottom:1px solid var(--border);">
-                                                    <td style="padding:0.55rem 0.5rem 0.55rem 1.25rem;"><input type="checkbox" class="test-suite-checkbox" checked></td>
+                                                    <td style="padding:0.55rem 0.5rem 0.55rem 1.25rem;"><input type="checkbox" class="test-suite-checkbox" checked onchange="updateTestSuiteSelectedCount()"></td>
                                                     <td style="padding:0.55rem 0.75rem; color:var(--text-secondary); overflow-wrap:break-word;"><?= htmlspecialchars($__test['category']) ?></td>
                                                     <td style="padding:0.55rem 0.75rem; cursor:help;" title="<?= htmlspecialchars($__test['description']) ?>"><?= htmlspecialchars($__test['label']) ?></td>
                                                     <td class="test-suite-time" style="padding:0.55rem 0.75rem; text-align:right; color:var(--text-secondary); white-space:nowrap; font-variant-numeric:tabular-nums;"></td>
-                                                    <td class="test-suite-status" style="padding:0.55rem 0.75rem; text-align:right; color:var(--text-secondary); white-space:nowrap;">Not run</td>
+                                                    <td class="test-suite-status" style="padding:0.55rem 0.75rem; text-align:right;"><span class="badge void">Not run</span></td>
                                                 </tr>
                                             <?php endforeach; ?>
                                         </tbody>

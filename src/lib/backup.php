@@ -228,17 +228,16 @@ function renderAuditItems($mysqli, int $offset, int $pageSize = 100): array
             <div class="timeline-icon"><i class="fa-solid <?= $icon ?>"></i></div>
             <div class="timeline-content">
                 <div class="timeline-time"><?= date('M j, Y H:i', strtotime($act['performed_at'])) ?></div>
-                <div
-                    style="font-size: 0.75rem; font-weight: 700; white-space: nowrap; min-width: 90px; color: var(--accent); letter-spacing: 0.03em;">
+                <div style="font-size: 0.75rem; font-weight: 700; color: var(--accent); letter-spacing: 0.03em;">
                     <?= $typeLabel ?></div>
-                <div style="font-size: 0.85rem; color: var(--text-primary); flex: 1; min-width: 200px;">
+                <div style="font-size: 0.85rem; color: var(--text-primary); white-space: normal;">
                     <span
                         style="background: rgba(255,255,255,0.05); padding: 0.2rem 0.4rem; border-radius: 4px; border: 1px solid var(--border); font-size: 0.65rem; text-transform: uppercase; margin-right: 0.75rem; font-weight: 600; letter-spacing: 0.5px;"><?= htmlspecialchars(str_replace('_', ' ', $act['action_type'])) ?></span><?= htmlspecialchars($act['notes'] ?? '') ?>
                 </div>
-                <div style="font-size: 0.78rem; min-width: 110px; color: var(--text-secondary); white-space: nowrap;"
+                <div style="font-size: 0.78rem; color: var(--text-secondary);"
                     title="Performed by"><i class="fa-solid fa-user-shield"
                         style="font-size: 0.7rem; margin-right: 0.3rem;"></i><?= $performedByLabel ?></div>
-                <div style="font-size: 0.85rem; min-width: 140px; color: var(--text-secondary);"
+                <div style="font-size: 0.85rem; color: var(--text-secondary);"
                     title="<?= $client ?>"><?php if ($client !== ''): ?><i class="fa-solid fa-user"
                         style="font-size: 0.75rem; margin-right: 0.3rem;"></i><?= $client ?><?php endif; ?></div>
             </div>
@@ -281,12 +280,12 @@ function renderAuditSection($mysqli): string
     <div class="section-scroll">
     <div class="card">
         <div class="card-body">
-        <div class="timeline-header" style="display:flex; align-items:center; flex-wrap:wrap; gap:0.75rem 1.5rem; margin-left:2rem; padding:0 1.25rem 0.5rem; border-bottom:1px solid var(--border); margin-bottom:0.75rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary);">
-            <div style="min-width:130px;">Time</div>
-            <div style="min-width:90px;">Type</div>
-            <div style="flex:1; min-width:200px;">Details</div>
-            <div style="min-width:110px;">Performed By</div>
-            <div style="min-width:140px;">Client</div>
+        <div class="timeline-header" style="margin-left:2rem; padding:0 1.25rem 0.5rem; border-bottom:1px solid var(--border); margin-bottom:0.6rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary);">
+            <div>Time</div>
+            <div>Type</div>
+            <div>Details</div>
+            <div>Performed By</div>
+            <div>Client</div>
         </div>
         <div class="timeline" id="auditTimelineBody" data-next-offset="<?= $page['nextOffset'] ?>"
             data-has-more="<?= $page['hasMore'] ? '1' : '0' ?>">
@@ -608,6 +607,20 @@ function invoxaTestDefinitions($mysqli, array $settings): array
     $run('Core Logic', 'Stripe', 'zero-decimal currency', 'JPY 500 stays 500 (not multiplied by 100) since Stripe treats JPY as a zero-decimal currency.', function () {
         invoxaAssertEquals(500, stripeAmountToMinorUnits(500, 'JPY'));
     });
+    $run('Core Logic', 'Stripe', 'large amount round-trip', '$12,345.67 converts to 1234567 (cents) and back to $12,345.67 — the same round-trip as the $19.99 case, but past the thousands-separator threshold where a naive re-parse of a formatted string would break.', function () {
+        $minor = stripeAmountToMinorUnits(12345.67, 'USD');
+        invoxaAssertEquals(1234567, $minor);
+        invoxaAssertEquals(12345.67, stripeAmountFromMinorUnits($minor, 'USD'));
+    });
+    $run('Core Logic', 'invoxaParseAmount', 'strips thousands-separator commas at any scale', 'Backs every place a possibly comma-formatted amount gets turned back into a number: the recurring-billing line item, generateInvoiceHTML()\'s Subtotal re-derivation, and all three CSV importers (client rate, invoice amount/paid_amount, expense amount). "1,200.00" must read back as 1200.0, "1,234,567.89" (multiple commas) as 1234567.89, and a plain "999.99" (no comma at all, the pre-$1,000 case that always worked) must be unaffected.', function () {
+        invoxaAssertEquals(1200.0, invoxaParseAmount('1,200.00'), 'single comma');
+        invoxaAssertEquals(1234567.89, invoxaParseAmount('1,234,567.89'), 'multiple commas');
+        invoxaAssertEquals(999.99, invoxaParseAmount('999.99'), 'no comma, unaffected');
+        invoxaAssertEquals(1200.0, invoxaParseAmount(' 1,200.00 '), 'surrounding whitespace, as a CSV cell might have');
+        invoxaAssertEquals(-1200.0, invoxaParseAmount('-1,200.00'), 'negative amount (a credit line item)');
+        invoxaAssertEquals(0.0, invoxaParseAmount(''), 'empty string');
+        invoxaAssertEquals(1200.0, invoxaParseAmount(1200.0), 'already a float, not just a string');
+    });
     $run('Core Logic', 'Lockout', 'minutes-remaining math', 'invoxaLockoutMinutesRemaining() returns 0 for no lock or an already-expired one, and ~5 for a lock 5 minutes in the future.', function () {
         invoxaAssertEquals(0, invoxaLockoutMinutesRemaining(null));
         invoxaAssertEquals(0, invoxaLockoutMinutesRemaining(date('Y-m-d H:i:s', time() - 60)));
@@ -635,6 +648,27 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         invoxaAssertEquals(70.0, $t['subtotal']);
         invoxaAssertEquals(7.0, $t['tax']);
         invoxaAssertEquals(77.0, $t['total']);
+    });
+    $run('Core Logic', 'computeInvoiceTotals', 'amounts of $1,000 or more', 'A $1,200 line item totals exactly $1,200 with no discount/tax, and $1,242 with a 10% discount then 15% tax — number_format() would render either amount with a thousands-separator comma internally, so this catches a regression where that formatted string leaks back into a numeric total instead of the raw value.', function () {
+        $items = [['amount' => 1200]];
+        $t = computeInvoiceTotals($items, 0, 0);
+        invoxaAssertEquals(1200.0, $t['total'], 'no discount/tax');
+        $items2 = [['amount' => 1200]];
+        $t2 = computeInvoiceTotals($items2, 10, 15);
+        invoxaAssertEquals(1242.0, $t2['total'], 'with discount and tax');
+    });
+    $run('Core Logic', 'computeInvoiceTotals', 'the exact $1,000 boundary and just below it', 'number_format() only inserts a thousands-separator comma at 1,000 and above — $999.99 (just under) must total correctly with no discount/tax involved at all (it always worked), and exactly $1,000.00 (the first value that gets a comma) must total exactly $1,000, not $1.', function () {
+        $items = [['amount' => 999.99]];
+        $t = computeInvoiceTotals($items, 0, 0);
+        invoxaAssertEquals(999.99, $t['total'], 'just under the comma threshold');
+        $items2 = [['amount' => 1000.00]];
+        $t2 = computeInvoiceTotals($items2, 0, 0);
+        invoxaAssertEquals(1000.0, $t2['total'], 'exactly at the comma threshold');
+    });
+    $run('Core Logic', 'computeInvoiceTotals', 'very large amounts with multiple thousands separators', 'A $1,234,567.89 line item (number_format() would render this as "1,234,567.89" — two commas) totals exactly $1,234,567.89 with no discount/tax, confirming the fix handles more than one comma, not just the single-comma four-to-six-figure case.', function () {
+        $items = [['amount' => 1234567.89]];
+        $t = computeInvoiceTotals($items, 0, 0);
+        invoxaAssertEquals(1234567.89, $t['total']);
     });
     $run('Core Logic', 'computeInvoiceTotals', 'clamps out-of-range percentages', 'A discount/tax pair outside 0-100 (150% discount, -10% tax) is clamped to the valid range before it\'s applied, the same clamp save_client\'s and the Ad Hoc form\'s own inputs go through — an over-100 discount can\'t make the total negative, and a negative tax can\'t reduce it.', function () {
         $items = [['amount' => 100]];
@@ -809,6 +843,19 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
+    $run('Clients & Invoices', 'Ad Hoc invoice', 'line items totaling over $1,000 store the correct amount', 'Same as the test above but with three line items ($1,200, $2,500.50, $999.50) whose $4,700 subtotal is well past the thousands-separator threshold, plus a 10% discount and 8% tax — the stored amount must be $4,568.40, not a comma-truncated fraction of it.', function () use ($mysqli) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $items = [['amount' => 1200.00], ['amount' => 2500.50], ['amount' => 999.50]];
+            $totals = computeInvoiceTotals($items, 10, 8);
+            invoxaAssertEquals(4568.40, round($totals['total'], 2), 'computed total');
+            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, $totals['total']);
+            $row = $mysqli->query("SELECT amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            invoxaAssertEquals(4568.40, round((float) $row['amount'], 2), 'stored amount matches computed total');
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
     $run('Clients & Invoices', 'Void invoice', 'removed from and restored to outstanding total', 'Voiding an invoice (the same status update void_invoice runs) drops it out of an "outstanding" query the same way the dashboard\'s totals filter it out; unvoiding puts it straight back.', function () use ($mysqli) {
         [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
         try {
@@ -918,6 +965,32 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             @rmdir(INVOICES_DIR . 'test_suite_fixture');
         }
     });
+    $run('Clients & Invoices', 'Quote', 'a five-figure amount survives conversion unchanged', 'Same conversion path as the test above, but for a $45,250.75 quote — convertQuoteToInvoice() only touches is_quote/status/the invoice number, never re-derives the amount, so this confirms nothing in that path re-parses it through a formatted string along the way.', function () use ($mysqli, $settings) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        $quoteId = null;
+        try {
+            $quoteNum = 'Q' . strtoupper($clientKey) . '002';
+            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, is_quote, html_content) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), 45250.75, 'sent', 1, ?)");
+            $html = "<html>{$quoteNum}</html>";
+            $stmt->bind_param("sss", $quoteNum, $clientKey, $html);
+            $stmt->execute();
+            $quoteId = $mysqli->insert_id;
+            $result = convertQuoteToInvoice($mysqli, $settings, $quoteId, 'admin');
+            invoxaAssertTrue($result['success'], 'conversion should succeed');
+            $row = $mysqli->query("SELECT amount FROM invoxa_invoices WHERE id = $quoteId")->fetch_assoc();
+            invoxaAssertEquals(45250.75, (float) $row['amount'], 'amount should carry over unchanged');
+        } finally {
+            if ($quoteId) {
+                $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id = " . (int) $quoteId);
+                $mysqli->query("DELETE FROM invoxa_invoices WHERE id = " . (int) $quoteId);
+            }
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            foreach (glob(INVOICES_DIR . 'test_suite_fixture/*.html') ?: [] as $__f) {
+                @unlink($__f);
+            }
+            @rmdir(INVOICES_DIR . 'test_suite_fixture');
+        }
+    });
 
     // ── Payments & Refunds ── the ledger's actual crediting/reversing logic.
     $run('Payments & Refunds', 'Payment ledger', 'partial then full payment', 'A $100 invoice paid $40 then $60 stays open (status "sent") after the first payment and flips to "paid" after the second, with paid_amount tracked correctly at each step.', function () use ($mysqli, $settings) {
@@ -968,6 +1041,39 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
+    $run('Payments & Refunds', 'Payment ledger', 'partial then full payment on a five-figure invoice', 'Same as the $100 version above, but a $12,345.67 invoice paid $5,000.00 then the $7,345.67 remainder — checks the partial-payment arithmetic (invoice amount minus payments so far) holds up past the thousands-separator threshold, not just at small round numbers.', function () use ($mysqli, $settings) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 12345.67);
+            $r1 = recordInvoicePayment($mysqli, $settings, $invId, 5000.00, 'test partial', 'manual');
+            invoxaAssertTrue($r1['success'] && !$r1['duplicate']);
+            $mid = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            invoxaAssertEquals('sent', $mid['status'], 'status stays open after partial payment');
+            invoxaAssertEquals(5000.00, (float) $mid['paid_amount']);
+            $r2 = recordInvoicePayment($mysqli, $settings, $invId, 7345.67, 'test remainder', 'manual');
+            invoxaAssertTrue($r2['success']);
+            $after = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            invoxaAssertEquals('paid', $after['status']);
+            invoxaAssertEquals(12345.67, (float) $after['paid_amount']);
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
+    $run('Payments & Refunds', 'Refund', 'partial refund on a five-figure invoice leaves the correct remaining balance', 'A $12,345.67 invoice paid in full, then partially refunded $5,000.00, must reopen to "sent" (any refund that drops total paid below the invoice amount reopens it — see recordInvoiceRefund()) with paid_amount left at exactly $7,345.67, not a comma-truncated figure.', function () use ($mysqli, $settings) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 12345.67);
+            recordInvoicePayment($mysqli, $settings, $invId, 12345.67, 'test', 'stripe', 'test_charge_' . bin2hex(random_bytes(6)));
+            $before = $mysqli->query("SELECT status FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            invoxaAssertEquals('paid', $before['status']);
+            recordInvoiceRefund($mysqli, $settings, $invId, 5000.00, 'stripe', 'test_refund_' . bin2hex(random_bytes(6)));
+            $after = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            invoxaAssertEquals('sent', $after['status'], 'invoice reopens once total paid drops below the invoice amount');
+            invoxaAssertEquals(7345.67, (float) $after['paid_amount'], 'remaining paid_amount after the partial refund');
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
     $run('Payments & Refunds', 'Audit Log', 'payment creates a matching entry', 'recordInvoicePayment() writes its own invoxa_actions row (mark_paid/mark_partial_paid) against the right invoice — the same audit trail the Activity tab reads.', function () use ($mysqli, $settings) {
         [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
         try {
@@ -996,6 +1102,23 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
+    $run('Payments & Refunds', 'Accounting journal', 'still balances at five figures', 'Same balance check as above, for a $23,456.78 invoice paid in full — confirms buildAccountingJournal() (and whatever it sums internally) doesn\'t drift once amounts cross the comma threshold.', function () use ($mysqli, $settings) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 23456.78);
+            $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $invId")->fetch_assoc()['invoice_number'];
+            recordInvoicePayment($mysqli, $settings, $invId, 23456.78, 'test', 'manual');
+            $journal = buildAccountingJournal($mysqli, $settings, date('Y-m-d', strtotime('-1 day')), '');
+            $ours = array_values(array_filter($journal, fn($r) => $r['ref'] === $invNum));
+            invoxaAssertEquals(4, count($ours), 'expected 2 rows for the invoice and 2 for its payment');
+            $debitTotal = array_sum(array_column($ours, 'debit'));
+            $creditTotal = array_sum(array_column($ours, 'credit'));
+            invoxaAssertEquals(round($debitTotal, 2), round($creditTotal, 2), 'debits and credits should balance');
+            invoxaAssertEquals(46913.56, round($debitTotal, 2), 'two $23,456.78 debit legs (invoice + payment)');
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
     $run('Payments & Refunds', 'Webhook', 'unmatched reference logs an audit entry', 'invoxaLogUnmatchedWebhook() — called when a Stripe/PayPal event references an invoice Invoxa no longer recognizes — writes a webhook_unmatched action naming the provider and the dangling reference, so the Audit Log still shows something happened even though nothing was credited.', function () use ($mysqli) {
         $reference = 'ztest_ref_' . bin2hex(random_bytes(6));
         try {
@@ -1005,6 +1128,91 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             invoxaAssertTrue(str_contains($row['notes'], 'Stripe'), 'provider name should be capitalized in the note');
         } finally {
             $mysqli->query("DELETE FROM invoxa_actions WHERE action_type = 'webhook_unmatched' AND notes LIKE '%" . $mysqli->real_escape_string($reference) . "%'");
+        }
+    });
+
+    // ── CSV Import/Export ── round-trips a comma-formatted amount through
+    // the same parsing loops the Clients/Invoices/Expenses "Import CSV"
+    // buttons run, and through the same query+fputcsv shape "Export CSV"
+    // produces, using an in-memory php://temp stream so nothing touches disk.
+    $run('CSV Import/Export', 'Client import', 'a rate with a thousands-separator comma imports correctly', 'A CSV row with Rate "1,200.00" (exactly how a spreadsheet would show a four-figure rate) must import as monthly_rate 1200.00, not comma-truncated to 1.', function () use ($mysqli) {
+        $name = 'ZTest CSV Client ' . bin2hex(random_bytes(4));
+        try {
+            $fh = fopen('php://temp', 'r+');
+            fputcsv($fh, ['Client Name', 'Email', 'Rate', 'Billing Frequency', 'Account Name', 'Account Number', 'Payment Terms Days', 'Phone', 'Address']);
+            fputcsv($fh, [$name, 'csvtest@invalid.example', '1,200.00', 'monthly', '', '', '21', '', '']);
+            rewind($fh);
+            $result = invoxaImportClientsCsvRows($mysqli, $fh);
+            invoxaAssertEquals(1, $result['imported'], 'one row should import');
+            $row = $mysqli->query("SELECT monthly_rate FROM invoxa_clients WHERE client_name = '" . $mysqli->real_escape_string($name) . "'")->fetch_assoc();
+            invoxaAssertTrue((bool) $row, 'imported client should exist');
+            invoxaAssertEquals(1200.00, (float) $row['monthly_rate'], 'rate should be 1200, not comma-truncated to 1');
+        } finally {
+            $mysqli->query("DELETE FROM invoxa_clients WHERE client_name = '" . $mysqli->real_escape_string($name) . "'");
+        }
+    });
+    $run('CSV Import/Export', 'Invoice import', 'an amount and paid amount with commas import correctly', 'A CSV row with Amount "12,345.67" and Paid Amount "5,000.00" must import as exactly those figures, both past the thousands-separator threshold.', function () use ($mysqli) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $invNum = 'ZTEST-CSV-' . strtoupper(bin2hex(random_bytes(3)));
+            $fh = fopen('php://temp', 'r+');
+            fputcsv($fh, ['Invoice Number', 'Client Name', 'Email', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date']);
+            fputcsv($fh, [$invNum, 'Test Suite Fixture', 'testsuite@invalid.example', date('Y-m-d'), date('Y-m-d', strtotime('+21 days')), '12,345.67', 'USD', 'paid', '5,000.00', date('Y-m-d')]);
+            rewind($fh);
+            $result = invoxaImportInvoicesCsvRows($mysqli, $fh, []);
+            invoxaAssertEquals(1, $result['imported'], 'one row should import');
+            $row = $mysqli->query("SELECT amount, paid_amount FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
+            invoxaAssertTrue((bool) $row, 'imported invoice should exist');
+            invoxaAssertEquals(12345.67, (float) $row['amount'], 'amount should be 12,345.67, not comma-truncated to 12');
+            invoxaAssertEquals(5000.00, (float) $row['paid_amount'], 'paid amount should be 5,000.00, not comma-truncated to 5');
+        } finally {
+            $mysqli->query("DELETE FROM invoxa_payments WHERE invoice_id IN (SELECT id FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "')");
+            $mysqli->query("DELETE FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'");
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
+    $run('CSV Import/Export', 'Expense import', 'an amount with a thousands-separator comma imports correctly', 'A CSV row with Amount "3,400.00" must import as exactly $3,400.00, not comma-truncated to $3.', function () use ($mysqli) {
+        $vendor = 'ZTest CSV Vendor ' . bin2hex(random_bytes(4));
+        try {
+            $fh = fopen('php://temp', 'r+');
+            fputcsv($fh, ['Date', 'Vendor', 'Category', 'Amount', 'Description']);
+            fputcsv($fh, [date('Y-m-d'), $vendor, 'software', '3,400.00', 'test fixture']);
+            rewind($fh);
+            $result = invoxaImportExpensesCsvRows($mysqli, $fh);
+            invoxaAssertEquals(1, $result['imported'], 'one row should import');
+            $row = $mysqli->query("SELECT amount FROM invoxa_expenses WHERE vendor = '" . $mysqli->real_escape_string($vendor) . "'")->fetch_assoc();
+            invoxaAssertTrue((bool) $row, 'imported expense should exist');
+            invoxaAssertEquals(3400.00, (float) $row['amount'], 'amount should be 3,400.00, not comma-truncated to 3');
+        } finally {
+            $mysqli->query("DELETE FROM invoxa_expenses WHERE vendor = '" . $mysqli->real_escape_string($vendor) . "'");
+        }
+    });
+    $run('CSV Import/Export', 'Export → re-import round trip', 'a five-figure invoice survives export and re-import unchanged', 'Writes a $34,567.89 invoice through the exact query + fputcsv() shape "Export Invoices" uses, then feeds that CSV straight back through the invoice importer (with the invoice number blanked, as re-adding an edited spreadsheet row would) — the re-imported amount must still be $34,567.89, proving the two features agree on format in both directions, not just import in isolation.', function () use ($mysqli, $settings) {
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        $reimportedNum = null;
+        try {
+            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 34567.89, 'USD');
+            $exportRow = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $exportRow['currency'] = invoxaResolveCurrency($exportRow['currency'], $settings);
+
+            $fh = fopen('php://temp', 'r+');
+            fputcsv($fh, ['Invoice Number', 'Client Name', 'Email', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date']);
+            $exportRow['invoice_number'] = ''; // blanked, as if adding this as a new row from an edited spreadsheet
+            fputcsv($fh, $exportRow);
+            rewind($fh);
+
+            $result = invoxaImportInvoicesCsvRows($mysqli, $fh, $settings);
+            invoxaAssertEquals(1, $result['imported'], 'one row should import');
+            $reimported = $mysqli->query("SELECT id, invoice_number, amount FROM invoxa_invoices WHERE client_key = '{$clientKey}' AND id != $invId ORDER BY id DESC LIMIT 1")->fetch_assoc();
+            invoxaAssertTrue((bool) $reimported, 're-imported invoice should exist');
+            $reimportedNum = $reimported['invoice_number'];
+            invoxaAssertEquals(34567.89, (float) $reimported['amount'], 're-imported amount should still be $34,567.89');
+        } finally {
+            if ($reimportedNum) {
+                $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_number = '" . $mysqli->real_escape_string($reimportedNum) . "'");
+                $mysqli->query("DELETE FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($reimportedNum) . "'");
+            }
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
 
@@ -1074,6 +1282,31 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             invoxaTestCleanupClient($mysqli, $freshId, $freshKey);
         }
     });
+    $run('Billing Cron', 'Recurring amount', 'a $1,200+ monthly rate bills the full amount, not just the leading digits', 'Builds the exact line item run_recurring() builds from a client\'s monthly_rate and runs it through computeInvoiceTotals() the same way — for a $1,242 rate this must total $1,242, not $1 (what a stray number_format() before that call would silently produce for any rate at or above $1,000).', function () {
+        $rate = 1242.00;
+        $recurLineItems = [['code' => 'WEB01', 'desc' => 'Website management', 'amount' => (float) $rate]];
+        $recurTotals = computeInvoiceTotals($recurLineItems, 0.0, 0.0);
+        invoxaAssertEquals(1242.0, $recurTotals['total'], 'billed total matches the monthly rate');
+    });
+    $run('Billing Cron', 'Recurring amount', 'a range of rates from just under $1,000 to six figures, with and without discount/tax', 'Same run_recurring() line-item construction as the test above, swept across the values most likely to expose an off-by-comma regression: just under the threshold, exactly at it, a typical four-figure rate, and a six-figure rate — each checked both plain and with a discount/tax combination, since a client can have both set.', function () {
+        $cases = [
+            ['rate' => 999.99, 'discount' => 0.0, 'tax' => 0.0, 'expected' => 999.99],
+            ['rate' => 1000.00, 'discount' => 0.0, 'tax' => 0.0, 'expected' => 1000.0],
+            ['rate' => 4500.00, 'discount' => 5.0, 'tax' => 10.0, 'expected' => 4702.5],
+            ['rate' => 123456.78, 'discount' => 0.0, 'tax' => 0.0, 'expected' => 123456.78],
+        ];
+        foreach ($cases as $case) {
+            $recurLineItems = [['code' => 'WEB01', 'desc' => 'Website management', 'amount' => (float) $case['rate']]];
+            $recurTotals = computeInvoiceTotals($recurLineItems, $case['discount'], $case['tax']);
+            invoxaAssertEquals($case['expected'], $recurTotals['total'], "rate {$case['rate']}");
+        }
+    });
+    $run('Billing Cron', 'Late fees', 'fee amount calculation, percent and flat, at scale', 'Replicates applyLateFees()\'s own fee-type branch (percent: round(outstanding * value / 100, 2); flat: the configured value untouched) against a $12,345.67 outstanding balance — a 5% fee must come out to $617.28, and a flat fee configured at $50 must stay exactly $50 rather than being scaled by the outstanding balance.', function () {
+        $outstanding = 12345.67;
+        $computeFee = fn(string $feeType, float $feeValue) => $feeType === 'flat' ? $feeValue : round($outstanding * $feeValue / 100, 2);
+        invoxaAssertEquals(617.28, $computeFee('percent', 5.0), '5% of $12,345.67');
+        invoxaAssertEquals(50.0, $computeFee('flat', 50.0), 'flat fee ignores the outstanding balance');
+    });
     $run('Billing Cron', 'Late fees', 'eligibility query catches overdue, skips grace-period and already-charged invoices', 'The same eligibility check applyLateFees() runs (unpaid, non-quote, due_date past the grace period, no existing late_fee_charged action) picks up an invoice 10 days overdue against a 7-day grace period, but correctly skips one only 3 days overdue, and skips an eligible invoice that already has a late_fee_charged entry against it.', function () use ($mysqli) {
         [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
         try {
@@ -1124,6 +1357,23 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         invoxaAssertTrue(str_contains($html, 'Test Client Co'), 'missing client name');
         invoxaAssertTrue(str_contains($html, 'INVTEST01'), 'missing invoice number');
         invoxaAssertTrue(str_contains($html, '99.00'), 'missing amount');
+    });
+    $run('Email Content', 'generateInvoiceHTML', 'Subtotal/Tax rows stay correct above $1,000', 'computeInvoiceTotals() normalizes a line item\'s amount to a display string (e.g. "1,200.00") as a side effect — generateInvoiceHTML() re-derives its own Subtotal/Discount/Tax rows from that same array, so this catches a regression where it re-parses the comma-formatted string instead of the raw number and renders "$1.00" instead of "$1,200.00".', function () {
+        $items = [['code' => 'WEB01', 'desc' => 'Test line', 'amount' => 1200.0]];
+        $totals = computeInvoiceTotals($items, 10, 15);
+        $html = generateInvoiceHTML('Test Client Co', '2026-01-01', '2026-01-22', 'INVTEST02', number_format($totals['total'], 2), '', '', 'billing@example.com', $items, '#4a90e2', '', 'USD', '', $totals['discount_pct'], $totals['tax_rate']);
+        invoxaAssertTrue(str_contains($html, '$1,200.00'), 'Subtotal row should show $1,200.00');
+        invoxaAssertTrue(str_contains($html, '$162.00'), 'Tax row should show $162.00 (15% of the $1,080 net after discount)');
+    });
+    $run('Email Content', 'generateInvoiceHTML', 'Subtotal sums multiple large line items correctly', 'Two line items of $1,200 and $2,500 (each individually above the comma threshold) plus a 5% tax must render a $3,700 Subtotal — checks the re-derivation loop over array_column($lineItems, \'amount\') doesn\'t just happen to work for a single item.', function () {
+        $items = [
+            ['code' => 'WEB01', 'desc' => 'Line one', 'amount' => 1200.0],
+            ['code' => 'WEB02', 'desc' => 'Line two', 'amount' => 2500.0],
+        ];
+        $totals = computeInvoiceTotals($items, 0, 5);
+        $html = generateInvoiceHTML('Test Client Co', '2026-01-01', '2026-01-22', 'INVTEST03', number_format($totals['total'], 2), '', '', 'billing@example.com', $items, '#4a90e2', '', 'USD', '', $totals['discount_pct'], $totals['tax_rate']);
+        invoxaAssertTrue(str_contains($html, '$3,700.00'), 'Subtotal row should show $3,700.00 (1,200 + 2,500)');
+        invoxaAssertTrue(str_contains($html, '$185.00'), 'Tax row should show $185.00 (5% of 3,700)');
     });
 
     // ── Security ── crypto/signature checks that are pure functions, plus the

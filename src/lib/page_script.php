@@ -3272,6 +3272,15 @@
             function selectAllTests(checked) {
                 document.querySelectorAll('.test-suite-checkbox, .test-suite-group-checkbox').forEach(cb => cb.checked = checked);
                 if (checked) resetTestVisibility(); // "Select All" also un-does any pill filter — checked-but-hidden would be confusing
+                updateTestSuiteSelectedCount();
+            }
+            function updateTestSuiteSelectedCount() {
+                const el = document.getElementById('testSuiteSelectedCount');
+                if (!el) return;
+                const visible = Array.from(document.querySelectorAll('.test-suite-row')).filter(row => row.style.display !== 'none');
+                const checked = visible.filter(row => row.querySelector('.test-suite-checkbox').checked).length;
+                const total = document.querySelectorAll('.test-suite-row').length;
+                el.textContent = checked === total ? `All ${total} selected` : `${checked} of ${visible.length} selected`;
             }
             function selectAllScreenshots(checked) {
                 document.querySelectorAll('.screenshot-page-checkbox').forEach(cb => cb.checked = checked);
@@ -3325,6 +3334,7 @@
             function toggleTestGroup(groupCheckbox) {
                 const group = groupCheckbox.dataset.group;
                 document.querySelectorAll('.test-suite-row[data-group="' + CSS.escape(group) + '"] .test-suite-checkbox').forEach(cb => cb.checked = groupCheckbox.checked);
+                updateTestSuiteSelectedCount();
             }
             function resetTestVisibility() {
                 document.querySelectorAll('#testSuiteList .test-suite-group-row, #testSuiteList .test-suite-row').forEach(row => row.style.display = '');
@@ -3353,6 +3363,7 @@
                     row.querySelector('.test-suite-checkbox').checked = isMatch;
                 });
                 setActiveTestPill(group);
+                updateTestSuiteSelectedCount();
             }
             async function runTestSuite() {
                 const rows = Array.from(document.querySelectorAll('.test-suite-row'));
@@ -3364,6 +3375,10 @@
                 const btn = document.getElementById('runTestSuiteBtn');
                 btn.disabled = true;
                 document.getElementById('testSuiteSummary').innerHTML = '';
+                const progressTrack = document.getElementById('testSuiteProgressTrack');
+                const progressFill = document.getElementById('testSuiteProgressFill');
+                progressTrack.style.display = '';
+                progressFill.style.width = '0%';
                 let passed = 0, failed = 0;
                 try {
                     // One request per test, run in sequence rather than all at once — each
@@ -3373,35 +3388,37 @@
                     for (let i = 0; i < selectedRows.length; i++) {
                         const row = selectedRows[i];
                         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running ' + (i + 1) + '/' + selectedRows.length + '…';
-                        row.querySelector('.test-suite-status').innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:var(--text-secondary);"></i> Running…';
+                        row.querySelector('.test-suite-status').innerHTML = '<span class="badge partial"><i class="fa-solid fa-spinner fa-spin"></i> Running</span>';
                         const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'run_test_suite', tests: JSON.stringify([row.dataset.testName]) }) });
                         const json = await res.json();
                         const status = row.querySelector('.test-suite-status');
                         const time = row.querySelector('.test-suite-time');
                         const r = json.success ? json.results[0] : null;
                         if (!r) {
-                            status.innerHTML = '<i class="fa-solid fa-xmark" style="color:var(--danger);"></i> <span style="color:var(--danger);">' + (json.error || 'Failed to run').replace(/</g, '&lt;') + '</span>';
+                            status.innerHTML = '<span class="badge failed">Failed</span><div style="margin-top:0.25rem; font-size:0.72rem; color:var(--danger); white-space:normal;">' + (json.error || 'Failed to run').replace(/</g, '&lt;') + '</div>';
                             failed++;
-                            continue;
-                        }
-                        time.textContent = r.duration_ms + ' ms';
-                        if (r.status === 'pass') {
-                            status.innerHTML = '<i class="fa-solid fa-check" style="color:var(--success);"></i> Passed';
-                            passed++;
                         } else {
-                            status.innerHTML = '<i class="fa-solid fa-xmark" style="color:var(--danger);"></i> <span style="color:var(--danger);">' + (r.message || 'Failed').replace(/</g, '&lt;') + '</span>';
-                            failed++;
+                            time.textContent = r.duration_ms + ' ms';
+                            if (r.status === 'pass') {
+                                status.innerHTML = '<span class="badge sent">Passed</span>';
+                                passed++;
+                            } else {
+                                status.innerHTML = '<span class="badge failed">Failed</span><div style="margin-top:0.25rem; font-size:0.72rem; color:var(--danger); white-space:normal;">' + (r.message || 'Failed').replace(/</g, '&lt;') + '</div>';
+                                failed++;
+                            }
                         }
+                        progressFill.style.width = Math.round(((i + 1) / selectedRows.length) * 100) + '%';
                     }
                     const allPassed = failed === 0;
                     document.getElementById('testSuiteSummary').innerHTML =
-                        '<span style="color:' + (allPassed ? 'var(--success)' : 'var(--danger)') + '; font-weight:600;">' +
+                        ' · <span style="color:' + (allPassed ? 'var(--success)' : 'var(--danger)') + '; font-weight:600;">' +
                         (allPassed ? '<i class="fa-solid fa-circle-check"></i> ' : '<i class="fa-solid fa-circle-xmark"></i> ') +
                         passed + ' passed, ' + failed + ' failed</span>';
                     showToast(allPassed ? 'All selected tests passed!' : (failed + ' test(s) failed'), !allPassed);
                 } catch (e) {
                     showToast('Failed to run test suite (network error)', true);
                 } finally {
+                    progressTrack.style.display = 'none';
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fa-solid fa-play"></i> Run Selected';
                 }

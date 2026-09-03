@@ -2,6 +2,20 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.46] - 2026-09-04
+
+### Fixed
+- Amounts of $1,000 or more silently lost their thousands-separator comma wherever a comma-formatted string was cast straight to a number with `(float)`/`floatval()` — CSV import (client rate, invoice amount/paid amount, expense amount), `generateInvoiceHTML()`'s Subtotal re-derivation for custom templates and discount/tax invoices, receipt OCR total extraction, and recurring-billing line items. Added a shared `invoxaParseAmount()` helper (strips thousands-separator commas before casting) and routed every one of those call sites through it.
+- `SMTPAuth` was hardcoded `true` on invoice/quote send, overdue reminders, and recurring billing regardless of whether `SMTP_USER` was actually set, so PHPMailer always attempted `AUTH LOGIN` even against a relay configured with no username. Now only enabled when `SMTP_USER` is non-empty.
+
+### Added
+- Extensive new Test Suite coverage for amounts at and past the $1,000 comma threshold, across Stripe conversion, `computeInvoiceTotals()`, CSV import (clients/invoices/expenses), Ad Hoc invoices, Quotes, the payment/refund ledger, and the accounting journal.
+
+### Changed
+- CSV import handlers (`invoxaHandleImportClientsCsv`, `invoxaHandleImportInvoicesCsv`, `invoxaHandleImportExpensesCsv`) split into separate `invoxaImport*CsvRows()` functions so the comma-parsing fix above could be covered directly against an in-memory CSV in the test suite, rather than only through a real file upload.
+- Test Suite page (Settings > Backup & Restore) reorganized: filter/selection controls moved into a bordered toolbar, added a live "N of M selected" count and a progress bar while tests run, pass/fail badges instead of colored icons, and a running test count next to the section title.
+- Audit Log timeline rows switched from fixed-width flex columns (with wrapping) to ellipsis truncation, fixing awkward wrapping on narrower screens.
+
 ## [2.11.45] - 2026-09-04
 
 ### Added

@@ -156,6 +156,15 @@ function invoxaStatDisplay(array $byCcy)
     return invoxaFormatMoneyByCurrency($byCcy);
 }
 
+// The one place a string that might carry a thousands-separator comma (a
+// number_format()'d amount fed back in, a pasted "$1,200.00", an Excel-
+// exported CSV cell) gets turned into a float — (float)/floatval() alone
+// stop at the first non-digit, silently truncating "1,200.00" to 1.0.
+function invoxaParseAmount($raw): float
+{
+    return (float) str_replace(',', '', trim((string) $raw));
+}
+
 // Computes subtotal/discount/tax/total from line items and a single
 // invoice-level discount % and tax % (not per line item). Discount is taken
 // off the subtotal first, then tax applied to what's left. Mutates
@@ -221,7 +230,7 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     $watermarkSpan = $licenseFingerprint !== '' ? "<span style=\"font-size:1px;color:#f9f9f8;user-select:none;\">{$licenseFingerprint}</span>" : '';
 
     if ($template === 'custom' && $customTemplate !== null && trim($customTemplate) !== '') {
-        $subtotal = array_sum(array_map('floatval', array_column($lineItems, 'amount')));
+        $subtotal = array_sum(array_map('invoxaParseAmount', array_column($lineItems, 'amount')));
         $discountAmt = $subtotal * $discountPct / 100;
         $taxAmt = ($subtotal - $discountAmt) * $taxRate / 100;
         return $watermarkComment . invoxaRenderTemplate($customTemplate, [
@@ -266,7 +275,7 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     // invoice just shows line items and a Total row.
     $summaryRowsHtml = "";
     if ($discountPct > 0 || $taxRate > 0) {
-        $subtotal = array_sum(array_map('floatval', array_column($lineItems, 'amount')));
+        $subtotal = array_sum(array_map('invoxaParseAmount', array_column($lineItems, 'amount')));
         $discountAmt = $subtotal * $discountPct / 100;
         $taxAmt = ($subtotal - $discountAmt) * $taxRate / 100;
         $summaryRowsHtml .= "<tr class=\"summary-row\"><td colspan=\"2\">Subtotal</td><td>{$currencyCode} \$" . number_format($subtotal, 2) . "</td></tr>";
@@ -963,13 +972,13 @@ function parseReceiptOcrText(string $text): array
     $confident = false;
     foreach ($lines as $line) {
         if (preg_match('/\btotal\b/i', $line) && preg_match('/(\d[\d,]*\.\d{2})/', $line, $m)) {
-            $amount = (float) str_replace(',', '', $m[1]);
+            $amount = invoxaParseAmount($m[1]);
             $confident = true;
             break;
         }
     }
     if ($amount === null && preg_match_all('/(\d[\d,]*\.\d{2})/', $text, $m) && !empty($m[1])) {
-        $amount = max(array_map(fn($v) => (float) str_replace(',', '', $v), $m[1]));
+        $amount = max(array_map('invoxaParseAmount', $m[1]));
     }
 
     return ['vendor' => $vendor, 'amount' => $amount, 'confident' => $confident];

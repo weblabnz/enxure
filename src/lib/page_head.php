@@ -1211,6 +1211,75 @@
             text-decoration: line-through;
         }
 
+        .test-suite-toolbar {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 0.85rem 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .test-suite-toolbar-row {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .test-suite-toolbar-row + .test-suite-toolbar-row {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .test-suite-toolbar-label {
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+
+        .test-suite-scroll {
+            max-height: 65vh;
+            overflow-y: auto;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+        }
+
+        .test-suite-scroll table {
+            border: none;
+        }
+
+        .test-suite-scroll thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: var(--surface-2);
+            box-shadow: 0 1px 0 var(--border);
+        }
+
+        .test-suite-group-row td {
+            background: var(--surface-hover);
+        }
+
+        .test-suite-progress-track {
+            height: 6px;
+            border-radius: 9999px;
+            background: var(--surface-hover);
+            overflow: hidden;
+            margin-top: 0.6rem;
+        }
+
+        .test-suite-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--accent);
+            transition: width 0.2s ease;
+        }
+
         .btn {
             background: var(--surface-2);
             color: var(--text-primary);
@@ -1287,7 +1356,7 @@
 
         .timeline-item {
             position: relative;
-            margin-bottom: 1.25rem;
+            margin-bottom: 0.6rem;
         }
 
         .timeline-icon {
@@ -1308,20 +1377,33 @@
             z-index: 1;
         }
 
+        /* Shared column template so the header and every row line up exactly —
+           a fixed grid track per column, rather than flex items whose width
+           follows each row's own content and drifts row to row. */
+        .timeline-header,
+        .timeline-content {
+            display: grid;
+            grid-template-columns: 130px 90px 1fr 110px 140px;
+            gap: 0.4rem 1.5rem;
+        }
+
         .timeline-content {
             background: var(--surface-2);
-            padding: 0.75rem 1.25rem;
+            padding: 0.45rem 1.25rem;
             border-radius: var(--radius-sm);
             border: 1px solid var(--border);
-            display: flex;
-            align-items: flex-start;
-            flex-wrap: wrap;
-            gap: 0.75rem 1.5rem;
+            align-items: center;
         }
 
         .timeline-time {
             font-size: 0.75rem;
             color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .timeline-content > div:not(:nth-child(3)) {
+            overflow: hidden;
+            text-overflow: ellipsis;
             white-space: nowrap;
         }
 
