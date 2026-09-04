@@ -512,6 +512,13 @@ class InvoxaTestFailure extends Exception
 {
 }
 
+// Thrown by a test to report 'skip' instead of pass/fail — used by the Email
+// Delivery group when Mailpit isn't configured (i.e. everywhere but the test
+// instance), so those checks don't count as failures in production.
+class InvoxaTestSkipped extends Exception
+{
+}
+
 function invoxaAssertEquals($expected, $actual, string $label = ''): void
 {
     if ($expected != $actual) {
@@ -566,6 +573,51 @@ function invoxaTestCleanupClient($mysqli, int $clientId, string $clientKey): voi
         $mysqli->query("DELETE FROM invoxa_invoices WHERE id IN ($inList)");
     }
     $mysqli->query("DELETE FROM invoxa_clients WHERE id = " . (int) $clientId);
+}
+
+// Non-null only when SMTP_HOST is 'mailpit' — set exclusively by
+// docker-invoxa's test-instance .env.test, never in production. This is the
+// switch the 'Email Delivery' test group checks before actually sending
+// anything, so those tests skip instead of running (or worse, sending real
+// mail) anywhere but the test instance.
+function invoxaMailpitBaseUrl(): ?string
+{
+    return getenv('SMTP_HOST') === 'mailpit' ? 'http://mailpit:8025' : null;
+}
+
+// Polls Mailpit's message list for one addressed to $recipientEmail whose
+// subject or body snippet contains $mustContain, up to $timeoutSeconds — the
+// send itself already completed synchronously by the time this is called,
+// but Mailpit's own indexing isn't guaranteed instant. Messages are never
+// deleted after a test runs (Mailpit doubles as a real inbox a human can
+// browse), so the list keeps growing across runs — the API returns newest
+// first, and that's relied on here to match this run's message rather than
+// an older one from a previous run with a similarly generic subject.
+function invoxaMailpitFindMessage(string $baseUrl, string $recipientEmail, string $mustContain, float $timeoutSeconds = 5.0): ?array
+{
+    $deadline = microtime(true) + $timeoutSeconds;
+    do {
+        $resp = @file_get_contents($baseUrl . '/api/v1/messages?limit=50');
+        $data = $resp !== false ? json_decode($resp, true) : null;
+        foreach ($data['messages'] ?? [] as $msg) {
+            $toAddresses = array_column($msg['To'] ?? [], 'Address');
+            $haystack = ($msg['Subject'] ?? '') . ' ' . ($msg['Snippet'] ?? '');
+            if (in_array($recipientEmail, $toAddresses, true) && str_contains($haystack, $mustContain)) {
+                return $msg;
+            }
+        }
+        usleep(200000);
+    } while (microtime(true) < $deadline);
+    return null;
+}
+
+// Full message detail (HTML/Text body, headers) for a message id from
+// invoxaMailpitFindMessage() — the list endpoint above only carries a
+// truncated snippet, not enough to assert on body content.
+function invoxaMailpitGetMessage(string $baseUrl, string $id): ?array
+{
+    $resp = @file_get_contents($baseUrl . '/api/v1/message/' . rawurlencode($id));
+    return $resp !== false ? json_decode($resp, true) : null;
 }
 
 // Returns the full catalogue of tests, keyed by "Category: Label" (the
@@ -1376,6 +1428,162 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         invoxaAssertTrue(str_contains($html, '$185.00'), 'Tax row should show $185.00 (5% of 3,700)');
     });
 
+    // ── Email Delivery ── unlike Email Content above, these actually call
+    // PHPMailer/SMTP and verify the result — only meaningful (and only run)
+    // when SMTP_HOST is 'mailpit', which is exclusively true on the test
+    // instance. Everywhere else (including production, where this same suite
+    // is reachable from Data Management > Test Suite) they report 'skip'
+    // rather than pass/fail, so a real send is never attempted outside
+    // Mailpit. Messages a test finds are left in Mailpit rather than deleted
+    // — it doubles as a real inbox for manually eyeballing what an email
+    // actually looks like, not just disposable test scaffolding.
+    $run('Email Delivery', 'sendReminderEmailForInvoice', 'reminder email is actually delivered', 'Sends a real overdue-reminder email through SMTP for a disposable test invoice and confirms it lands in Mailpit addressed to the right recipient, with the invoice number in the subject and the invoice HTML in the body — catches regressions the Email Content group can\'t, since pure-function tests never touch the PHPMailer/SMTP path at all.', function () use ($mysqli, $settings) {
+        $mailpitUrl = invoxaMailpitBaseUrl();
+        if ($mailpitUrl === null) {
+            throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
+        }
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 150.00);
+            $mysqli->query("UPDATE invoxa_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 10 DAY) WHERE id = $invId");
+            $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+
+            $result = sendReminderEmailForInvoice($mysqli, $inv, $settings, getenv('SMTP_PASSWORD') ?: '');
+            invoxaAssertTrue($result['sent'], 'sendReminderEmailForInvoice() reported failure: ' . $result['error']);
+
+            $msg = invoxaMailpitFindMessage($mailpitUrl, $inv['recipient_email'], $inv['invoice_number']);
+            invoxaAssertTrue($msg !== null, 'no message addressed to ' . $inv['recipient_email'] . ' with "' . $inv['invoice_number'] . '" in the subject appeared in Mailpit within the timeout');
+            $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
+            $body = ($full['HTML'] ?? '') ?: ($full['Text'] ?? '');
+            invoxaAssertTrue(str_contains($body, $inv['invoice_number']), 'delivered message body does not contain the invoice number');
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
+    $run('Email Delivery', 'resendInvoiceEmail', 'resent invoice email is actually delivered', 'Resends a disposable test invoice\'s stored HTML through SMTP and confirms it lands in Mailpit addressed to the right recipient with that exact HTML as the body — the same code path the invoice row\'s Resend Invoice Email button uses.', function () use ($mysqli, $settings) {
+        $mailpitUrl = invoxaMailpitBaseUrl();
+        if ($mailpitUrl === null) {
+            throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
+        }
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        try {
+            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 90.00);
+            $marker = 'ZT-RESEND-' . bin2hex(random_bytes(4));
+            $html = '<p>Test Suite Fixture invoice body ' . $marker . '</p>';
+            $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET html_content = ? WHERE id = ?");
+            $stmt->bind_param("si", $html, $invId);
+            $stmt->execute();
+            $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+
+            $result = resendInvoiceEmail($mysqli, $inv, $settings, getenv('SMTP_PASSWORD') ?: '');
+            invoxaAssertTrue($result['sent'], 'resendInvoiceEmail() reported failure: ' . $result['error']);
+
+            $msg = invoxaMailpitFindMessage($mailpitUrl, $inv['recipient_email'], $marker);
+            invoxaAssertTrue($msg !== null, 'no message addressed to ' . $inv['recipient_email'] . ' containing "' . $marker . '" appeared in Mailpit within the timeout');
+            $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
+            $body = ($full['HTML'] ?? '') ?: ($full['Text'] ?? '');
+            invoxaAssertTrue(str_contains($body, $marker), 'delivered message body does not contain the stored HTML marker');
+            invoxaAssertTrue(count($full['Attachments'] ?? []) > 0, 'delivered message is missing the invoice HTML attachment');
+        } finally {
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+        }
+    });
+    $run('Email Delivery', 'processInvoice', 'a full invoice is generated and delivered', 'Sends a real, fully-rendered invoice (not just a bare DB row) through SMTP for a disposable test client and confirms it lands in Mailpit with the invoice number and line item in the body — the actual code path invoice creation uses end to end: number generation, HTML rendering, and SMTP send.', function () use ($mysqli, $settings) {
+        $mailpitUrl = invoxaMailpitBaseUrl();
+        if ($mailpitUrl === null) {
+            throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
+        }
+        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        $marker = 'Email Delivery test line item ' . bin2hex(random_bytes(4));
+        $result = null;
+        try {
+            $client = [
+                'client_key' => $clientKey,
+                'client_name' => 'Test Suite Fixture',
+                'email' => 'testsuite@invalid.example',
+                'currency' => '',
+                'account_name' => '',
+                'account_number' => '',
+                'phone' => '',
+                'address' => '',
+                'payment_terms_days' => 21,
+            ];
+            $result = processInvoice($mysqli, $client, 275.00, $marker, getenv('SMTP_PASSWORD') ?: '');
+            invoxaAssertTrue($result['success'], 'processInvoice() reported failure: ' . $result['error']);
+
+            // Matched on the invoice number, not the line-item marker — the
+            // marker renders too far down generateInvoiceHTML()'s markup to
+            // reliably land inside Mailpit's list-view Snippet (a truncated
+            // preview), unlike the invoice number near the top. The marker is
+            // still checked below, just against the untruncated full body.
+            $msg = invoxaMailpitFindMessage($mailpitUrl, $client['email'], $result['invNum']);
+            invoxaAssertTrue($msg !== null, 'no message addressed to ' . $client['email'] . ' with "' . $result['invNum'] . '" appeared in Mailpit within the timeout');
+            $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
+            $body = ($full['HTML'] ?? '') ?: ($full['Text'] ?? '');
+            invoxaAssertTrue(str_contains($body, $result['invNum']), 'delivered invoice body does not contain the invoice number');
+            invoxaAssertTrue(str_contains($body, $marker), 'delivered invoice body does not contain the line item description');
+        } finally {
+            if ($result !== null && !empty($result['invNum'])) {
+                @unlink(INVOICES_DIR . 'test_suite_fixture/' . $result['invNum'] . '.html');
+            }
+            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            @rmdir(INVOICES_DIR . 'test_suite_fixture');
+        }
+    });
+    $run('Email Delivery', 'invoxaSendPasswordResetEmail', 'password reset email is actually delivered', 'Sends a real password-reset email through SMTP and confirms it lands in Mailpit with the reset link, bearing the exact token passed in, in the body — one of the account-lifecycle emails, not just invoice-related ones.', function () {
+        $mailpitUrl = invoxaMailpitBaseUrl();
+        if ($mailpitUrl === null) {
+            throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
+        }
+        $to = 'zt' . bin2hex(random_bytes(4)) . '@invalid.example';
+        $token = bin2hex(random_bytes(16));
+        $sent = invoxaSendPasswordResetEmail('Test Suite Fixture', $to, $token);
+        invoxaAssertTrue($sent, 'invoxaSendPasswordResetEmail() reported failure');
+        $msg = invoxaMailpitFindMessage($mailpitUrl, $to, 'Password Reset');
+        invoxaAssertTrue($msg !== null, 'no password reset message appeared in Mailpit within the timeout');
+        $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
+        invoxaAssertTrue(str_contains($full['HTML'] ?? '', $token), 'delivered message does not contain the reset token');
+    });
+    $run('Email Delivery', 'invoxaSendWelcomeEmail', 'welcome email is actually delivered', 'Sends a real new-account welcome email through SMTP and confirms it lands in Mailpit with the set-password link, bearing the exact token passed in, in the body.', function () {
+        $mailpitUrl = invoxaMailpitBaseUrl();
+        if ($mailpitUrl === null) {
+            throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
+        }
+        $to = 'zt' . bin2hex(random_bytes(4)) . '@invalid.example';
+        $token = bin2hex(random_bytes(16));
+        $sent = invoxaSendWelcomeEmail('Test Suite Fixture', $to, $token);
+        invoxaAssertTrue($sent, 'invoxaSendWelcomeEmail() reported failure');
+        $msg = invoxaMailpitFindMessage($mailpitUrl, $to, 'account is ready');
+        invoxaAssertTrue($msg !== null, 'no welcome message appeared in Mailpit within the timeout');
+        $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
+        invoxaAssertTrue(str_contains($full['HTML'] ?? '', $token), 'delivered message does not contain the set-password token');
+    });
+    $run('Email Delivery', 'invoxaSendVerificationEmail', 'verification email is actually delivered', 'Sends a real email-confirmation message through SMTP and confirms it lands in Mailpit with the verify link, bearing the exact token passed in, in the body.', function () {
+        $mailpitUrl = invoxaMailpitBaseUrl();
+        if ($mailpitUrl === null) {
+            throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
+        }
+        $to = 'zt' . bin2hex(random_bytes(4)) . '@invalid.example';
+        $token = bin2hex(random_bytes(16));
+        $sent = invoxaSendVerificationEmail('Test Suite Fixture', $to, $token);
+        invoxaAssertTrue($sent, 'invoxaSendVerificationEmail() reported failure');
+        $msg = invoxaMailpitFindMessage($mailpitUrl, $to, 'Confirm Your Email');
+        invoxaAssertTrue($msg !== null, 'no verification message appeared in Mailpit within the timeout');
+        $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
+        invoxaAssertTrue(str_contains($full['HTML'] ?? '', $token), 'delivered message does not contain the verification token');
+    });
+    $run('Email Delivery', 'invoxaSendTestEmail', 'SMTP test email is actually delivered', 'Sends the real SMTP test message that Settings > Email\'s Send Test Email button triggers and confirms it lands in Mailpit — the simplest possible check that SMTP itself is reachable and authenticating, independent of any invoice/reminder/account-email template logic.', function () use ($mysqli, $settings) {
+        $mailpitUrl = invoxaMailpitBaseUrl();
+        if ($mailpitUrl === null) {
+            throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
+        }
+        $to = 'zt' . bin2hex(random_bytes(4)) . '@invalid.example';
+        $result = invoxaSendTestEmail($mysqli, $settings, getenv('SMTP_PASSWORD') ?: '', $to);
+        invoxaAssertTrue($result['sent'], 'invoxaSendTestEmail() reported failure: ' . $result['error']);
+        $msg = invoxaMailpitFindMessage($mailpitUrl, $to, 'SMTP Test');
+        invoxaAssertTrue($msg !== null, 'no SMTP test message appeared in Mailpit within the timeout');
+    });
+
     // ── Security ── crypto/signature checks that are pure functions, plus the
     // account-recovery paths that touch the database, using a real but
     // isolated, fake user id (never invoxa_users itself).
@@ -1617,6 +1825,8 @@ function invoxaRunTestSuite($mysqli, array $settings, ?array $selected = null): 
             try {
                 $test['fn']();
                 $results[] = ['name' => $name, 'status' => 'pass', 'message' => '', 'duration_ms' => (int) round((microtime(true) - $start) * 1000)];
+            } catch (InvoxaTestSkipped $e) {
+                $results[] = ['name' => $name, 'status' => 'skip', 'message' => $e->getMessage(), 'duration_ms' => (int) round((microtime(true) - $start) * 1000)];
             } catch (Throwable $e) {
                 $results[] = ['name' => $name, 'status' => 'fail', 'message' => $e->getMessage(), 'duration_ms' => (int) round((microtime(true) - $start) * 1000)];
             }
@@ -1632,6 +1842,7 @@ function invoxaRunTestSuite($mysqli, array $settings, ?array $selected = null): 
         'results' => $results,
         'passed' => count(array_filter($results, fn($r) => $r['status'] === 'pass')),
         'failed' => count(array_filter($results, fn($r) => $r['status'] === 'fail')),
+        'skipped' => count(array_filter($results, fn($r) => $r['status'] === 'skip')),
     ];
 }
 

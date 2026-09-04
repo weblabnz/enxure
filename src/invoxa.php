@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.47');
+define('APP_VERSION', '2.11.48');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -532,6 +532,119 @@ function invoxaLogUnmatchedWebhook($mysqli, string $provider, string $eventType,
     notifyChannel($mysqli, $settings, 'notify_on_webhook_unmatched', "\xE2\x9A\xA0\xEF\xB8\x8F " . ucfirst($provider) . " payment webhook didn't match any invoice ('{$reference}') — payment not credited.");
 }
 
+// Resends an invoice's already-generated email — same stored HTML body,
+// logo, and PDF attachment; not a new invoice number, not a reminder. Shared
+// by the 'resend_invoice_email' action and the Email Delivery test group —
+// callers are responsible for logging the resulting action.
+function resendInvoiceEmail($mysqli, array $inv, array $settings, string $emailPassword): array
+{
+    require_once PHPMAILER_DIR . 'PHPMailer.php';
+    require_once PHPMAILER_DIR . 'SMTP.php';
+    require_once PHPMAILER_DIR . 'Exception.php';
+    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
+    $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
+    $currencyCode = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host = getenv('SMTP_HOST') ?: '';
+        $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
+        $mail->SMTPAuth = trim((string) (getenv('SMTP_USER') ?: '')) !== '';
+        $mail->Username = getenv('SMTP_USER') ?: '';
+        $mail->Password = $emailPassword;
+        $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {
+            'ssl' => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS,
+            'none', '' => false,
+            default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
+        };
+        $mail->CharSet = 'UTF-8';
+        $mail->setFrom($fromEmail, $fromName);
+        $mail->addAddress($inv['recipient_email'], $inv['client_name']);
+        $mail->Subject = renderEmailTemplate($settings['invoice_email_subject'] ?? DEFAULT_INVOICE_SUBJECT, [
+            'business_name' => $fromName,
+            'client_name' => $inv['client_name'],
+            'invoice_number' => $inv['invoice_number'],
+            'amount' => $currencyCode . ' ' . number_format((float) $inv['amount'], 2),
+            'due_date' => $inv['due_date'],
+        ]);
+        $mail->isHTML(true);
+        $mail->Body = $inv['html_content'];
+        $logoPath = INVOICES_DIR . LOGO_FILENAME;
+        if (file_exists($logoPath)) {
+            $mail->addEmbeddedImage($logoPath, 'logo_cid');
+        }
+        $mail->addStringAttachment($inv['html_content'], "Invoice-{$inv['invoice_number']}.html", 'base64', 'text/html');
+        $mail->send();
+        return ['sent' => true, 'error' => ''];
+    } catch (Exception $e) {
+        return ['sent' => false, 'error' => $e->getMessage()];
+    }
+}
+
+// Builds and sends the payment-reminder email for a single invoice using the
+// reminder_email_subject/body templates (Settings > Payment Reminders).
+// Shared by the overdue-reminder cron sweep and the manual "Send Reminder"
+// button — callers are responsible for logging the resulting action.
+function sendReminderEmailForInvoice($mysqli, array $inv, array $settings, string $emailPassword): array
+{
+    require_once PHPMAILER_DIR . 'PHPMailer.php';
+    require_once PHPMAILER_DIR . 'SMTP.php';
+    require_once PHPMAILER_DIR . 'Exception.php';
+
+    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
+    $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
+    $currencyCode = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
+    $outstanding = (float) $inv['amount'] - (float) ($inv['paid_amount'] ?? 0);
+    $daysOverdue = (int) floor((time() - strtotime($inv['due_date'])) / 86400);
+    $vars = [
+        'business_name' => $fromName,
+        'client_name' => $inv['client_name'],
+        'invoice_number' => $inv['invoice_number'],
+        'amount' => $currencyCode . ' ' . number_format($outstanding, 2),
+        'due_date' => date('Y-m-d', strtotime($inv['due_date'])),
+        'days_overdue' => $daysOverdue,
+    ];
+    $subject = renderEmailTemplate($settings['reminder_email_subject'] ?? DEFAULT_REMINDER_SUBJECT, $vars);
+    $body = renderEmailTemplate($settings['reminder_email_body'] ?? DEFAULT_REMINDER_BODY, $vars);
+
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host = getenv('SMTP_HOST') ?: '';
+        $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
+        $mail->SMTPAuth = trim((string) (getenv('SMTP_USER') ?: '')) !== '';
+        $mail->Username = getenv('SMTP_USER') ?: '';
+        $mail->Password = $emailPassword;
+        $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {
+            'ssl' => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS,
+            'none', '' => false,
+            default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
+        };
+        $mail->CharSet = 'UTF-8';
+        $mail->setFrom($fromEmail, $fromName);
+        $mail->addAddress($inv['recipient_email'], $inv['client_name']);
+        $mail->Subject = $subject;
+        // Resends the original invoice HTML rather than a plain-text blurb.
+        // Falls back to the plain-text template for rows with no stored
+        // HTML (e.g. very old/imported invoices — see sync_missing).
+        if (!empty($inv['html_content'])) {
+            $mail->isHTML(true);
+            $mail->Body = $inv['html_content'];
+            $logoPath = INVOICES_DIR . LOGO_FILENAME;
+            if (file_exists($logoPath)) {
+                $mail->addEmbeddedImage($logoPath, 'logo_cid');
+            }
+        } else {
+            $mail->isHTML(false);
+            $mail->Body = $body;
+        }
+        $mail->send();
+        return ['sent' => true, 'error' => '', 'days_overdue' => $daysOverdue, 'amount' => $vars['amount']];
+    } catch (Exception $e) {
+        return ['sent' => false, 'error' => $e->getMessage(), 'days_overdue' => $daysOverdue, 'amount' => $vars['amount']];
+    }
+}
+
 // Emails a one-time overdue reminder for every unpaid, non-quote invoice
 // 7+ days past due, gated by 'reminders_enabled' (Settings > Payment
 // Reminders) and run from the same cron trigger as recurring billing. The
@@ -553,78 +666,20 @@ function sendOverdueReminders($mysqli, array $settings, string $emailPassword): 
            )"
     );
 
-    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
-    $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
-
-    require_once PHPMAILER_DIR . 'PHPMailer.php';
-    require_once PHPMAILER_DIR . 'SMTP.php';
-    require_once PHPMAILER_DIR . 'Exception.php';
-
     while ($inv = $res->fetch_assoc()) {
-        $currencyCode = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
-        $outstanding = (float) $inv['amount'] - (float) ($inv['paid_amount'] ?? 0);
-        $daysOverdue = (int) floor((time() - strtotime($inv['due_date'])) / 86400);
-        $vars = [
-            'business_name' => $fromName,
-            'client_name' => $inv['client_name'],
-            'invoice_number' => $inv['invoice_number'],
-            'amount' => $currencyCode . ' ' . number_format($outstanding, 2),
-            'due_date' => date('Y-m-d', strtotime($inv['due_date'])),
-            'days_overdue' => $daysOverdue,
-        ];
-        $subject = renderEmailTemplate($settings['reminder_email_subject'] ?? DEFAULT_REMINDER_SUBJECT, $vars);
-        $body = renderEmailTemplate($settings['reminder_email_body'] ?? DEFAULT_REMINDER_BODY, $vars);
+        $result = sendReminderEmailForInvoice($mysqli, $inv, $settings, $emailPassword);
 
-        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-        $emailSent = false;
-        $errorMsg = '';
-        try {
-            $mail->isSMTP();
-            $mail->Host = getenv('SMTP_HOST') ?: '';
-            $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
-            $mail->SMTPAuth = trim((string) (getenv('SMTP_USER') ?: '')) !== '';
-            $mail->Username = getenv('SMTP_USER') ?: '';
-            $mail->Password = $emailPassword;
-            $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {
-                'ssl' => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS,
-                'none', '' => false,
-                default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
-            };
-            $mail->CharSet = 'UTF-8';
-            $mail->setFrom($fromEmail, $fromName);
-            $mail->addAddress($inv['recipient_email'], $inv['client_name']);
-            $mail->Subject = $subject;
-            // Resends the original invoice HTML rather than a plain-text blurb.
-            // Falls back to the plain-text template for rows with no stored
-            // HTML (e.g. very old/imported invoices — see sync_missing).
-            if (!empty($inv['html_content'])) {
-                $mail->isHTML(true);
-                $mail->Body = $inv['html_content'];
-                $logoPath = INVOICES_DIR . LOGO_FILENAME;
-                if (file_exists($logoPath)) {
-                    $mail->addEmbeddedImage($logoPath, 'logo_cid');
-                }
-            } else {
-                $mail->isHTML(false);
-                $mail->Body = $body;
-            }
-            $mail->send();
-            $emailSent = true;
-        } catch (Exception $e) {
-            $errorMsg = $e->getMessage();
-        }
-
-        $actionType = $emailSent ? 'reminder_sent' : 'reminder_failed';
-        $notes = $emailSent
-            ? "Overdue reminder emailed to {$inv['recipient_email']} ({$daysOverdue} days overdue)"
-            : "Overdue reminder failed: " . $errorMsg;
+        $actionType = $result['sent'] ? 'reminder_sent' : 'reminder_failed';
+        $notes = $result['sent']
+            ? "Overdue reminder emailed to {$inv['recipient_email']} ({$result['days_overdue']} days overdue)"
+            : "Overdue reminder failed: " . $result['error'];
         invoxaLogAction($mysqli, $inv['id'], $inv['invoice_number'], $actionType, $notes);
 
         // Fired regardless of whether the email itself sent — a broken SMTP
         // config shouldn't also silence the Telegram/Slack alert.
-        notifyChannel($mysqli, $settings, 'notify_on_overdue', "\xE2\x9A\xA0\xEF\xB8\x8F Invoice {$inv['invoice_number']} ({$inv['client_name']}) is {$daysOverdue} days overdue — {$vars['amount']} outstanding");
+        notifyChannel($mysqli, $settings, 'notify_on_overdue', "\xE2\x9A\xA0\xEF\xB8\x8F Invoice {$inv['invoice_number']} ({$inv['client_name']}) is {$result['days_overdue']} days overdue — {$result['amount']} outstanding");
 
-        if ($emailSent)
+        if ($result['sent'])
             $sent++;
         else
             $errors++;
@@ -819,6 +874,11 @@ function renderInvoiceRows(array $invoices): string
                 <?php if ($inv['status'] !== 'void' && $inv['status'] !== 'draft'): ?>
                     <button class="btn small" onclick="resendInvoiceEmail(<?= $inv['id'] ?>)"
                         title="Resend Invoice Email"><i class="fa-solid fa-paper-plane"></i></button>
+                <?php endif; ?>
+                <?php if ($isOverdue): ?>
+                    <button class="btn small" style="background: var(--danger); color: white; border: none;"
+                        onclick="sendReminderEmail(<?= $inv['id'] ?>)"
+                        title="Send Payment Reminder"><i class="fa-solid fa-bell"></i></button>
                 <?php endif; ?>
                 <?php if ($inv['status'] === 'void'): ?>
                     <button class="btn small" onclick="unvoidInvoice(<?= $inv['id'] ?>)"
@@ -1681,66 +1741,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         if ($_POST['action'] === 'resend_invoice_email') {
-            // Resends the original invoice email as-is — same stored HTML body,
-            // logo, and PDF attachment; not a new invoice number, not a reminder.
             $id = (int) ($_POST['id'] ?? 0);
             $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $id")->fetch_assoc();
             if (!$inv || empty($inv['html_content'])) {
                 echo json_encode(['success' => false, 'error' => 'Invoice not found or has no stored content to resend.']);
                 exit;
             }
-            require_once PHPMAILER_DIR . 'PHPMailer.php';
-            require_once PHPMAILER_DIR . 'SMTP.php';
-            require_once PHPMAILER_DIR . 'Exception.php';
-            $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
-            $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
-            $currencyCode = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
-            $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-            $emailSent = false;
-            $errorMsg = '';
-            try {
-                $mail->isSMTP();
-                $mail->Host = getenv('SMTP_HOST') ?: '';
-                $mail->Port = (int) (getenv('SMTP_PORT') ?: 587);
-                $mail->SMTPAuth = trim((string) (getenv('SMTP_USER') ?: '')) !== '';
-                $mail->Username = getenv('SMTP_USER') ?: '';
-                $mail->Password = $emailPassword;
-                $mail->SMTPSecure = match (strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls')) {
-                    'ssl' => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS,
-                    'none', '' => false,
-                    default => PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS,
-                };
-                $mail->CharSet = 'UTF-8';
-                $mail->setFrom($fromEmail, $fromName);
-                $mail->addAddress($inv['recipient_email'], $inv['client_name']);
-                $mail->Subject = renderEmailTemplate($settings['invoice_email_subject'] ?? DEFAULT_INVOICE_SUBJECT, [
-                    'business_name' => $fromName,
-                    'client_name' => $inv['client_name'],
-                    'invoice_number' => $inv['invoice_number'],
-                    'amount' => $currencyCode . ' ' . number_format((float) $inv['amount'], 2),
-                    'due_date' => $inv['due_date'],
-                ]);
-                $mail->isHTML(true);
-                $mail->Body = $inv['html_content'];
-                $logoPath = INVOICES_DIR . LOGO_FILENAME;
-                if (file_exists($logoPath)) {
-                    $mail->addEmbeddedImage($logoPath, 'logo_cid');
-                }
-                $mail->addStringAttachment($inv['html_content'], "Invoice-{$inv['invoice_number']}.html", 'base64', 'text/html');
-                $mail->send();
-                $emailSent = true;
-            } catch (Exception $e) {
-                $errorMsg = $e->getMessage();
-            }
-            $actionType = $emailSent ? 'email_sent' : 'email_failed';
-            $notes = $emailSent ? "Invoice resent to {$inv['recipient_email']}" : "Resend failed: " . $errorMsg;
+            $result = resendInvoiceEmail($mysqli, $inv, $settings, $emailPassword);
+            $actionType = $result['sent'] ? 'email_sent' : 'email_failed';
+            $notes = $result['sent'] ? "Invoice resent to {$inv['recipient_email']}" : "Resend failed: " . $result['error'];
             invoxaLogAction($mysqli, $id, $inv['invoice_number'], $actionType, $notes);
             // A successful resend clears a previously-failed status — it's been
             // sent now, same as if it had succeeded the first time.
-            if ($emailSent && $inv['status'] === 'failed') {
+            if ($result['sent'] && $inv['status'] === 'failed') {
                 $mysqli->query("UPDATE invoxa_invoices SET status = 'sent' WHERE id = $id");
             }
-            echo json_encode(['success' => $emailSent, 'error' => $errorMsg]);
+            echo json_encode(['success' => $result['sent'], 'error' => $result['error']]);
+            exit;
+        }
+        if ($_POST['action'] === 'send_reminder_email') {
+            // Manual, on-demand counterpart to sendOverdueReminders() — same
+            // template and send path, triggered by the row button instead of
+            // the cron sweep. Logs 'reminder_sent' too, so a manual send also
+            // satisfies the automatic sweep's idempotency guard.
+            $id = (int) ($_POST['id'] ?? 0);
+            $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $id")->fetch_assoc();
+            if (!$inv) {
+                echo json_encode(['success' => false, 'error' => 'Invoice not found.']);
+                exit;
+            }
+            $isOverdue = !in_array($inv['status'], ['paid', 'void'], true) && strtotime($inv['due_date']) < time();
+            if (!$isOverdue) {
+                echo json_encode(['success' => false, 'error' => 'This invoice is not overdue.']);
+                exit;
+            }
+            $result = sendReminderEmailForInvoice($mysqli, $inv, $settings, $emailPassword);
+            $actionType = $result['sent'] ? 'reminder_sent' : 'reminder_failed';
+            $notes = $result['sent']
+                ? "Reminder manually sent to {$inv['recipient_email']} ({$result['days_overdue']} days overdue)"
+                : "Manual reminder failed: " . $result['error'];
+            invoxaLogAction($mysqli, $id, $inv['invoice_number'], $actionType, $notes);
+            echo json_encode(['success' => $result['sent'], 'error' => $result['error']]);
             exit;
         }
         if ($_POST['action'] === 'fix_paid_dates') {

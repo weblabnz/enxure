@@ -12,9 +12,11 @@ function invoxaHandleSaveLicenseKey($mysqli, array $settings): void
     exit;
 }
 
-function invoxaHandleTestEmail($mysqli, array $settings, string $emailPassword): void
+// Sends the "SMTP Test" message — Settings > Email's Send Test Email button
+// and the Email Delivery test group both go through this. Logs 'smtp_test'
+// either way; callers decide how to surface the result.
+function invoxaSendTestEmail($mysqli, array $settings, string $emailPassword, string $to): array
 {
-    $to = $_POST['email'];
     require_once PHPMAILER_DIR . 'PHPMailer.php';
     require_once PHPMAILER_DIR . 'SMTP.php';
     require_once PHPMAILER_DIR . 'Exception.php';
@@ -39,15 +41,22 @@ function invoxaHandleTestEmail($mysqli, array $settings, string $emailPassword):
         $mail->Subject = "SMTP Test - {$fromName}";
         $mail->Body = "This is a test email sent from {$fromName} to verify SMTP configuration.";
         $mail->send();
-        $logNotes = "Test email sent to {$to}";
-        invoxaLogAction($mysqli, null, '', 'smtp_test', $logNotes);
-        echo json_encode(['success' => true]);
-        exit;
+        invoxaLogAction($mysqli, null, '', 'smtp_test', "Test email sent to {$to}");
+        return ['sent' => true, 'error' => ''];
     } catch (Exception $e) {
-        $logNotes = "Test email to {$to} failed: " . $e->getMessage();
-        invoxaLogAction($mysqli, null, '', 'smtp_test', $logNotes);
-        throw new Exception($e->getMessage());
+        invoxaLogAction($mysqli, null, '', 'smtp_test', "Test email to {$to} failed: " . $e->getMessage());
+        return ['sent' => false, 'error' => $e->getMessage()];
     }
+}
+
+function invoxaHandleTestEmail($mysqli, array $settings, string $emailPassword): void
+{
+    $result = invoxaSendTestEmail($mysqli, $settings, $emailPassword, $_POST['email']);
+    if (!$result['sent']) {
+        throw new Exception($result['error']);
+    }
+    echo json_encode(['success' => true]);
+    exit;
 }
 
 function invoxaHandleSaveNotificationSettings($mysqli): void

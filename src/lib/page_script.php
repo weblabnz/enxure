@@ -1909,6 +1909,12 @@
                 const json = await res.json();
                 if (json.success) { showToast('Invoice email resent!'); } else { showToast(json.error || 'Resend failed', true); }
             }
+            async function sendReminderEmail(id) {
+                if (!confirm('Send a payment reminder email to the client?')) return;
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'send_reminder_email', id }) });
+                const json = await res.json();
+                if (json.success) { showToast('Reminder sent!'); } else { showToast(json.error || 'Reminder failed', true); }
+            }
             async function voidInvoice(id, invNum) {
                 const reason = prompt(`Void invoice ${invNum}? It stays on record but is excluded from outstanding/overdue totals. This can be undone.\n\nOptional reason:`);
                 if (reason === null) return;
@@ -3379,7 +3385,7 @@
                 const progressFill = document.getElementById('testSuiteProgressFill');
                 progressTrack.style.display = '';
                 progressFill.style.width = '0%';
-                let passed = 0, failed = 0;
+                let passed = 0, failed = 0, skipped = 0;
                 try {
                     // One request per test, run in sequence rather than all at once — each
                     // row ticks pass/fail with its own timing the moment that test finishes,
@@ -3402,6 +3408,9 @@
                             if (r.status === 'pass') {
                                 status.innerHTML = '<span class="badge sent">Passed</span>';
                                 passed++;
+                            } else if (r.status === 'skip') {
+                                status.innerHTML = '<span class="badge void" title="' + (r.message || '').replace(/"/g, '&quot;') + '"><i class="fa-solid fa-forward"></i> Skipped</span>';
+                                skipped++;
                             } else {
                                 status.innerHTML = '<span class="badge failed">Failed</span><div style="margin-top:0.25rem; font-size:0.72rem; color:var(--danger); white-space:normal;">' + (r.message || 'Failed').replace(/</g, '&lt;') + '</div>';
                                 failed++;
@@ -3413,7 +3422,7 @@
                     document.getElementById('testSuiteSummary').innerHTML =
                         ' · <span style="color:' + (allPassed ? 'var(--success)' : 'var(--danger)') + '; font-weight:600;">' +
                         (allPassed ? '<i class="fa-solid fa-circle-check"></i> ' : '<i class="fa-solid fa-circle-xmark"></i> ') +
-                        passed + ' passed, ' + failed + ' failed</span>';
+                        passed + ' passed, ' + failed + ' failed' + (skipped > 0 ? ', ' + skipped + ' skipped' : '') + '</span>';
                     showToast(allPassed ? 'All selected tests passed!' : (failed + ' test(s) failed'), !allPassed);
                 } catch (e) {
                     showToast('Failed to run test suite (network error)', true);
@@ -3745,7 +3754,7 @@
                     color: '#f1f5f9',
                     fontSize: '0.75rem',
                     fontWeight: '400',
-                    whiteSpace: 'nowrap',
+                    whiteSpace: 'pre-line',
                     padding: '0.35rem 0.65rem',
                     borderRadius: '6px',
                     border: '1px solid rgba(255,255,255,0.1)',

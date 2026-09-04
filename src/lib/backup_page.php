@@ -177,7 +177,10 @@
                             <div class="card-header">
                                 <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-vial"
                                         style="color:var(--accent); margin-right:0.5rem;"></i>Test Suite
-                                    <span class="has-tooltip" data-tip="Each check creates its own disposable data and deletes it after, pass or fail — never calls real Stripe/PayPal/SMTP APIs or sends real notifications.">?</span>
+                                    <span class="has-tooltip" data-tip="Each check creates its own disposable data and deletes it after, pass or fail.
+Never calls real Stripe/PayPal APIs or sends real notifications.
+The Email Delivery group sends through real SMTP too, but requires Mailpit — it only runs when SMTP_HOST=mailpit (the test instance's default), reporting Skipped everywhere else, including here in production.
+See DEPLOY.md's Test instance section to set up Mailpit.">?</span>
                                     <?php $__testDefs = invoxaTestDefinitions($mysqli, $settings); ?>
                                     <span style="font-size:0.75rem; font-weight:400; color:var(--text-secondary);">(<?= count($__testDefs) ?> tests available)</span>
                                 </h3>
@@ -228,6 +231,11 @@
                                                             <label style="cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-weight:600; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--accent);">
                                                                 <input type="checkbox" class="test-suite-group-checkbox" data-group="<?= htmlspecialchars($__lastGroup) ?>" checked onclick="toggleTestGroup(this)">
                                                                 <?= htmlspecialchars($__lastGroup) ?>
+                                                                <?php if ($__lastGroup === 'Email Delivery'): ?>
+                                                                    <span style="font-weight:400; text-transform:none; letter-spacing:normal; color:var(--text-secondary); cursor:help;" class="has-tooltip" data-tip="These send through real SMTP and require Mailpit.
+They only run when SMTP_HOST=mailpit (the test instance's default) and report Skipped everywhere else.
+See DEPLOY.md's Test instance section to set up Mailpit.">(requires Mailpit — hover for setup)</span>
+                                                                <?php endif; ?>
                                                             </label>
                                                         </td>
                                                     </tr>

@@ -2,6 +2,16 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.11.48] - 2026-09-04
+
+### Added
+- Overdue invoices now have a manual "Send Reminder" button (invoice row actions, bell icon) alongside Resend Invoice Email — sends the same reminder template/content as the automatic overdue sweep, on demand, for a single invoice. Rejects invoices that aren't actually overdue and logs `reminder_sent`/`reminder_failed` to the Audit Log the same way the automatic sweep does.
+- Data Management > Test Suite gained an "Email Delivery" group — unlike the existing Email Content group (pure template/HTML-generation checks), these actually send through real SMTP and verify the result via Mailpit's API. Covers every real send path: the overdue reminder, resend, a fully-rendered new invoice, password reset, welcome, email verification, and Settings > Email's SMTP test message. Each only runs when `SMTP_HOST=mailpit` (the test instance's default) — everywhere else, including production, they report a new "Skipped" status instead of pass/fail, so the suite stays exactly as side-effect-free elsewhere as it's always been. Messages a test finds are left in Mailpit rather than deleted, since it doubles as a real inbox for eyeballing what an email actually looks like.
+
+### Changed
+- `resend_invoice_email`'s and `test_email`'s dispatch handlers extracted into standalone `resendInvoiceEmail()`/`invoxaSendTestEmail()` functions (matching `sendReminderEmailForInvoice()`'s existing shape) so the new Email Delivery tests can call the real send logic directly instead of duplicating it.
+- Test Suite's header tooltip and the Email Delivery group's row both now note that those checks require Mailpit and point to DEPLOY.md's Test instance section for how to set it up.
+
 ## [2.11.47] - 2026-09-04
 
 ### Fixed
