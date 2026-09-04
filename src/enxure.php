@@ -39,10 +39,10 @@ define('PDF_AUTOLOAD', __DIR__ . '/lib/pdf_autoload.php');
 define('LOGO_FILENAME', 'enxure_logo.jpg');
 define('CRONTAB_PATH', '/etc/enxure-crontab/root');
 define('DOCS_DIR', __DIR__ . '/docs/');
-define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
+define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_UXdnBU8Axt2wy5LDLh7lmTghzIrREeUJM0Upj4ECAXM');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.4');
+define('APP_VERSION', '3.0.5');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).

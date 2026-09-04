@@ -2,6 +2,12 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.5] - 2026-09-05
+
+### Changed
+- Updated `LICENSE_PURCHASE_URL` to the new Polar checkout link.
+
+
 ## [3.0.4] - 2026-09-05
 
 ### Changed
