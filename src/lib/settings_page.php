@@ -1343,8 +1343,8 @@
                                         ?>
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
                                             <?= htmlspecialchars($__licenseMsg) ?></p>
-                                        <a href="<?= htmlspecialchars(LICENSE_PURCHASE_URL) ?>" target="_blank" rel="noopener" class="btn primary" style="margin-top:0.5rem;"><i class="fa-solid fa-cart-shopping"></i> Buy a License</a>
                                     <?php endif; ?>
+                                    <a href="<?= htmlspecialchars(LICENSE_PURCHASE_URL) ?>" target="_blank" rel="noopener" class="btn primary" style="margin-top:0.5rem;"><i class="fa-solid fa-cart-shopping"></i> <?= $licenseValid ? 'Polar Purchase Page' : 'Buy a License' ?></a>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">License

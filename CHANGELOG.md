@@ -2,6 +2,12 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.3] - 2026-09-05
+
+### Changed
+- Settings > License now always shows the Polar purchase link, not just while unlicensed — labeled "Buy a License" before a key is activated and "Polar Purchase Page" afterward, so a licensed user can still get back to Polar (e.g. to check an order or buy again) instead of the link disappearing once `$licenseValid` is true.
+
+
 ## [3.0.2] - 2026-09-05
 
 ### Changed
