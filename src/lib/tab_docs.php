@@ -9,8 +9,8 @@
                 // filters by title and each page's rendered text (see filterDocsNav()
                 // below) — every page's content is already in the DOM, just hidden.
                 $__docCategories = [
-                    'Getting Started' => ['readme' => 'Quick Start', 'install' => 'Installation Guide'],
-                    'Features' => [
+                    'Getting Started' => ['readme' => 'Quick Start', 'install' => 'Installation Guide', 'features' => 'Features'],
+                    'User Guide' => [
                         'overview' => 'Overview',
                         'feat-invoicing' => 'Invoicing & Quotes',
                         'feat-recurring' => 'Recurring Billing',
@@ -33,7 +33,7 @@
                     </div>
                     <?php foreach ($__docCategories as $__catName => $__catPages): ?>
                         <details class="docs-nav-category" data-category="<?= htmlspecialchars($__catName) ?>"
-                            <?= $__catName !== 'Features' ? 'open' : '' ?>>
+                            <?= $__catName !== 'User Guide' ? 'open' : '' ?>>
                             <summary style="padding:0.5rem 0.75rem 0.6rem; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; gap:0.5rem;">
                                 <i class="fa-solid fa-chevron-right docs-cat-chevron"></i>
                                 <span style="flex:1;"><?= htmlspecialchars($__catName) ?></span>
@@ -71,6 +71,59 @@
                             </div>
                         </div>
                     </div>
+                    <div class="subnav-pane" id="docs-pane-features">
+                        <div class="card">
+                            <div class="card-body doc-content">
+                                <h1>Features</h1>
+                                <p>Every main area of enXure, at a glance. Click a card to jump to its page under
+                                    <strong>User Guide</strong> for the full detail. Cards marked <span
+                                        class="badge feature-badge-license">License</span> need a paid license key to
+                                    unlock — everything else is free with a self-hosted install (see
+                                    <strong>Security</strong> under User Guide for exactly what a license covers).</p>
+                                <?php
+                                $__featureCards = [
+                                    ['icon' => 'fa-file-invoice-dollar', 'title' => 'Ad Hoc Invoicing', 'desc' => 'Line-item invoices with optional discount/tax breakdown and a live PDF.', 'target' => 'feat-invoicing'],
+                                    ['icon' => 'fa-file-signature', 'title' => 'Quotes & Conversion', 'desc' => "Build quotes with the same line-item tool, then convert to a real invoice on acceptance.", 'target' => 'feat-invoicing'],
+                                    ['icon' => 'fa-ban', 'title' => 'Void & Unvoid', 'desc' => 'Pull a mistaken invoice out of every total without losing its history.', 'target' => 'feat-invoicing'],
+                                    ['icon' => 'fa-arrows-rotate', 'title' => 'Recurring Billing', 'desc' => 'Per-client billing schedule with a double-billing guard, cron-driven.', 'target' => 'feat-recurring', 'license' => true],
+                                    ['icon' => 'fa-clock', 'title' => 'Late Fees & Reminders', 'desc' => 'Automatic overdue fees and payment reminder emails.', 'target' => 'feat-recurring', 'license' => true],
+                                    ['icon' => 'fa-receipt', 'title' => 'Payment Ledger', 'desc' => "Every payment its own row, so partial payments keep an honest history.", 'target' => 'feat-payments'],
+                                    ['icon' => 'fa-credit-card', 'title' => 'Stripe & PayPal', 'desc' => 'Hosted checkout with webhook-verified Pay Now links.', 'target' => 'feat-payments', 'license' => true],
+                                    ['icon' => 'fa-rotate-left', 'title' => 'Refunds', 'desc' => 'Gateway refunds automatically reopen and adjust the invoice.', 'target' => 'feat-payments'],
+                                    ['icon' => 'fa-address-book', 'title' => 'Clients & CRM Notes', 'desc' => 'Per-client billing defaults plus free-text CRM notes.', 'target' => 'feat-clients'],
+                                    ['icon' => 'fa-door-open', 'title' => 'Client Portal', 'desc' => "Token-gated, login-free page for a client's own invoices and quotes.", 'target' => 'feat-clients', 'license' => true],
+                                    ['icon' => 'fa-shield-halved', 'title' => 'Two-Factor Authentication', 'desc' => 'TOTP login with one-time backup codes.', 'target' => 'feat-security'],
+                                    ['icon' => 'fa-users', 'title' => 'Users & Roles', 'desc' => 'Admin and Member accounts, least-privilege by default.', 'target' => 'feat-security', 'license' => true],
+                                    ['icon' => 'fa-plug', 'title' => 'External API', 'desc' => 'Token-authenticated read/write endpoints for scripts and other tools.', 'target' => 'feat-api', 'license' => true],
+                                    ['icon' => 'fa-gauge-high', 'title' => 'Dashboard', 'desc' => 'At-a-glance revenue, outstanding, and overdue totals.', 'target' => 'feat-reporting'],
+                                    ['icon' => 'fa-chart-line', 'title' => 'Statistics', 'desc' => 'Six focused tabs — Revenue, Forecasting, Tax & Compliance, and more.', 'target' => 'feat-reporting', 'license' => true],
+                                    ['icon' => 'fa-list-check', 'title' => 'Audit Log', 'desc' => 'Every send, payment, refund, and security event, timestamped.', 'target' => 'feat-reporting'],
+                                    ['icon' => 'fa-database', 'title' => 'Backup & Restore', 'desc' => 'Scoped backups with a dry-run restore before anything changes.', 'target' => 'feat-data'],
+                                    ['icon' => 'fa-flask', 'title' => 'Demo Data', 'desc' => 'Seed sample clients and invoices to preview charts safely.', 'target' => 'feat-data'],
+                                    ['icon' => 'fa-vial-circle-check', 'title' => 'Test Suite', 'desc' => 'In-app correctness checks for invoice math, TOTP, and webhooks.', 'target' => 'feat-data'],
+                                    ['icon' => 'fa-wrench', 'title' => 'Data Repair', 'desc' => 'Four narrow fixes for drifted paid dates, totals, and duplicates.', 'target' => 'feat-data'],
+                                    ['icon' => 'fa-bell', 'title' => 'Notifications', 'desc' => 'Slack, Telegram, or a generic webhook, independent of email.', 'target' => 'feat-notifications'],
+                                    ['icon' => 'fa-keyboard', 'title' => 'Keyboard Shortcuts', 'desc' => 'Press ? anywhere for the full shortcuts overlay.', 'target' => 'feat-shortcuts'],
+                                ];
+                                ?>
+                                <div class="feature-cards-grid">
+                                    <?php foreach ($__featureCards as $__fc): ?>
+                                        <button type="button" class="feature-card" onclick="navDocs('<?= htmlspecialchars($__fc['target']) ?>')">
+                                            <div class="feature-card-top">
+                                                <div class="feature-card-icon"><i class="fa-solid <?= htmlspecialchars($__fc['icon']) ?>"></i></div>
+                                                <?php if (!empty($__fc['license'])): ?>
+                                                    <span class="badge feature-badge-license">License</span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="feature-card-title"><?= htmlspecialchars($__fc['title']) ?></div>
+                                            <p class="feature-card-desc"><?= htmlspecialchars($__fc['desc']) ?></p>
+                                        </button>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="subnav-pane" id="docs-pane-roadmap">
                         <div class="card">
                             <div class="card-body doc-content">

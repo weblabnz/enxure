@@ -1575,6 +1575,7 @@
 
         .doc-content table {
             width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
             margin: 0.75rem 0 1.25rem;
             font-size: 0.85rem;
@@ -1594,7 +1595,7 @@
         .doc-content td { color: var(--text-secondary); }
 
         .doc-content img {
-            max-width: 70%;
+            max-width: 100%;
             height: auto;
             border-radius: var(--radius-sm);
             border: 1px solid var(--border);
@@ -1835,6 +1836,75 @@
         .roadmap-desc {
             color: var(--text-secondary);
             font-size: 0.9rem;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        .feature-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.1rem;
+            margin: 1.25rem 0 0.5rem;
+        }
+
+        .feature-card {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+            width: 100%;
+            text-align: left;
+            font-family: inherit;
+            cursor: pointer;
+            background: linear-gradient(180deg, var(--surface-2), var(--surface));
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 1.1rem 1.2rem;
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--accent);
+        }
+
+        .feature-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            gap: 0.5rem;
+        }
+
+        .feature-card-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .feature-badge-license {
+            background: color-mix(in srgb, var(--warning) 15%, transparent);
+            color: var(--warning);
+        }
+
+        .feature-card-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .feature-card-desc {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
             line-height: 1.5;
             margin: 0;
         }

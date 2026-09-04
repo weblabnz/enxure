@@ -2,6 +2,18 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.2] - 2026-09-05
+
+### Changed
+- Docs > Features category renamed to Docs > User Guide, since that's what it actually is: the how-to reference for each feature area, not a features list.
+
+### Added
+- Docs > Getting Started > Features: a new card-based overview of enXure's ~20 main feature areas (Invoicing & Quotes, Recurring Billing, Payments, Client Portal, Security, External API, Reporting, Data Management, Notifications, Keyboard Shortcuts, and more), each card linking straight to its page under Docs > User Guide, laid out in a responsive grid.
+
+### Fixed
+- README screenshot pairs shown in Docs > Quick Start rendered unevenly, with the left-column image consistently larger than the right one — the table's automatic column-width algorithm was sizing each column from the images' native pixel dimensions before the existing image size cap applied. `.doc-content table` now uses `table-layout: fixed` so paired screenshots always share an equal-width column, and the image cap itself was raised to `max-width: 100%` of that column.
+
+
 ## [3.0.1] - 2026-09-04
 
 ### Changed
