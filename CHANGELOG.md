@@ -2,6 +2,11 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.12.1] - 2026-09-04
+
+### Fixed
+- A fenced code block indented under a list item (e.g. INSTALL.md's Gmail SMTP setup step) rendered as garbled literal backticks instead of a code block — the renderer's fence detection required the ``` marker at the very start of the line, with zero tolerance for the indentation a nested list item naturally has. Now tolerates up to 3 leading spaces on the fence (matching CommonMark), and strips that same indentation back off the code content so it doesn't render with the list item's indent baked in.
+
 ## [2.12.0] - 2026-09-04
 
 ### Added

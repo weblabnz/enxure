@@ -82,13 +82,18 @@ function invoxaRenderMarkdown(string $md): string
     while ($i < $n) {
         $line = $lines[$i];
 
-        // Fenced code block
-        if (preg_match('/^```/', $line)) {
+        // Fenced code block — up to 3 leading spaces tolerated on the fence
+        // itself (CommonMark's own allowance, and how a fence nested under a
+        // numbered/bulleted list item is normally indented); that same
+        // leading whitespace is stripped back off each content line too, so
+        // the block doesn't render with the list item's indent baked in.
+        if (preg_match('/^( {0,3})```/', $line, $fm)) {
             $closeLists();
+            $indent = $fm[1];
             $code = [];
             $i++;
-            while ($i < $n && !preg_match('/^```/', $lines[$i])) {
-                $code[] = $lines[$i];
+            while ($i < $n && !preg_match('/^ {0,3}```/', $lines[$i])) {
+                $code[] = preg_replace('/^' . preg_quote($indent, '/') . '/', '', $lines[$i]);
                 $i++;
             }
             $i++; // skip closing fence
@@ -168,7 +173,7 @@ function invoxaRenderMarkdown(string $md): string
         $closeLists();
         $para = [$line];
         $i++;
-        while ($i < $n && trim($lines[$i]) !== '' && !preg_match('/^(#{1,4}\s|```|\s*[-*]\s|\s*\d+\.\s)/', $lines[$i])) {
+        while ($i < $n && trim($lines[$i]) !== '' && !preg_match('/^(#{1,4}\s| {0,3}```|\s*[-*]\s|\s*\d+\.\s)/', $lines[$i])) {
             $para[] = $lines[$i];
             $i++;
         }
