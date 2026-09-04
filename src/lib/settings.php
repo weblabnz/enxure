@@ -1,6 +1,6 @@
 <?php
 
-function invoxaHandleSaveLicenseKey($mysqli, array $settings): void
+function enxureHandleSaveLicenseKey($mysqli, array $settings): void
 {
     $key = trim($_POST['license_key'] ?? '');
     $stmt = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('license_key', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
@@ -15,12 +15,12 @@ function invoxaHandleSaveLicenseKey($mysqli, array $settings): void
 // Sends the "SMTP Test" message — Settings > Email's Send Test Email button
 // and the Email Delivery test group both go through this. Logs 'smtp_test'
 // either way; callers decide how to surface the result.
-function invoxaSendTestEmail($mysqli, array $settings, string $emailPassword, string $to): array
+function enxureSendTestEmail($mysqli, array $settings, string $emailPassword, string $to): array
 {
     require_once PHPMAILER_DIR . 'PHPMailer.php';
     require_once PHPMAILER_DIR . 'SMTP.php';
     require_once PHPMAILER_DIR . 'Exception.php';
-    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
+    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'enXure');
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {
@@ -41,17 +41,17 @@ function invoxaSendTestEmail($mysqli, array $settings, string $emailPassword, st
         $mail->Subject = "SMTP Test - {$fromName}";
         $mail->Body = "This is a test email sent from {$fromName} to verify SMTP configuration.";
         $mail->send();
-        invoxaLogAction($mysqli, null, '', 'smtp_test', "Test email sent to {$to}");
+        enxureLogAction($mysqli, null, '', 'smtp_test', "Test email sent to {$to}");
         return ['sent' => true, 'error' => ''];
     } catch (Exception $e) {
-        invoxaLogAction($mysqli, null, '', 'smtp_test', "Test email to {$to} failed: " . $e->getMessage());
+        enxureLogAction($mysqli, null, '', 'smtp_test', "Test email to {$to} failed: " . $e->getMessage());
         return ['sent' => false, 'error' => $e->getMessage()];
     }
 }
 
-function invoxaHandleTestEmail($mysqli, array $settings, string $emailPassword): void
+function enxureHandleTestEmail($mysqli, array $settings, string $emailPassword): void
 {
-    $result = invoxaSendTestEmail($mysqli, $settings, $emailPassword, $_POST['email']);
+    $result = enxureSendTestEmail($mysqli, $settings, $emailPassword, $_POST['email']);
     if (!$result['sent']) {
         throw new Exception($result['error']);
     }
@@ -59,7 +59,7 @@ function invoxaHandleTestEmail($mysqli, array $settings, string $emailPassword):
     exit;
 }
 
-function invoxaHandleSaveNotificationSettings($mysqli): void
+function enxureHandleSaveNotificationSettings($mysqli): void
 {
     $channel = in_array($_POST['notification_channel'] ?? 'none', ['none', 'telegram', 'slack', 'webhook'], true)
         ? $_POST['notification_channel'] : 'none';
@@ -107,11 +107,11 @@ function invoxaHandleSaveNotificationSettings($mysqli): void
     exit;
 }
 
-function invoxaHandleTestNotification($mysqli, array $settings): void
+function enxureHandleTestNotification($mysqli, array $settings): void
 {
     $channel = in_array($_POST['notification_channel'] ?? 'none', ['telegram', 'slack', 'webhook'], true)
         ? $_POST['notification_channel'] : null;
-    $fromName = $settings['business_name'] ?? 'Invoxa';
+    $fromName = $settings['business_name'] ?? 'enXure';
     $message = "\xF0\x9F\x94\x94 Test notification from {$fromName}.";
     if ($channel === 'slack') {
         $result = sendSlackNotification(trim($_POST['slack_webhook_url'] ?? ''), $message);
@@ -126,26 +126,26 @@ function invoxaHandleTestNotification($mysqli, array $settings): void
     }
     $logNotes = $result['success'] ? ucfirst($channel ?? '') . ' test message sent' : 'Notification test failed: ' . $result['error'];
     $actionType = $result['success'] ? 'notification_test' : 'notification_failed';
-    invoxaLogAction($mysqli, null, '', $actionType, $logNotes);
+    enxureLogAction($mysqli, null, '', $actionType, $logNotes);
     echo json_encode($result);
     exit;
 }
 
-function invoxaHandleCreateApiToken($mysqli, array $settings): void
+function enxureHandleCreateApiToken($mysqli, array $settings): void
 {
     $label = trim($_POST['label'] ?? '');
     if ($label === '') {
         throw new Exception('Give this token a label so you can tell it apart later.');
     }
     $expiryDays = ['never' => null, '30' => 30, '90' => 90, '365' => 365][$_POST['expiry'] ?? 'never'] ?? null;
-    $created = invoxaCreateApiToken($mysqli, $label, $expiryDays);
-    invoxaLogAction($mysqli, null, '', 'api_token_created', 'API token created: ' . $label);
+    $created = enxureCreateApiToken($mysqli, $label, $expiryDays);
+    enxureLogAction($mysqli, null, '', 'api_token_created', 'API token created: ' . $label);
     notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F API token created: {$label}");
     echo json_encode(['success' => true, 'token' => $created['token']]);
     exit;
 }
 
-function invoxaHandleRenewApiToken($mysqli): void
+function enxureHandleRenewApiToken($mysqli): void
 {
     $id = (int) ($_POST['id'] ?? 0);
     $expiryDays = ['never' => null, '30' => 30, '90' => 90, '365' => 365][$_POST['expiry'] ?? 'never'] ?? null;
@@ -161,20 +161,20 @@ function invoxaHandleRenewApiToken($mysqli): void
     exit;
 }
 
-function invoxaHandleRevokeApiToken($mysqli, array $settings): void
+function enxureHandleRevokeApiToken($mysqli, array $settings): void
 {
     $id = (int) ($_POST['id'] ?? 0);
     $label = $mysqli->query("SELECT label FROM invoxa_api_tokens WHERE id = " . $id)->fetch_assoc()['label'] ?? '';
     $stmt = $mysqli->prepare("UPDATE invoxa_api_tokens SET revoked_at = NOW() WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-    invoxaLogAction($mysqli, null, '', 'api_token_revoked', 'API token revoked: ' . $label);
+    enxureLogAction($mysqli, null, '', 'api_token_revoked', 'API token revoked: ' . $label);
     notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F API token revoked: {$label}");
     echo json_encode(['success' => true]);
     exit;
 }
 
-function invoxaHandleDeleteApiToken($mysqli): void
+function enxureHandleDeleteApiToken($mysqli): void
 {
     $id = (int) ($_POST['id'] ?? 0);
     $row = $mysqli->query("SELECT label, revoked_at, expires_at FROM invoxa_api_tokens WHERE id = " . $id)->fetch_assoc();
@@ -188,12 +188,12 @@ function invoxaHandleDeleteApiToken($mysqli): void
     $stmt = $mysqli->prepare("DELETE FROM invoxa_api_tokens WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-    invoxaLogAction($mysqli, null, '', 'api_token_revoked', 'API token permanently deleted: ' . $row['label']);
+    enxureLogAction($mysqli, null, '', 'api_token_revoked', 'API token permanently deleted: ' . $row['label']);
     echo json_encode(['success' => true]);
     exit;
 }
 
-function invoxaHandleUpdateProfile($mysqli, int $currentUserId): void
+function enxureHandleUpdateProfile($mysqli, int $currentUserId): void
 {
     $newUsername = trim($_POST['new_username'] ?? '');
     $newEmail = trim($_POST['new_email'] ?? '');
@@ -246,13 +246,13 @@ function invoxaHandleUpdateProfile($mysqli, int $currentUserId): void
         $stmt->execute();
     }
     if ($emailChanged) {
-        invoxaIssueEmailVerification($mysqli, (int) $user['id'], $newUsername !== '' ? $newUsername : $user['username'], $newEmail);
+        enxureIssueEmailVerification($mysqli, (int) $user['id'], $newUsername !== '' ? $newUsername : $user['username'], $newEmail);
     }
     echo json_encode(['success' => true]);
     exit;
 }
 
-function invoxaHandleTotpSetupInit($mysqli, int $currentUserId): void
+function enxureHandleTotpSetupInit($mysqli, int $currentUserId): void
 {
     $userRow = $mysqli->query("SELECT id, username FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
     if (!$userRow) {
@@ -266,7 +266,7 @@ function invoxaHandleTotpSetupInit($mysqli, int $currentUserId): void
     exit;
 }
 
-function invoxaHandleTotpSetupConfirm($mysqli, int $currentUserId, array $settings): void
+function enxureHandleTotpSetupConfirm($mysqli, int $currentUserId, array $settings): void
 {
     $userRow = $mysqli->query("SELECT id, totp_secret_pending FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
     if (!$userRow || empty($userRow['totp_secret_pending'])) {
@@ -278,14 +278,14 @@ function invoxaHandleTotpSetupConfirm($mysqli, int $currentUserId, array $settin
     $stmt = $mysqli->prepare("UPDATE invoxa_users SET totp_secret = totp_secret_pending, totp_secret_pending = NULL WHERE id = ?");
     $stmt->bind_param("i", $userRow['id']);
     $stmt->execute();
-    $backupCodes = invoxaIssueBackupCodes($mysqli, (int) $userRow['id']);
-    invoxaLogAction($mysqli, null, '', 'totp_enabled', 'Two-factor authentication enabled');
+    $backupCodes = enxureIssueBackupCodes($mysqli, (int) $userRow['id']);
+    enxureLogAction($mysqli, null, '', 'totp_enabled', 'Two-factor authentication enabled');
     notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F Two-factor authentication enabled");
     echo json_encode(['success' => true, 'backup_codes' => $backupCodes]);
     exit;
 }
 
-function invoxaHandleTotpRegenerateBackupCodes($mysqli, int $currentUserId, array $settings): void
+function enxureHandleTotpRegenerateBackupCodes($mysqli, int $currentUserId, array $settings): void
 {
     $userRow = $mysqli->query("SELECT id, password_hash, totp_secret FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
     if (!$userRow || empty($userRow['totp_secret'])) {
@@ -294,14 +294,14 @@ function invoxaHandleTotpRegenerateBackupCodes($mysqli, int $currentUserId, arra
     if (!password_verify($_POST['current_password'] ?? '', $userRow['password_hash'])) {
         throw new Exception('Current password is incorrect.');
     }
-    $backupCodes = invoxaIssueBackupCodes($mysqli, (int) $userRow['id']);
-    invoxaLogAction($mysqli, null, '', 'totp_enabled', 'Backup codes regenerated — previous codes no longer work');
+    $backupCodes = enxureIssueBackupCodes($mysqli, (int) $userRow['id']);
+    enxureLogAction($mysqli, null, '', 'totp_enabled', 'Backup codes regenerated — previous codes no longer work');
     notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F Two-factor authentication backup codes regenerated — previous codes no longer work");
     echo json_encode(['success' => true, 'backup_codes' => $backupCodes]);
     exit;
 }
 
-function invoxaHandleTotpDisable($mysqli, int $currentUserId, array $settings): void
+function enxureHandleTotpDisable($mysqli, int $currentUserId, array $settings): void
 {
     $userRow = $mysqli->query("SELECT id, password_hash FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
     if (!$userRow || !password_verify($_POST['current_password'] ?? '', $userRow['password_hash'])) {
@@ -311,13 +311,13 @@ function invoxaHandleTotpDisable($mysqli, int $currentUserId, array $settings): 
     $stmt->bind_param("i", $userRow['id']);
     $stmt->execute();
     $mysqli->query("DELETE FROM invoxa_totp_backup_codes WHERE user_id = " . (int) $userRow['id']);
-    invoxaLogAction($mysqli, null, '', 'totp_disabled', 'Two-factor authentication disabled');
+    enxureLogAction($mysqli, null, '', 'totp_disabled', 'Two-factor authentication disabled');
     notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F Two-factor authentication disabled");
     echo json_encode(['success' => true]);
     exit;
 }
 
-function invoxaHandleCreateUser($mysqli, array $settings): void
+function enxureHandleCreateUser($mysqli, array $settings): void
 {
     $newUsername = trim($_POST['username'] ?? '');
     $newEmail = trim($_POST['email'] ?? '');
@@ -340,14 +340,14 @@ function invoxaHandleCreateUser($mysqli, array $settings): void
     $stmt = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, ?, ?, ?)");
     $stmt->bind_param("ssss", $newUsername, $newEmail, $newRole, $hash);
     $stmt->execute();
-    invoxaIssueUserWelcomeEmail($mysqli, (int) $mysqli->insert_id, $newUsername, $newEmail);
-    invoxaLogAction($mysqli, null, '', 'user_created', "User account created: {$newUsername} ({$newRole})");
+    enxureIssueUserWelcomeEmail($mysqli, (int) $mysqli->insert_id, $newUsername, $newEmail);
+    enxureLogAction($mysqli, null, '', 'user_created', "User account created: {$newUsername} ({$newRole})");
     notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F User account created: {$newUsername} ({$newRole})");
     echo json_encode(['success' => true]);
     exit;
 }
 
-function invoxaHandleUpdateUser($mysqli, array $settings): void
+function enxureHandleUpdateUser($mysqli, array $settings): void
 {
     $id = (int) ($_POST['id'] ?? 0);
     $newRole = ($_POST['role'] ?? 'member') === 'admin' ? 'admin' : 'member';
@@ -375,17 +375,17 @@ function invoxaHandleUpdateUser($mysqli, array $settings): void
     }
     $stmt->execute();
     if ($newRole !== $target['role']) {
-        invoxaLogAction($mysqli, null, '', 'user_role_changed', "{$target['username']}'s role changed to {$newRole}");
+        enxureLogAction($mysqli, null, '', 'user_role_changed', "{$target['username']}'s role changed to {$newRole}");
         notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F {$target['username']}'s role changed to {$newRole}");
     }
     if ($newPassword !== '') {
-        invoxaLogAction($mysqli, null, '', 'user_password_reset', "Password reset for {$target['username']} by an admin");
+        enxureLogAction($mysqli, null, '', 'user_password_reset', "Password reset for {$target['username']} by an admin");
     }
     echo json_encode(['success' => true]);
     exit;
 }
 
-function invoxaHandleDeleteUser($mysqli, int $currentUserId, array $settings): void
+function enxureHandleDeleteUser($mysqli, int $currentUserId, array $settings): void
 {
     $id = (int) ($_POST['id'] ?? 0);
     if ($id === $currentUserId) {
@@ -405,13 +405,13 @@ function invoxaHandleDeleteUser($mysqli, int $currentUserId, array $settings): v
     $stmt = $mysqli->prepare("DELETE FROM invoxa_users WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-    invoxaLogAction($mysqli, null, '', 'user_deleted', "User account deleted: {$target['username']}");
+    enxureLogAction($mysqli, null, '', 'user_deleted', "User account deleted: {$target['username']}");
     notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F User account deleted: {$target['username']}");
     echo json_encode(['success' => true]);
     exit;
 }
 
-function invoxaHandleToggleTestClients($mysqli): void
+function enxureHandleToggleTestClients($mysqli): void
 {
     $val = $_POST['hide'] === '1' ? '1' : '0';
     $mysqli->query("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('hide_test', '$val') ON DUPLICATE KEY UPDATE setting_value = '$val'");
@@ -419,7 +419,7 @@ function invoxaHandleToggleTestClients($mysqli): void
     exit;
 }
 
-function invoxaHandleToggleShowTestOnly($mysqli): void
+function enxureHandleToggleShowTestOnly($mysqli): void
 {
     $val = $_POST['show'] === '1' ? '1' : '0';
     $mysqli->query("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('show_test_only', '$val') ON DUPLICATE KEY UPDATE setting_value = '$val'");
@@ -427,21 +427,21 @@ function invoxaHandleToggleShowTestOnly($mysqli): void
     exit;
 }
 
-function invoxaHandleGetDefaultInvoiceTemplate(): void
+function enxureHandleGetDefaultInvoiceTemplate(): void
 {
     echo json_encode(['success' => true, 'template' => defaultCustomInvoiceTemplate()]);
     exit;
 }
 
-function invoxaHandlePreviewInvoiceTemplate(array $settings, bool $licenseValid): void
+function enxureHandlePreviewInvoiceTemplate(array $settings, bool $licenseValid): void
 {
     $template = in_array($_POST['template'] ?? '', ['compact', 'custom'], true) ? $_POST['template'] : 'detailed';
     $customHtml = $_POST['custom_html'] ?? ($settings['custom_invoice_template'] ?? '');
-    echo json_encode(['success' => true, 'html' => invoxaSampleInvoiceHtml($template, $customHtml, $settings, $licenseValid)]);
+    echo json_encode(['success' => true, 'html' => enxureSampleInvoiceHtml($template, $customHtml, $settings, $licenseValid)]);
     exit;
 }
 
-function invoxaHandleSaveInvoiceTemplate($mysqli): void
+function enxureHandleSaveInvoiceTemplate($mysqli): void
 {
     $invoiceTemplate = in_array($_POST['invoice_template'] ?? '', ['compact', 'custom'], true) ? $_POST['invoice_template'] : 'detailed';
     $customInvoiceTemplate = $_POST['custom_invoice_template'] ?? '';
@@ -458,7 +458,7 @@ function invoxaHandleSaveInvoiceTemplate($mysqli): void
     exit;
 }
 
-function invoxaHandleSaveBusinessIdentity($mysqli, bool $licenseValid): void
+function enxureHandleSaveBusinessIdentity($mysqli, bool $licenseValid): void
 {
     $businessName = $_POST['business_name'] ?? '';
     $vatNumber = trim($_POST['vat_number'] ?? '');
@@ -494,7 +494,7 @@ function invoxaHandleSaveBusinessIdentity($mysqli, bool $licenseValid): void
     exit;
 }
 
-function invoxaHandleSaveInvoiceDefaults($mysqli): void
+function enxureHandleSaveInvoiceDefaults($mysqli): void
 {
     $currency = strtoupper(preg_replace('/[^A-Za-z]/', '', $_POST['currency'] ?? '')) ?: 'USD';
     $currency = substr($currency, 0, 3);
@@ -520,7 +520,7 @@ function invoxaHandleSaveInvoiceDefaults($mysqli): void
     exit;
 }
 
-function invoxaHandleSavePaymentDetails($mysqli): void
+function enxureHandleSavePaymentDetails($mysqli): void
 {
     $footerText = $_POST['footer_text'] ?? '';
     $defaultAccountName = $_POST['default_account_name'] ?? '';
@@ -539,7 +539,7 @@ function invoxaHandleSavePaymentDetails($mysqli): void
     exit;
 }
 
-function invoxaHandleSaveEmailTemplates($mysqli): void
+function enxureHandleSaveEmailTemplates($mysqli): void
 {
     $invoiceEmailSubject = trim($_POST['invoice_email_subject'] ?? '') ?: DEFAULT_INVOICE_SUBJECT;
     $reminderEmailSubject = trim($_POST['reminder_email_subject'] ?? '') ?: DEFAULT_REMINDER_SUBJECT;
@@ -558,7 +558,7 @@ function invoxaHandleSaveEmailTemplates($mysqli): void
     exit;
 }
 
-function invoxaHandleSaveInvoiceNumbering($mysqli): void
+function enxureHandleSaveInvoiceNumbering($mysqli): void
 {
     $template = trim($_POST['invoice_number_template'] ?? '') ?: '{key}{seq}';
     $padding = (int) ($_POST['invoice_number_padding'] ?? 3);
@@ -576,7 +576,7 @@ function invoxaHandleSaveInvoiceNumbering($mysqli): void
     exit;
 }
 
-function invoxaHandleResendVerificationEmail($mysqli, int $currentUserId): void
+function enxureHandleResendVerificationEmail($mysqli, int $currentUserId): void
 {
     error_reporting(0);
     ob_start();
@@ -585,7 +585,7 @@ function invoxaHandleResendVerificationEmail($mysqli, int $currentUserId): void
         if (!$user || empty($user['email'])) {
             throw new Exception('No account email on file.');
         }
-        $sent = invoxaIssueEmailVerification($mysqli, (int) $user['id'], $user['username'], $user['email']);
+        $sent = enxureIssueEmailVerification($mysqli, (int) $user['id'], $user['username'], $user['email']);
         ob_clean();
         echo json_encode(['success' => $sent, 'error' => $sent ? '' : 'Failed to send — check SMTP settings.']);
     } catch (Throwable $e) {

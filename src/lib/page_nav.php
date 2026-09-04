@@ -1,6 +1,6 @@
 <body>
 
-    <div class="mobile-brand-icon"><img src="assets/img/invoxa-mark.svg" alt="Invoxa"></div>
+    <div class="mobile-brand-icon"><img src="assets/img/enxure-mark.svg" alt="enXure"></div>
     <button type="button" class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Toggle menu"><i
             class="fa-solid fa-bars"></i></button>
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
@@ -18,8 +18,8 @@
 
     <div class="sidebar">
         <div class="sidebar-header">
-            <h1 id="sidebarBrandName"><img src="assets/img/invoxa-mark.svg" width="36" height="36" alt="">
-                <img src="assets/img/invoxa-wordmark.svg" height="30" alt="Invoxa" style="width:auto;"></h1>
+            <h1 id="sidebarBrandName"><img src="assets/img/enxure-mark.svg" width="36" height="36" alt="">
+                <img src="assets/img/enxure-wordmark.svg" height="30" alt="enXure" style="width:auto;"></h1>
         </div>
         <div class="nav-section-label">Main Menu</div>
 
@@ -106,8 +106,8 @@
                     class="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button></form>
             <div style="display:flex; align-items:center; justify-content:center; gap:0.6rem; margin-top:1rem; font-size:0.75rem; color:var(--text-secondary);">
                 <span style="cursor:pointer;" title="View changelog" onclick="nav('docs', true); navDocs('changelog');">
-                    <span class="brand-wordmark">Invoxa</span> v<?= htmlspecialchars(APP_VERSION) ?></span>
-                <a href="https://gitlab.com/weblabnz/invoxa" target="_blank" title="Source on GitLab"
+                    <span class="brand-wordmark">enXure</span> v<?= htmlspecialchars(APP_VERSION) ?></span>
+                <a href="https://gitlab.com/weblabnz/enxure" target="_blank" title="Source on GitLab"
                     style="color:var(--text-secondary);"><i class="fa-brands fa-gitlab"></i></a>
             </div>
         </div>

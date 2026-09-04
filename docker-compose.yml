@@ -1,13 +1,15 @@
+name: enxure
+
 services:
 
   db:
     image: mysql:8.0
-    container_name: invoxa-db
+    container_name: enxure-db
     environment:
-      MYSQL_DATABASE: ${DB_NAME:-invoxa}
-      MYSQL_USER: ${DB_USER:-invoxa}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-invoxa_default_change_me}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-invoxa_root_default_change_me}
+      MYSQL_DATABASE: ${DB_NAME:-enxure}
+      MYSQL_USER: ${DB_USER:-enxure}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-enxure_default_change_me}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-enxure_root_default_change_me}
       # Keeps stored timestamps in APP_TIMEZONE — MySQL defaults to UTC
       # otherwise, and the app reads DATETIME columns as already being local.
       TZ: ${APP_TIMEZONE:-UTC}
@@ -22,13 +24,13 @@ services:
       - db-data:/var/lib/mysql
       - ./sql/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     networks:
-      - invoxa-net
+      - enxure-net
 
   php:
     build:
       context: .
       dockerfile: php/Dockerfile
-    container_name: invoxa-php
+    container_name: enxure-php
     restart: unless-stopped
     depends_on:
       db:
@@ -36,9 +38,9 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 3306
-      DB_NAME: ${DB_NAME:-invoxa}
-      DB_USER: ${DB_USER:-invoxa}
-      DB_PASSWORD: ${DB_PASSWORD:-invoxa_default_change_me}
+      DB_NAME: ${DB_NAME:-enxure}
+      DB_USER: ${DB_USER:-enxure}
+      DB_PASSWORD: ${DB_PASSWORD:-enxure_default_change_me}
       # Leave unset — a unique secret is generated automatically on first boot
       # (see php/docker-entrypoint.sh). Never reuse the same value across
       # installs: this secret gates an endpoint reachable over the public HTTP
@@ -51,15 +53,15 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
-      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Invoxa}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-enXure}
       SMTP_ENCRYPTION: ${SMTP_ENCRYPTION:-tls}
     volumes:
-      - ./src:/usr/share/nginx/html:ro
+      - ./src:/usr/share/nginx/html
       # Host bind mounts so invoices/backups are ordinary files you can browse
       # or back up with normal host tools, not buried in Docker volume storage.
-      - ./invoxa-invoices:/usr/share/nginx/html/invoxa-invoices
-      - ./invoxa-backups:/usr/share/nginx/html/invoxa-backups
-      - crontab-data:/etc/invoxa-crontab
+      - ./enxure-invoices:/usr/share/nginx/html/enxure-invoices
+      - ./enxure-backups:/usr/share/nginx/html/enxure-backups
+      - crontab-data:/etc/enxure-crontab
       # Rendered in-app on the Docs tab — only the php container needs these.
       - ./README.md:/usr/share/nginx/html/docs/README.md:ro
       - ./INSTALL.md:/usr/share/nginx/html/docs/INSTALL.md:ro
@@ -67,7 +69,7 @@ services:
       - ./LICENSE:/usr/share/nginx/html/docs/LICENSE:ro
       - ./docs/screenshots:/usr/share/nginx/html/docs/screenshots
     networks:
-      - invoxa-net
+      - enxure-net
     healthcheck:
       # Checks that php-fpm itself is responding, independent of nginx or the
       # database (covered by the healthchecks below).
@@ -78,7 +80,7 @@ services:
 
   nginx:
     image: nginx:1.27-alpine
-    container_name: invoxa-nginx
+    container_name: enxure-nginx
     restart: unless-stopped
     depends_on:
       - php
@@ -86,8 +88,8 @@ services:
       - "${HTTP_PORT:-8090}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./src:/usr/share/nginx/html:ro
-      - ./invoxa-invoices:/usr/share/nginx/html/invoxa-invoices:ro
+      - ./src:/usr/share/nginx/html
+      - ./enxure-invoices:/usr/share/nginx/html/enxure-invoices:ro
       # README.md's screenshots — plain public images, so served directly by
       # nginx rather than round-tripping through php (see nginx.conf's
       # /docs/screenshots/ location).
@@ -97,11 +99,11 @@ services:
       # through the authenticated app, and the markdown/text docs are
       # rendered in-app by php (see above), never served raw by nginx.
     networks:
-      - invoxa-net
+      - enxure-net
     healthcheck:
       # Exercises the full request path (nginx -> php -> db); fails if the app
       # can't reach the database.
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/invoxa.php?health=1"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/enxure.php?health=1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -111,7 +113,7 @@ services:
     build:
       context: .
       dockerfile: cron/Dockerfile
-    container_name: invoxa-cron
+    container_name: enxure-cron
     restart: unless-stopped
     depends_on:
       - nginx
@@ -124,13 +126,13 @@ services:
     volumes:
       - crontab-data:/etc/crontabs
     networks:
-      - invoxa-net    
+      - enxure-net    
 
 volumes:
   db-data:
   crontab-data:
 
 networks:
-  invoxa-net:
-    name: invoxa-net
+  enxure-net:
+    name: enxure-net
     driver: bridge

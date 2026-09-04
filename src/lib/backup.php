@@ -115,7 +115,7 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
     return ob_get_clean();
 }
 
-function invoxaHandleSaveScreenshot(): void
+function enxureHandleSaveScreenshot(): void
 {
     $manifest = json_decode(file_get_contents(__DIR__ . '/screenshot_manifest.json'), true) ?: [];
     $entry = null;
@@ -151,7 +151,7 @@ function invoxaHandleSaveScreenshot(): void
 
 // The Audit Log tab — same reasoning as renderStatsSection() above (no
 // client-side state worth preserving across a refresh).
-function invoxaAuditIcons(): array
+function enxureAuditIcons(): array
 {
     return ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban', 'quote_accepted' => 'fa-file-circle-check', 'quote_converted' => 'fa-file-invoice', 'user_created' => 'fa-user-plus', 'user_role_changed' => 'fa-user-gear', 'user_password_reset' => 'fa-key', 'user_deleted' => 'fa-user-xmark', 'backup_created' => 'fa-database', 'backup_failed' => 'fa-circle-xmark'];
 }
@@ -159,7 +159,7 @@ function invoxaAuditIcons(): array
 // Short category tag for the Type column — every action type gets one,
 // grouping the 28 granular action_type values (already shown in full in the
 // Details badge) into the handful of subsystems a reader actually scans for.
-function invoxaAuditTypeLabel(string $actionType): string
+function enxureAuditTypeLabel(string $actionType): string
 {
     $types = [
         'email_sent' => 'INV',
@@ -202,7 +202,7 @@ function invoxaAuditTypeLabel(string $actionType): string
 // the caller whether another page exists, without a separate COUNT(*).
 function renderAuditItems($mysqli, int $offset, int $pageSize = 100): array
 {
-    $icons = invoxaAuditIcons();
+    $icons = enxureAuditIcons();
     $fetchLimit = $pageSize + 1;
     $stmt = $mysqli->prepare("SELECT a.*, i.client_name FROM invoxa_actions a LEFT JOIN invoxa_invoices i ON a.invoice_number = i.invoice_number ORDER BY a.performed_at DESC LIMIT ? OFFSET ?");
     $stmt->bind_param('ii', $fetchLimit, $offset);
@@ -218,7 +218,7 @@ function renderAuditItems($mysqli, int $offset, int $pageSize = 100): array
     foreach ($rows as $act):
         $icon = $icons[$act['action_type']] ?? 'fa-bolt';
         $client = !empty($act['client_name']) ? htmlspecialchars($act['client_name']) : (empty($act['invoice_number']) ? '' : 'Unknown Client');
-        $typeLabel = invoxaAuditTypeLabel($act['action_type']);
+        $typeLabel = enxureAuditTypeLabel($act['action_type']);
         $performedBy = $act['performed_by_username'] ?? null;
         $performedByLabel = $performedBy !== null ? htmlspecialchars($performedBy) : 'System';
         $searchBlob = strtolower($client . ' ' . $typeLabel . ' ' . $act['invoice_number'] . ' ' . str_replace('_', ' ', $act['action_type']) . ' ' . ($act['notes'] ?? '') . ' ' . $performedByLabel);
@@ -248,7 +248,7 @@ function renderAuditItems($mysqli, int $offset, int $pageSize = 100): array
 
 function renderAuditSection($mysqli): string
 {
-    $icons = invoxaAuditIcons();
+    $icons = enxureAuditIcons();
     $page = renderAuditItems($mysqli, 0);
     ob_start();
     ?>
@@ -304,13 +304,13 @@ function renderAuditSection($mysqli): string
 }
 
 // TEMPORARY backward-compat shim for buyers migrating off "weblab", the
-// pre-Invoxa tool this product was built from: old backup_db-style exports
+// pre-enXure tool this product was built from: old backup_db-style exports
 // use weblab_actions/weblab_clients/weblab_invoices/weblab_settings/weblab_users
 // instead of invoxa_*. Remove once the migration window has passed — exports
-// from Invoxa itself never contain "weblab_". Scoped to the four statement
+// from enXure itself never contain "weblab_". Scoped to the four statement
 // keywords that name a table, not a blind string replace, so it can't touch
 // "weblab" inside actual data (invoice HTML, notes, emails, etc.).
-function invoxaRemapLegacyTableNames(string $sql, ?bool &$didRemap = null): string
+function enxureRemapLegacyTableNames(string $sql, ?bool &$didRemap = null): string
 {
     $didRemap = false;
     $pattern = '/\b(DROP TABLE IF EXISTS\s+`?|CREATE TABLE\s+`?|INSERT INTO\s+`?|ALTER TABLE\s+`?)weblab_/i';
@@ -321,11 +321,11 @@ function invoxaRemapLegacyTableNames(string $sql, ?bool &$didRemap = null): stri
 
 // Demo/sample data (Data Management > Demo Data) — every seeded client_key
 // starts with 'dm' so it can be found and torn down precisely.
-const INVOXA_DEMO_CLIENT_KEY_PREFIX = 'dm';
+const ENXURE_DEMO_CLIENT_KEY_PREFIX = 'dm';
 
 function clearDemoData($mysqli): int
 {
-    $res = $mysqli->query("SELECT client_key, client_name FROM invoxa_clients WHERE client_key LIKE '" . INVOXA_DEMO_CLIENT_KEY_PREFIX . "%'");
+    $res = $mysqli->query("SELECT client_key, client_name FROM invoxa_clients WHERE client_key LIKE '" . ENXURE_DEMO_CLIENT_KEY_PREFIX . "%'");
     $keys = [];
     $folders = [];
     while ($row = $res->fetch_assoc()) {
@@ -390,7 +390,7 @@ function seedDemoData($mysqli, array $settings): int
     $insertInvoice = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, paid_at, paid_amount, html_content, file_path, is_quote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     foreach ($demoClients as $ci => $dc) {
-        $clientKey = INVOXA_DEMO_CLIENT_KEY_PREFIX . sprintf('%02d', $ci + 1);
+        $clientKey = ENXURE_DEMO_CLIENT_KEY_PREFIX . sprintf('%02d', $ci + 1);
         $email = preg_replace('/[^a-z0-9]/', '', strtolower($dc['name'])) . '@example.com';
         $insertClient->bind_param("sssssd", $clientKey, $dc['name'], $email, $dc['acc'], $dc['accnum'], $dc['rate']);
         $insertClient->execute();
@@ -439,7 +439,7 @@ function seedDemoData($mysqli, array $settings): int
             $iid = $insertInvoice->insert_id;
             $actionType = $paid ? 'mark_paid' : 'email_sent';
             $notes = $paid ? 'Marked as paid: $' . number_format($amount, 2) : 'Invoice generated and emailed to ' . $email;
-            invoxaLogAction($mysqli, $iid, $invNum, $actionType, $notes);
+            enxureLogAction($mysqli, $iid, $invNum, $actionType, $notes);
         }
 
         // A couple of clients also get an open quote, so the Quotes tab isn't empty.
@@ -503,7 +503,7 @@ function normaliseDate(?string $raw): ?string
 // pure logic (invoice math, TOTP, Stripe/PayPal conversion and signature
 // verification, lockout timing, backup code format) plus the payment
 // ledger's DB behavior — never a real Stripe/PayPal/SMTP call or a real
-// notification send (invoxaRunTestSuite() forces notification_channel to
+// notification send (enxureRunTestSuite() forces notification_channel to
 // 'none', both on the $settings passed in here and on $GLOBALS['settings']
 // for code paths that read the global directly). DB-touching
 // tests use disposable fixtures (client_key prefixed 'zt') deleted in a
@@ -519,14 +519,14 @@ class InvoxaTestSkipped extends Exception
 {
 }
 
-function invoxaAssertEquals($expected, $actual, string $label = ''): void
+function enxureAssertEquals($expected, $actual, string $label = ''): void
 {
     if ($expected != $actual) {
         throw new InvoxaTestFailure(($label !== '' ? "$label: " : '') . 'expected ' . var_export($expected, true) . ', got ' . var_export($actual, true));
     }
 }
 
-function invoxaAssertTrue(bool $condition, string $label = ''): void
+function enxureAssertTrue(bool $condition, string $label = ''): void
 {
     if (!$condition) {
         throw new InvoxaTestFailure($label !== '' ? $label : 'assertion failed');
@@ -536,7 +536,7 @@ function invoxaAssertTrue(bool $condition, string $label = ''): void
 // Creates a disposable client for a DB-touching test. is_test=1 excludes it
 // from real reporting even if cleanup fails to run; client_key is namespaced
 // 'zt' so it can't collide with a real client or Demo Data's 'dm' fixtures.
-function invoxaTestCreateClient($mysqli): array
+function enxureTestCreateClient($mysqli): array
 {
     $key = 'zt' . substr(bin2hex(random_bytes(4)), 0, 6);
     $name = 'Test Suite Fixture';
@@ -546,7 +546,7 @@ function invoxaTestCreateClient($mysqli): array
     return [$mysqli->insert_id, $key];
 }
 
-function invoxaTestCreateInvoice($mysqli, string $clientKey, float $amount, string $currency = ''): int
+function enxureTestCreateInvoice($mysqli, string $clientKey, float $amount, string $currency = ''): int
 {
     // Must end in digits — generateInvoiceNumber()'s "highest number so far"
     // lookup only matches a trailing run of digits (/(\d+)$/).
@@ -559,7 +559,7 @@ function invoxaTestCreateInvoice($mysqli, string $clientKey, float $amount, stri
 
 // Deletes everything a test fixture created — payments, actions, invoices,
 // then the client (children before parents). Called from a finally block.
-function invoxaTestCleanupClient($mysqli, int $clientId, string $clientKey): void
+function enxureTestCleanupClient($mysqli, int $clientId, string $clientKey): void
 {
     $ids = [];
     $res = $mysqli->query("SELECT id FROM invoxa_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "'");
@@ -580,7 +580,7 @@ function invoxaTestCleanupClient($mysqli, int $clientId, string $clientKey): voi
 // switch the 'Email Delivery' test group checks before actually sending
 // anything, so those tests skip instead of running (or worse, sending real
 // mail) anywhere but the test instance.
-function invoxaMailpitBaseUrl(): ?string
+function enxureMailpitBaseUrl(): ?string
 {
     return getenv('SMTP_HOST') === 'mailpit' ? 'http://mailpit:8025' : null;
 }
@@ -593,7 +593,7 @@ function invoxaMailpitBaseUrl(): ?string
 // browse), so the list keeps growing across runs — the API returns newest
 // first, and that's relied on here to match this run's message rather than
 // an older one from a previous run with a similarly generic subject.
-function invoxaMailpitFindMessage(string $baseUrl, string $recipientEmail, string $mustContain, float $timeoutSeconds = 5.0): ?array
+function enxureMailpitFindMessage(string $baseUrl, string $recipientEmail, string $mustContain, float $timeoutSeconds = 5.0): ?array
 {
     $deadline = microtime(true) + $timeoutSeconds;
     do {
@@ -612,9 +612,9 @@ function invoxaMailpitFindMessage(string $baseUrl, string $recipientEmail, strin
 }
 
 // Full message detail (HTML/Text body, headers) for a message id from
-// invoxaMailpitFindMessage() — the list endpoint above only carries a
+// enxureMailpitFindMessage() — the list endpoint above only carries a
 // truncated snippet, not enough to assert on body content.
-function invoxaMailpitGetMessage(string $baseUrl, string $id): ?array
+function enxureMailpitGetMessage(string $baseUrl, string $id): ?array
 {
     $resp = @file_get_contents($baseUrl . '/api/v1/message/' . rawurlencode($id));
     return $resp !== false ? json_decode($resp, true) : null;
@@ -625,7 +625,7 @@ function invoxaMailpitGetMessage(string $baseUrl, string $id): ?array
 // category/label, a $description for the row's tooltip, and the callable.
 // Building this just constructs closures — nothing executes yet, which is
 // also how the checkbox list gets its rows without running any test.
-function invoxaTestDefinitions($mysqli, array $settings): array
+function enxureTestDefinitions($mysqli, array $settings): array
 {
     $definitions = [];
     $run = function (string $group, string $category, string $label, string $description, callable $fn) use (&$definitions) {
@@ -636,330 +636,330 @@ function invoxaTestDefinitions($mysqli, array $settings): array
     $run('Core Logic', 'computeInvoiceTotals', 'no discount/tax', 'A $100 line item with 0% discount and 0% tax totals exactly $100.', function () {
         $items = [['amount' => 100]];
         $t = computeInvoiceTotals($items, 0, 0);
-        invoxaAssertEquals(100.0, $t['total'], 'total');
+        enxureAssertEquals(100.0, $t['total'], 'total');
     });
     $run('Core Logic', 'computeInvoiceTotals', 'discount before tax', 'A $100 item with 10% discount then 15% tax totals $103.50 — discount is applied first, tax on what\'s left.', function () {
         $items = [['amount' => 100]];
         $t = computeInvoiceTotals($items, 10, 15); // 100 -10% = 90, +15% tax = 103.5
-        invoxaAssertEquals(103.5, $t['total'], 'total');
+        enxureAssertEquals(103.5, $t['total'], 'total');
     });
     $run('Core Logic', 'formatPct', 'trims trailing zeros', 'formatPct() renders 7.5 as "7.5%" and 10 as "10%", never "10.00%".', function () {
-        invoxaAssertEquals('7.5%', formatPct(7.5));
-        invoxaAssertEquals('10%', formatPct(10));
+        enxureAssertEquals('7.5%', formatPct(7.5));
+        enxureAssertEquals('10%', formatPct(10));
     });
     $run('Core Logic', 'base32', 'round-trip', 'Encoding random bytes to base32 and decoding the result returns the exact original bytes.', function () {
         $raw = random_bytes(20);
-        invoxaAssertTrue(base32Decode(base32Encode($raw)) === $raw);
+        enxureAssertTrue(base32Decode(base32Encode($raw)) === $raw);
     });
     $run('Core Logic', 'Stripe', 'USD amount round-trip', '$19.99 converts to 1999 (cents) via stripeAmountToMinorUnits() and back to $19.99 via stripeAmountFromMinorUnits().', function () {
         $minor = stripeAmountToMinorUnits(19.99, 'USD');
-        invoxaAssertEquals(1999, $minor);
-        invoxaAssertEquals(19.99, stripeAmountFromMinorUnits($minor, 'USD'));
+        enxureAssertEquals(1999, $minor);
+        enxureAssertEquals(19.99, stripeAmountFromMinorUnits($minor, 'USD'));
     });
     $run('Core Logic', 'Stripe', 'zero-decimal currency', 'JPY 500 stays 500 (not multiplied by 100) since Stripe treats JPY as a zero-decimal currency.', function () {
-        invoxaAssertEquals(500, stripeAmountToMinorUnits(500, 'JPY'));
+        enxureAssertEquals(500, stripeAmountToMinorUnits(500, 'JPY'));
     });
     $run('Core Logic', 'Stripe', 'large amount round-trip', '$12,345.67 converts to 1234567 (cents) and back to $12,345.67 — the same round-trip as the $19.99 case, but past the thousands-separator threshold where a naive re-parse of a formatted string would break.', function () {
         $minor = stripeAmountToMinorUnits(12345.67, 'USD');
-        invoxaAssertEquals(1234567, $minor);
-        invoxaAssertEquals(12345.67, stripeAmountFromMinorUnits($minor, 'USD'));
+        enxureAssertEquals(1234567, $minor);
+        enxureAssertEquals(12345.67, stripeAmountFromMinorUnits($minor, 'USD'));
     });
-    $run('Core Logic', 'invoxaParseAmount', 'strips thousands-separator commas at any scale', 'Backs every place a possibly comma-formatted amount gets turned back into a number: the recurring-billing line item, generateInvoiceHTML()\'s Subtotal re-derivation, and all three CSV importers (client rate, invoice amount/paid_amount, expense amount). "1,200.00" must read back as 1200.0, "1,234,567.89" (multiple commas) as 1234567.89, and a plain "999.99" (no comma at all, the pre-$1,000 case that always worked) must be unaffected.', function () {
-        invoxaAssertEquals(1200.0, invoxaParseAmount('1,200.00'), 'single comma');
-        invoxaAssertEquals(1234567.89, invoxaParseAmount('1,234,567.89'), 'multiple commas');
-        invoxaAssertEquals(999.99, invoxaParseAmount('999.99'), 'no comma, unaffected');
-        invoxaAssertEquals(1200.0, invoxaParseAmount(' 1,200.00 '), 'surrounding whitespace, as a CSV cell might have');
-        invoxaAssertEquals(-1200.0, invoxaParseAmount('-1,200.00'), 'negative amount (a credit line item)');
-        invoxaAssertEquals(0.0, invoxaParseAmount(''), 'empty string');
-        invoxaAssertEquals(1200.0, invoxaParseAmount(1200.0), 'already a float, not just a string');
+    $run('Core Logic', 'enxureParseAmount', 'strips thousands-separator commas at any scale', 'Backs every place a possibly comma-formatted amount gets turned back into a number: the recurring-billing line item, generateInvoiceHTML()\'s Subtotal re-derivation, and all three CSV importers (client rate, invoice amount/paid_amount, expense amount). "1,200.00" must read back as 1200.0, "1,234,567.89" (multiple commas) as 1234567.89, and a plain "999.99" (no comma at all, the pre-$1,000 case that always worked) must be unaffected.', function () {
+        enxureAssertEquals(1200.0, enxureParseAmount('1,200.00'), 'single comma');
+        enxureAssertEquals(1234567.89, enxureParseAmount('1,234,567.89'), 'multiple commas');
+        enxureAssertEquals(999.99, enxureParseAmount('999.99'), 'no comma, unaffected');
+        enxureAssertEquals(1200.0, enxureParseAmount(' 1,200.00 '), 'surrounding whitespace, as a CSV cell might have');
+        enxureAssertEquals(-1200.0, enxureParseAmount('-1,200.00'), 'negative amount (a credit line item)');
+        enxureAssertEquals(0.0, enxureParseAmount(''), 'empty string');
+        enxureAssertEquals(1200.0, enxureParseAmount(1200.0), 'already a float, not just a string');
     });
-    $run('Core Logic', 'Lockout', 'minutes-remaining math', 'invoxaLockoutMinutesRemaining() returns 0 for no lock or an already-expired one, and ~5 for a lock 5 minutes in the future.', function () {
-        invoxaAssertEquals(0, invoxaLockoutMinutesRemaining(null));
-        invoxaAssertEquals(0, invoxaLockoutMinutesRemaining(date('Y-m-d H:i:s', time() - 60)));
-        $remaining = invoxaLockoutMinutesRemaining(date('Y-m-d H:i:s', time() + 300));
-        invoxaAssertTrue($remaining >= 4 && $remaining <= 5, "expected ~5 minutes, got {$remaining}");
+    $run('Core Logic', 'Lockout', 'minutes-remaining math', 'enxureLockoutMinutesRemaining() returns 0 for no lock or an already-expired one, and ~5 for a lock 5 minutes in the future.', function () {
+        enxureAssertEquals(0, enxureLockoutMinutesRemaining(null));
+        enxureAssertEquals(0, enxureLockoutMinutesRemaining(date('Y-m-d H:i:s', time() - 60)));
+        $remaining = enxureLockoutMinutesRemaining(date('Y-m-d H:i:s', time() + 300));
+        enxureAssertTrue($remaining >= 4 && $remaining <= 5, "expected ~5 minutes, got {$remaining}");
     });
-    $run('Core Logic', 'invoxaTestViewFilter', 'all three data-view states', 'The Preferences data-view filter picks the right SQL fragment for each of its three states — real-only (hide test), everything (both off), and test-only (the "Show Only Test/Dummy Data" toggle, which wins over "Hide Test Clients Globally" whenever both are somehow on) — for both the client_key-subquery shape (invoices) and the direct-column shape (clients).', function () {
-        invoxaAssertEquals("AND client_key NOT IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)", invoxaTestViewFilter(true, false), 'real-only');
-        invoxaAssertEquals("", invoxaTestViewFilter(false, false), 'everything');
-        invoxaAssertEquals("AND client_key IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)", invoxaTestViewFilter(false, true), 'test-only');
-        invoxaAssertEquals("AND client_key IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)", invoxaTestViewFilter(true, true), 'test-only wins when both are on');
-        invoxaAssertEquals("WHERE is_test = 0", invoxaTestViewClientFilter(true, false, 'WHERE'), 'real-only, direct column');
-        invoxaAssertEquals("WHERE is_test = 1", invoxaTestViewClientFilter(false, true, 'WHERE'), 'test-only, direct column');
-        invoxaAssertEquals("", invoxaTestViewClientFilter(false, false, 'WHERE'), 'everything, direct column');
+    $run('Core Logic', 'enxureTestViewFilter', 'all three data-view states', 'The Preferences data-view filter picks the right SQL fragment for each of its three states — real-only (hide test), everything (both off), and test-only (the "Show Only Test/Dummy Data" toggle, which wins over "Hide Test Clients Globally" whenever both are somehow on) — for both the client_key-subquery shape (invoices) and the direct-column shape (clients).', function () {
+        enxureAssertEquals("AND client_key NOT IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)", enxureTestViewFilter(true, false), 'real-only');
+        enxureAssertEquals("", enxureTestViewFilter(false, false), 'everything');
+        enxureAssertEquals("AND client_key IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)", enxureTestViewFilter(false, true), 'test-only');
+        enxureAssertEquals("AND client_key IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)", enxureTestViewFilter(true, true), 'test-only wins when both are on');
+        enxureAssertEquals("WHERE is_test = 0", enxureTestViewClientFilter(true, false, 'WHERE'), 'real-only, direct column');
+        enxureAssertEquals("WHERE is_test = 1", enxureTestViewClientFilter(false, true, 'WHERE'), 'test-only, direct column');
+        enxureAssertEquals("", enxureTestViewClientFilter(false, false, 'WHERE'), 'everything, direct column');
     });
     $run('Core Logic', 'computeInvoiceTotals', '100% discount zeroes the total', 'A $100 item with a 100% discount nets to $0 before tax, so a 20% tax rate on top still totals exactly $0 — tax never applies to a discount, only to what\'s left after it.', function () {
         $items = [['amount' => 100]];
         $t = computeInvoiceTotals($items, 100, 20);
-        invoxaAssertEquals(100.0, $t['discount']);
-        invoxaAssertEquals(0.0, $t['total']);
+        enxureAssertEquals(100.0, $t['discount']);
+        enxureAssertEquals(0.0, $t['total']);
     });
     $run('Core Logic', 'computeInvoiceTotals', 'negative line item nets correctly', 'A $100 charge alongside a -$30 credit line (e.g. a partial refund folded into the same invoice) subtotals to $70, and a 10% tax applies to that net $70, not the $100 gross.', function () {
         $items = [['amount' => 100], ['amount' => -30]];
         $t = computeInvoiceTotals($items, 0, 10);
-        invoxaAssertEquals(70.0, $t['subtotal']);
-        invoxaAssertEquals(7.0, $t['tax']);
-        invoxaAssertEquals(77.0, $t['total']);
+        enxureAssertEquals(70.0, $t['subtotal']);
+        enxureAssertEquals(7.0, $t['tax']);
+        enxureAssertEquals(77.0, $t['total']);
     });
     $run('Core Logic', 'computeInvoiceTotals', 'amounts of $1,000 or more', 'A $1,200 line item totals exactly $1,200 with no discount/tax, and $1,242 with a 10% discount then 15% tax — number_format() would render either amount with a thousands-separator comma internally, so this catches a regression where that formatted string leaks back into a numeric total instead of the raw value.', function () {
         $items = [['amount' => 1200]];
         $t = computeInvoiceTotals($items, 0, 0);
-        invoxaAssertEquals(1200.0, $t['total'], 'no discount/tax');
+        enxureAssertEquals(1200.0, $t['total'], 'no discount/tax');
         $items2 = [['amount' => 1200]];
         $t2 = computeInvoiceTotals($items2, 10, 15);
-        invoxaAssertEquals(1242.0, $t2['total'], 'with discount and tax');
+        enxureAssertEquals(1242.0, $t2['total'], 'with discount and tax');
     });
     $run('Core Logic', 'computeInvoiceTotals', 'the exact $1,000 boundary and just below it', 'number_format() only inserts a thousands-separator comma at 1,000 and above — $999.99 (just under) must total correctly with no discount/tax involved at all (it always worked), and exactly $1,000.00 (the first value that gets a comma) must total exactly $1,000, not $1.', function () {
         $items = [['amount' => 999.99]];
         $t = computeInvoiceTotals($items, 0, 0);
-        invoxaAssertEquals(999.99, $t['total'], 'just under the comma threshold');
+        enxureAssertEquals(999.99, $t['total'], 'just under the comma threshold');
         $items2 = [['amount' => 1000.00]];
         $t2 = computeInvoiceTotals($items2, 0, 0);
-        invoxaAssertEquals(1000.0, $t2['total'], 'exactly at the comma threshold');
+        enxureAssertEquals(1000.0, $t2['total'], 'exactly at the comma threshold');
     });
     $run('Core Logic', 'computeInvoiceTotals', 'very large amounts with multiple thousands separators', 'A $1,234,567.89 line item (number_format() would render this as "1,234,567.89" — two commas) totals exactly $1,234,567.89 with no discount/tax, confirming the fix handles more than one comma, not just the single-comma four-to-six-figure case.', function () {
         $items = [['amount' => 1234567.89]];
         $t = computeInvoiceTotals($items, 0, 0);
-        invoxaAssertEquals(1234567.89, $t['total']);
+        enxureAssertEquals(1234567.89, $t['total']);
     });
     $run('Core Logic', 'computeInvoiceTotals', 'clamps out-of-range percentages', 'A discount/tax pair outside 0-100 (150% discount, -10% tax) is clamped to the valid range before it\'s applied, the same clamp save_client\'s and the Ad Hoc form\'s own inputs go through — an over-100 discount can\'t make the total negative, and a negative tax can\'t reduce it.', function () {
         $items = [['amount' => 100]];
         $t = computeInvoiceTotals($items, 150, -10);
-        invoxaAssertEquals(100.0, $t['discount_pct'], 'discount_pct clamped to 100');
-        invoxaAssertEquals(0.0, $t['tax_rate'], 'tax_rate clamped to 0');
-        invoxaAssertEquals(0.0, $t['total']);
+        enxureAssertEquals(100.0, $t['discount_pct'], 'discount_pct clamped to 100');
+        enxureAssertEquals(0.0, $t['tax_rate'], 'tax_rate clamped to 0');
+        enxureAssertEquals(0.0, $t['total']);
     });
     $run('Core Logic', 'getTaxYearStart', 'resolves the correct calendar year on both sides of the start month', 'With an April 1st tax year start, a "now" of mid-February resolves to the previous year\'s April 1st (the tax year still in progress), while a "now" of mid-June resolves to this year\'s April 1st (a new tax year has already begun).', function () {
         $before = getTaxYearStart(4, new DateTime('2026-02-15'));
-        invoxaAssertEquals('2025-04-01', $before->format('Y-m-d'), 'before the start month falls back to last year');
+        enxureAssertEquals('2025-04-01', $before->format('Y-m-d'), 'before the start month falls back to last year');
         $after = getTaxYearStart(4, new DateTime('2026-06-10'));
-        invoxaAssertEquals('2026-04-01', $after->format('Y-m-d'), 'at/after the start month uses this year');
+        enxureAssertEquals('2026-04-01', $after->format('Y-m-d'), 'at/after the start month uses this year');
     });
     $run('Core Logic', 'generateInvoiceNumber', 'default template numbers a fresh client from 001', 'With no invoice_number_template configured, a brand-new client\'s first invoice number is exactly their client_key (uppercased) followed by "001" — the {key}{seq} default template with 3-digit padding.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $num = generateInvoiceNumber($mysqli, $clientKey, 'Test Suite Fixture', []);
-            invoxaAssertEquals(strtoupper($clientKey) . '001', $num);
+            enxureAssertEquals(strtoupper($clientKey) . '001', $num);
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
             @rmdir(INVOICES_DIR . 'test_suite_fixture');
         }
     });
     $run('Core Logic', 'generateInvoiceNumber', 'custom template and padding are honored', 'Settings > Branding\'s invoice_number_template ("INV-{year}-{key}-{seq}") and a 5-digit padding produce exactly that shape for a fresh client\'s first invoice, substituting {year} and {key} correctly.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $num = generateInvoiceNumber($mysqli, $clientKey, 'Test Suite Fixture', ['invoice_number_template' => 'INV-{year}-{key}-{seq}', 'invoice_number_padding' => 5]);
-            invoxaAssertEquals('INV-' . date('Y') . '-' . strtoupper($clientKey) . '-00001', $num);
+            enxureAssertEquals('INV-' . date('Y') . '-' . strtoupper($clientKey) . '-00001', $num);
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
             @rmdir(INVOICES_DIR . 'test_suite_fixture');
         }
     });
-    $run('Core Logic', 'invoxaResolveCurrency', 'client currency wins, blank falls back to the instance default', 'A non-blank currency (however it\'s cased) is returned uppercased; a blank one falls back to Settings > General\'s currency — the same fallback processInvoice()/save_quote/renderInvoiceRows() all use.', function () use ($settings) {
-        invoxaAssertEquals('EUR', invoxaResolveCurrency('eur', $settings));
-        invoxaAssertEquals(strtoupper($settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD')), invoxaResolveCurrency('', $settings));
+    $run('Core Logic', 'enxureResolveCurrency', 'client currency wins, blank falls back to the instance default', 'A non-blank currency (however it\'s cased) is returned uppercased; a blank one falls back to Settings > General\'s currency — the same fallback processInvoice()/save_quote/renderInvoiceRows() all use.', function () use ($settings) {
+        enxureAssertEquals('EUR', enxureResolveCurrency('eur', $settings));
+        enxureAssertEquals(strtoupper($settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD')), enxureResolveCurrency('', $settings));
     });
-    $run('Core Logic', 'invoxaNormalizeCurrencyCode', 'strips non-letters, uppercases, caps at 3 characters', 'The Add/Edit Client Currency field goes through the same normalization Settings > General\'s Currency Code already used — stray digits/symbols stripped before the 3-letter cap.', function () {
-        invoxaAssertEquals('EUR', invoxaNormalizeCurrencyCode(' eur '));
-        invoxaAssertEquals('USD', invoxaNormalizeCurrencyCode('us1d$'));
-        invoxaAssertEquals('', invoxaNormalizeCurrencyCode(''));
+    $run('Core Logic', 'enxureNormalizeCurrencyCode', 'strips non-letters, uppercases, caps at 3 characters', 'The Add/Edit Client Currency field goes through the same normalization Settings > General\'s Currency Code already used — stray digits/symbols stripped before the 3-letter cap.', function () {
+        enxureAssertEquals('EUR', enxureNormalizeCurrencyCode(' eur '));
+        enxureAssertEquals('USD', enxureNormalizeCurrencyCode('us1d$'));
+        enxureAssertEquals('', enxureNormalizeCurrencyCode(''));
     });
-    $run('Core Logic', 'invoxaGroupAmountsByCurrency / invoxaFormatMoneyByCurrency', 'groups and renders per currency instead of blending totals', 'Two USD rows and one EUR row group into separate USD/EUR sums (not one number that adds unlike currencies together), and the formatted string used on the Dashboard/CSV exports names both totals rather than only one.', function () use ($settings) {
+    $run('Core Logic', 'enxureGroupAmountsByCurrency / enxureFormatMoneyByCurrency', 'groups and renders per currency instead of blending totals', 'Two USD rows and one EUR row group into separate USD/EUR sums (not one number that adds unlike currencies together), and the formatted string used on the Dashboard/CSV exports names both totals rather than only one.', function () use ($settings) {
         $rows = [['currency' => 'USD', 'amount' => 100], ['currency' => 'USD', 'amount' => 50], ['currency' => 'EUR', 'amount' => 30]];
-        $grouped = invoxaGroupAmountsByCurrency($rows, 'amount', $settings);
-        invoxaAssertEquals(150.0, $grouped['USD'] ?? null, 'USD total');
-        invoxaAssertEquals(30.0, $grouped['EUR'] ?? null, 'EUR total');
-        $rendered = invoxaFormatMoneyByCurrency($grouped);
-        invoxaAssertTrue(str_contains($rendered, 'USD $150.00'), 'rendered string names the USD total');
-        invoxaAssertTrue(str_contains($rendered, 'EUR $30.00'), 'rendered string names the EUR total');
+        $grouped = enxureGroupAmountsByCurrency($rows, 'amount', $settings);
+        enxureAssertEquals(150.0, $grouped['USD'] ?? null, 'USD total');
+        enxureAssertEquals(30.0, $grouped['EUR'] ?? null, 'EUR total');
+        $rendered = enxureFormatMoneyByCurrency($grouped);
+        enxureAssertTrue(str_contains($rendered, 'USD $150.00'), 'rendered string names the USD total');
+        enxureAssertTrue(str_contains($rendered, 'EUR $30.00'), 'rendered string names the EUR total');
     });
-    $run('Core Logic', 'invoxaSumByCcyConverted', 'blends every currency with a rate, excludes any without one', 'The Statistics/Forecasting/AR Aging blended total: the default currency is summed as-is, a currency with a rate is divided by it (rate = units of that currency per 1 unit of default), and a currency with no rate at all is left out entirely rather than added in unconverted — the same fallback the page had before FX conversion existed, now scoped to just the currencies a fetch failed for.', function () {
+    $run('Core Logic', 'enxureSumByCcyConverted', 'blends every currency with a rate, excludes any without one', 'The Statistics/Forecasting/AR Aging blended total: the default currency is summed as-is, a currency with a rate is divided by it (rate = units of that currency per 1 unit of default), and a currency with no rate at all is left out entirely rather than added in unconverted — the same fallback the page had before FX conversion existed, now scoped to just the currencies a fetch failed for.', function () {
         $byCcy = ['NZD' => 1000.0, 'USD' => 587.21, 'GBP' => 50.0];
         $rates = ['USD' => 0.58721]; // no rate for GBP
-        $total = invoxaSumByCcyConverted($byCcy, 'NZD', $rates);
-        invoxaAssertEquals(round(1000.0 + (587.21 / 0.58721), 6), round($total, 6), 'NZD as-is plus converted USD, GBP excluded (no rate)');
-        invoxaAssertEquals(0.0, invoxaSumByCcyConverted([], 'NZD', $rates), 'empty input totals zero');
-        invoxaAssertEquals(250.0, invoxaSumByCcyConverted(['NZD' => 250.0], 'NZD', []), 'default currency alone never needs a rate at all');
+        $total = enxureSumByCcyConverted($byCcy, 'NZD', $rates);
+        enxureAssertEquals(round(1000.0 + (587.21 / 0.58721), 6), round($total, 6), 'NZD as-is plus converted USD, GBP excluded (no rate)');
+        enxureAssertEquals(0.0, enxureSumByCcyConverted([], 'NZD', $rates), 'empty input totals zero');
+        enxureAssertEquals(250.0, enxureSumByCcyConverted(['NZD' => 250.0], 'NZD', []), 'default currency alone never needs a rate at all');
     });
-    $run('Core Logic', 'invoxaFxRequestUrl', 'Frankfurter by default, a custom template when configured', 'With no fx_provider setting (or "frankfurter"), the built-in Frankfurter URL is used with {base}/{symbols} substituted; with fx_provider=custom, the admin-supplied fx_custom_url template is used instead, same substitution.', function () {
-        $frankfurterUrl = invoxaFxRequestUrl([], 'NZD', ['USD', 'EUR']);
-        invoxaAssertTrue(str_starts_with($frankfurterUrl, 'https://api.frankfurter.dev/'), 'defaults to the Frankfurter API');
-        invoxaAssertTrue(str_contains($frankfurterUrl, 'base=NZD'), 'base currency substituted');
-        invoxaAssertTrue(str_contains($frankfurterUrl, 'symbols=USD%2CEUR'), 'symbols substituted and comma-joined');
+    $run('Core Logic', 'enxureFxRequestUrl', 'Frankfurter by default, a custom template when configured', 'With no fx_provider setting (or "frankfurter"), the built-in Frankfurter URL is used with {base}/{symbols} substituted; with fx_provider=custom, the admin-supplied fx_custom_url template is used instead, same substitution.', function () {
+        $frankfurterUrl = enxureFxRequestUrl([], 'NZD', ['USD', 'EUR']);
+        enxureAssertTrue(str_starts_with($frankfurterUrl, 'https://api.frankfurter.dev/'), 'defaults to the Frankfurter API');
+        enxureAssertTrue(str_contains($frankfurterUrl, 'base=NZD'), 'base currency substituted');
+        enxureAssertTrue(str_contains($frankfurterUrl, 'symbols=USD%2CEUR'), 'symbols substituted and comma-joined');
 
-        $customUrl = invoxaFxRequestUrl(['fx_provider' => 'custom', 'fx_custom_url' => 'https://example.invalid/rates?from={base}&to={symbols}'], 'GBP', ['JPY']);
-        invoxaAssertEquals('https://example.invalid/rates?from=GBP&to=JPY', $customUrl);
+        $customUrl = enxureFxRequestUrl(['fx_provider' => 'custom', 'fx_custom_url' => 'https://example.invalid/rates?from={base}&to={symbols}'], 'GBP', ['JPY']);
+        enxureAssertEquals('https://example.invalid/rates?from=GBP&to=JPY', $customUrl);
     });
 
     // ── Clients & Invoices ── the "add a client" / "add an invoice" paths,
     // exercised against disposable fixtures rather than the real AJAX actions.
     $run('Clients & Invoices', 'Client', 'created with correct defaults', 'A newly inserted client comes back active, flagged as test data, and with 0% discount/tax — the same defaults the Add Client form relies on.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $row = $mysqli->query("SELECT is_active, is_test, discount_pct, tax_rate, currency FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
-            invoxaAssertTrue((bool) $row, 'client row exists');
-            invoxaAssertEquals(1, (int) $row['is_active']);
-            invoxaAssertEquals(1, (int) $row['is_test']);
-            invoxaAssertEquals(0.0, (float) $row['discount_pct']);
-            invoxaAssertEquals(0.0, (float) $row['tax_rate']);
-            invoxaAssertEquals('', $row['currency'] ?? null, 'blank currency by default');
+            enxureAssertTrue((bool) $row, 'client row exists');
+            enxureAssertEquals(1, (int) $row['is_active']);
+            enxureAssertEquals(1, (int) $row['is_test']);
+            enxureAssertEquals(0.0, (float) $row['discount_pct']);
+            enxureAssertEquals(0.0, (float) $row['tax_rate']);
+            enxureAssertEquals('', $row['currency'] ?? null, 'blank currency by default');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Client currency', 'blank currency resolves to the instance default', 'A freshly added client (Currency left blank, the default) resolves to Settings > General\'s currency rather than an empty string once an invoice is generated for them.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
-            invoxaAssertEquals(strtoupper($settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD')), invoxaResolveCurrency($client['currency'] ?? '', $settings));
+            enxureAssertEquals(strtoupper($settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD')), enxureResolveCurrency($client['currency'] ?? '', $settings));
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
-    $run('Clients & Invoices', 'Client currency', 'invoice snapshots the client\'s currency, unaffected by a later change', 'An invoice stamped with a client\'s currency at creation time (the same invoxaResolveCurrency() call processInvoice()/save_quote make) keeps that value even after the client\'s own currency is changed afterward — invoxa_invoices.currency is a snapshot, not a live link to invoxa_clients.currency.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+    $run('Clients & Invoices', 'Client currency', 'invoice snapshots the client\'s currency, unaffected by a later change', 'An invoice stamped with a client\'s currency at creation time (the same enxureResolveCurrency() call processInvoice()/save_quote make) keeps that value even after the client\'s own currency is changed afterward — invoxa_invoices.currency is a snapshot, not a live link to invoxa_clients.currency.', function () use ($mysqli, $settings) {
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $mysqli->query("UPDATE invoxa_clients SET currency = 'EUR' WHERE id = $clientId");
             $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
-            $stampedCurrency = invoxaResolveCurrency($client['currency'] ?? '', $settings);
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 50.00, $stampedCurrency);
+            $stampedCurrency = enxureResolveCurrency($client['currency'] ?? '', $settings);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 50.00, $stampedCurrency);
             $mysqli->query("UPDATE invoxa_clients SET currency = 'GBP' WHERE id = $clientId");
             $invRow = $mysqli->query("SELECT currency FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals('EUR', $invRow['currency']);
+            enxureAssertEquals('EUR', $invRow['currency']);
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Invoice numbering', 'increases as invoices are added', 'generateInvoiceNumber() returns a higher sequence the second time it\'s called for the same client, after one invoice has actually been recorded in between.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $clientName = 'Test Suite Fixture';
             $first = generateInvoiceNumber($mysqli, $clientKey, $clientName, $settings);
-            invoxaTestCreateInvoice($mysqli, $clientKey, 10.00);
+            enxureTestCreateInvoice($mysqli, $clientKey, 10.00);
             $second = generateInvoiceNumber($mysqli, $clientKey, $clientName, $settings);
-            invoxaAssertTrue($first !== $second, "expected a different number, got '{$first}' both times");
+            enxureAssertTrue($first !== $second, "expected a different number, got '{$first}' both times");
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
             // generateInvoiceNumber() creates INVOICES_DIR/<client folder> as a
             // side effect; rmdir only succeeds if it's still empty.
             @rmdir(INVOICES_DIR . 'test_suite_fixture');
         }
     });
     $run('Clients & Invoices', 'Invoice', 'stores the exact amount billed', 'An invoice inserted for $123.45 reads back as exactly $123.45 — no float-rounding drift through the DECIMAL(10,2) column.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 123.45);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 123.45);
             $row = $mysqli->query("SELECT amount, status FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals(123.45, (float) $row['amount']);
-            invoxaAssertEquals('sent', $row['status']);
+            enxureAssertEquals(123.45, (float) $row['amount']);
+            enxureAssertEquals('sent', $row['status']);
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Client Portal', 'excludes draft invoices', 'The Client Portal\'s own query (status != \'draft\') leaves a draft invoice out of what a client sees, while a sent one for the same client still shows up.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $sentId = invoxaTestCreateInvoice($mysqli, $clientKey, 40.00);
-            $draftId = invoxaTestCreateInvoice($mysqli, $clientKey, 40.00);
+            $sentId = enxureTestCreateInvoice($mysqli, $clientKey, 40.00);
+            $draftId = enxureTestCreateInvoice($mysqli, $clientKey, 40.00);
             $mysqli->query("UPDATE invoxa_invoices SET status = 'draft' WHERE id = $draftId");
             $visibleIds = [];
             $res = $mysqli->query("SELECT id FROM invoxa_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "' AND is_quote = 0 AND status != 'draft'");
             while ($r = $res->fetch_assoc()) {
                 $visibleIds[] = (int) $r['id'];
             }
-            invoxaAssertTrue(in_array($sentId, $visibleIds, true), 'sent invoice should be visible');
-            invoxaAssertTrue(!in_array($draftId, $visibleIds, true), 'draft invoice should not be visible');
+            enxureAssertTrue(in_array($sentId, $visibleIds, true), 'sent invoice should be visible');
+            enxureAssertTrue(!in_array($draftId, $visibleIds, true), 'draft invoice should not be visible');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Portal token', 'resolves correct client', 'Looking up a client by the portal_token just written for them returns that same client\'s id, not some other row.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $token = bin2hex(random_bytes(24));
             $mysqli->query("UPDATE invoxa_clients SET portal_token = '" . $mysqli->real_escape_string($token) . "' WHERE id = $clientId");
             $found = $mysqli->query("SELECT id FROM invoxa_clients WHERE portal_token = '" . $mysqli->real_escape_string($token) . "'")->fetch_assoc();
-            invoxaAssertTrue($found && (int) $found['id'] === $clientId);
+            enxureAssertTrue($found && (int) $found['id'] === $clientId);
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Portal token', 'revoke invalidates the link', 'Revoking a client\'s portal link (setting portal_token back to NULL, the same update revoke_portal_token runs) means the old token no longer resolves to any client — the same lookup a portal page uses to validate a link.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $token = bin2hex(random_bytes(24));
             $mysqli->query("UPDATE invoxa_clients SET portal_token = '" . $mysqli->real_escape_string($token) . "' WHERE id = $clientId");
             $stillFound = $mysqli->query("SELECT id FROM invoxa_clients WHERE portal_token = '" . $mysqli->real_escape_string($token) . "'")->fetch_assoc();
-            invoxaAssertTrue((bool) $stillFound, 'token should resolve before revoking');
+            enxureAssertTrue((bool) $stillFound, 'token should resolve before revoking');
             $stmt = $mysqli->prepare("UPDATE invoxa_clients SET portal_token = NULL, portal_token_expires_at = NULL WHERE id = ?");
             $stmt->bind_param("i", $clientId);
             $stmt->execute();
             $afterRevoke = $mysqli->query("SELECT id FROM invoxa_clients WHERE portal_token = '" . $mysqli->real_escape_string($token) . "'")->fetch_assoc();
-            invoxaAssertTrue(!$afterRevoke, 'old token should no longer resolve after being revoked');
+            enxureAssertTrue(!$afterRevoke, 'old token should no longer resolve after being revoked');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Ad Hoc invoice', 'line items total matches stored amount', 'Building an invoice from three line items with a 10% discount and 8% tax (the same computeInvoiceTotals() the Ad Hoc invoice builder uses) and storing that total behaves exactly like a real Ad Hoc save — the stored amount matches the computed total to the cent.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $items = [['amount' => 150], ['amount' => 75.50], ['amount' => 24.50]];
             $totals = computeInvoiceTotals($items, 10, 8);
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, $totals['total']);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, $totals['total']);
             $row = $mysqli->query("SELECT amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals(round($totals['total'], 2), round((float) $row['amount'], 2), 'stored amount matches computed total');
+            enxureAssertEquals(round($totals['total'], 2), round((float) $row['amount'], 2), 'stored amount matches computed total');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Ad Hoc invoice', 'line items totaling over $1,000 store the correct amount', 'Same as the test above but with three line items ($1,200, $2,500.50, $999.50) whose $4,700 subtotal is well past the thousands-separator threshold, plus a 10% discount and 8% tax — the stored amount must be $4,568.40, not a comma-truncated fraction of it.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $items = [['amount' => 1200.00], ['amount' => 2500.50], ['amount' => 999.50]];
             $totals = computeInvoiceTotals($items, 10, 8);
-            invoxaAssertEquals(4568.40, round($totals['total'], 2), 'computed total');
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, $totals['total']);
+            enxureAssertEquals(4568.40, round($totals['total'], 2), 'computed total');
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, $totals['total']);
             $row = $mysqli->query("SELECT amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals(4568.40, round((float) $row['amount'], 2), 'stored amount matches computed total');
+            enxureAssertEquals(4568.40, round((float) $row['amount'], 2), 'stored amount matches computed total');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Void invoice', 'removed from and restored to outstanding total', 'Voiding an invoice (the same status update void_invoice runs) drops it out of an "outstanding" query the same way the dashboard\'s totals filter it out; unvoiding puts it straight back.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 200.00);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 200.00);
             $outstandingSql = "SELECT COUNT(*) as c FROM invoxa_invoices WHERE id = $invId AND status NOT IN ('paid', 'void')";
             $before = (int) $mysqli->query($outstandingSql)->fetch_assoc()['c'];
-            invoxaAssertEquals(1, $before, 'freshly sent invoice should count as outstanding');
+            enxureAssertEquals(1, $before, 'freshly sent invoice should count as outstanding');
             $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = 'void' WHERE id = ?");
             $stmt->bind_param("i", $invId);
             $stmt->execute();
             $whileVoid = (int) $mysqli->query($outstandingSql)->fetch_assoc()['c'];
-            invoxaAssertEquals(0, $whileVoid, 'voided invoice should drop out of the outstanding total');
+            enxureAssertEquals(0, $whileVoid, 'voided invoice should drop out of the outstanding total');
             $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = 'sent' WHERE id = ? AND status = 'void'");
             $stmt->bind_param("i", $invId);
             $stmt->execute();
             $afterUnvoid = (int) $mysqli->query($outstandingSql)->fetch_assoc()['c'];
-            invoxaAssertEquals(1, $afterUnvoid, 'unvoided invoice should count as outstanding again');
+            enxureAssertEquals(1, $afterUnvoid, 'unvoided invoice should count as outstanding again');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Quote', 'numbered separately from real invoices', 'A saved quote uses the Q<CLIENTKEY>NNN numbering format and is excluded from a real-invoice list query (is_quote = 0) while still showing up in a quotes query (is_quote = 1) for the same client.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $quoteNum = 'Q' . strtoupper($clientKey) . '001';
-            invoxaAssertTrue((bool) preg_match('/^Q[A-Z0-9]+\d{3}$/', $quoteNum), 'quote number format');
+            enxureAssertTrue((bool) preg_match('/^Q[A-Z0-9]+\d{3}$/', $quoteNum), 'quote number format');
             $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, is_quote) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), 500.00, 'sent', 1)");
             $stmt->bind_param("ss", $quoteNum, $clientKey);
             $stmt->execute();
             $realCount = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "' AND is_quote = 0")->fetch_assoc()['c'];
             $quoteCount = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "' AND is_quote = 1")->fetch_assoc()['c'];
-            invoxaAssertEquals(0, $realCount, 'a quote should not appear in the real-invoice list');
-            invoxaAssertEquals(1, $quoteCount, 'the quote should appear in the quotes list');
+            enxureAssertEquals(0, $realCount, 'a quote should not appear in the real-invoice list');
+            enxureAssertEquals(1, $quoteCount, 'the quote should appear in the quotes list');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Expense', 'created with correct fields', 'Recording an expense (the same fields save_expense writes: date, vendor, category, amount, description) reads back exactly as entered, including the DECIMAL(10,2) amount.', function () use ($mysqli) {
@@ -972,9 +972,9 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $stmt->execute();
             $expenseId = $mysqli->insert_id;
             $row = $mysqli->query("SELECT vendor, category, amount FROM invoxa_expenses WHERE id = $expenseId")->fetch_assoc();
-            invoxaAssertEquals('Test Suite Vendor', $row['vendor']);
-            invoxaAssertEquals('software', $row['category']);
-            invoxaAssertEquals(42.75, (float) $row['amount']);
+            enxureAssertEquals('Test Suite Vendor', $row['vendor']);
+            enxureAssertEquals('software', $row['category']);
+            enxureAssertEquals(42.75, (float) $row['amount']);
         } finally {
             if ($expenseId) {
                 $mysqli->query("DELETE FROM invoxa_expenses WHERE id = " . (int) $expenseId);
@@ -982,28 +982,28 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         }
     });
     $run('Clients & Invoices', 'Client', 'bulk flag update toggles independently', 'The Clients tab\'s bulk action bar updates one flag at a time (update_client_flags) — flipping is_active to 0 leaves is_test untouched, and flipping is_test to 1 afterward leaves is_active untouched, exactly as if each button were its own single-column UPDATE.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $stmt = $mysqli->prepare("UPDATE invoxa_clients SET is_active = ? WHERE id = ?");
             $inactive = 0;
             $stmt->bind_param("ii", $inactive, $clientId);
             $stmt->execute();
             $row = $mysqli->query("SELECT is_active, is_test FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
-            invoxaAssertEquals(0, (int) $row['is_active'], 'is_active should now be 0');
-            invoxaAssertEquals(1, (int) $row['is_test'], 'is_test should be untouched by the is_active update');
+            enxureAssertEquals(0, (int) $row['is_active'], 'is_active should now be 0');
+            enxureAssertEquals(1, (int) $row['is_test'], 'is_test should be untouched by the is_active update');
             $stmt = $mysqli->prepare("UPDATE invoxa_clients SET is_test = ? WHERE id = ?");
             $stillTest = 1;
             $stmt->bind_param("ii", $stillTest, $clientId);
             $stmt->execute();
             $after = $mysqli->query("SELECT is_active, is_test FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
-            invoxaAssertEquals(0, (int) $after['is_active'], 'is_active should still be untouched by the is_test update');
-            invoxaAssertEquals(1, (int) $after['is_test']);
+            enxureAssertEquals(0, (int) $after['is_active'], 'is_active should still be untouched by the is_test update');
+            enxureAssertEquals(1, (int) $after['is_test']);
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Clients & Invoices', 'Quote', 'converts to a real invoice', 'convertQuoteToInvoice() flips is_quote to 0, keeps the same amount, renumbers away from the Q-prefixed quote number, and logs a quote_converted audit entry — the same path the admin\'s Convert button and the Client Portal\'s Accept button both call.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         $quoteId = null;
         try {
             $quoteNum = 'Q' . strtoupper($clientKey) . '001';
@@ -1013,21 +1013,21 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $stmt->execute();
             $quoteId = $mysqli->insert_id;
             $result = convertQuoteToInvoice($mysqli, $settings, $quoteId, 'admin');
-            invoxaAssertTrue($result['success'], 'conversion should succeed for a real quote');
+            enxureAssertTrue($result['success'], 'conversion should succeed for a real quote');
             $row = $mysqli->query("SELECT is_quote, amount, invoice_number FROM invoxa_invoices WHERE id = $quoteId")->fetch_assoc();
-            invoxaAssertEquals(0, (int) $row['is_quote'], 'should no longer be flagged as a quote');
-            invoxaAssertEquals(250.00, (float) $row['amount'], 'amount should carry over unchanged');
-            invoxaAssertTrue($row['invoice_number'] !== $quoteNum, 'should be renumbered away from the quote number');
+            enxureAssertEquals(0, (int) $row['is_quote'], 'should no longer be flagged as a quote');
+            enxureAssertEquals(250.00, (float) $row['amount'], 'amount should carry over unchanged');
+            enxureAssertTrue($row['invoice_number'] !== $quoteNum, 'should be renumbered away from the quote number');
             $action = $mysqli->query("SELECT action_type FROM invoxa_actions WHERE invoice_id = $quoteId AND action_type = 'quote_converted'")->fetch_assoc();
-            invoxaAssertTrue((bool) $action, 'expected a quote_converted audit entry');
+            enxureAssertTrue((bool) $action, 'expected a quote_converted audit entry');
             $missing = convertQuoteToInvoice($mysqli, $settings, 999999999, 'admin');
-            invoxaAssertTrue(!$missing['success'], 'converting a non-existent quote id should fail cleanly');
+            enxureAssertTrue(!$missing['success'], 'converting a non-existent quote id should fail cleanly');
         } finally {
             if ($quoteId) {
                 $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id = " . (int) $quoteId);
                 $mysqli->query("DELETE FROM invoxa_invoices WHERE id = " . (int) $quoteId);
             }
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
             foreach (glob(INVOICES_DIR . 'test_suite_fixture/*.html') ?: [] as $__f) {
                 @unlink($__f);
             }
@@ -1035,7 +1035,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         }
     });
     $run('Clients & Invoices', 'Quote', 'a five-figure amount survives conversion unchanged', 'Same conversion path as the test above, but for a $45,250.75 quote — convertQuoteToInvoice() only touches is_quote/status/the invoice number, never re-derives the amount, so this confirms nothing in that path re-parses it through a formatted string along the way.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         $quoteId = null;
         try {
             $quoteNum = 'Q' . strtoupper($clientKey) . '002';
@@ -1045,15 +1045,15 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $stmt->execute();
             $quoteId = $mysqli->insert_id;
             $result = convertQuoteToInvoice($mysqli, $settings, $quoteId, 'admin');
-            invoxaAssertTrue($result['success'], 'conversion should succeed');
+            enxureAssertTrue($result['success'], 'conversion should succeed');
             $row = $mysqli->query("SELECT amount FROM invoxa_invoices WHERE id = $quoteId")->fetch_assoc();
-            invoxaAssertEquals(45250.75, (float) $row['amount'], 'amount should carry over unchanged');
+            enxureAssertEquals(45250.75, (float) $row['amount'], 'amount should carry over unchanged');
         } finally {
             if ($quoteId) {
                 $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id = " . (int) $quoteId);
                 $mysqli->query("DELETE FROM invoxa_invoices WHERE id = " . (int) $quoteId);
             }
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
             foreach (glob(INVOICES_DIR . 'test_suite_fixture/*.html') ?: [] as $__f) {
                 @unlink($__f);
             }
@@ -1063,138 +1063,138 @@ function invoxaTestDefinitions($mysqli, array $settings): array
 
     // ── Payments & Refunds ── the ledger's actual crediting/reversing logic.
     $run('Payments & Refunds', 'Payment ledger', 'partial then full payment', 'A $100 invoice paid $40 then $60 stays open (status "sent") after the first payment and flips to "paid" after the second, with paid_amount tracked correctly at each step.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 100.00);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 100.00);
             $r1 = recordInvoicePayment($mysqli, $settings, $invId, 40.00, 'test partial', 'manual');
-            invoxaAssertTrue($r1['success'] && !$r1['duplicate']);
+            enxureAssertTrue($r1['success'] && !$r1['duplicate']);
             $mid = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals('sent', $mid['status'], 'status stays open after partial payment');
-            invoxaAssertEquals(40.00, (float) $mid['paid_amount']);
+            enxureAssertEquals('sent', $mid['status'], 'status stays open after partial payment');
+            enxureAssertEquals(40.00, (float) $mid['paid_amount']);
             $r2 = recordInvoicePayment($mysqli, $settings, $invId, 60.00, 'test remainder', 'manual');
-            invoxaAssertTrue($r2['success']);
+            enxureAssertTrue($r2['success']);
             $after = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals('paid', $after['status']);
-            invoxaAssertEquals(100.00, (float) $after['paid_amount']);
+            enxureAssertEquals('paid', $after['status']);
+            enxureAssertEquals(100.00, (float) $after['paid_amount']);
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Payments & Refunds', 'Payment ledger', 'duplicate webhook idempotency', 'Recording the same gateway payment reference (provider_ref) twice only credits the invoice once — the second call comes back as a no-op duplicate, not a second ledger row.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 50.00);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 50.00);
             $ref = 'test_ref_' . bin2hex(random_bytes(6));
             $r1 = recordInvoicePayment($mysqli, $settings, $invId, 50.00, 'test', 'stripe', $ref);
-            invoxaAssertTrue($r1['success'] && !$r1['duplicate']);
+            enxureAssertTrue($r1['success'] && !$r1['duplicate']);
             $r2 = recordInvoicePayment($mysqli, $settings, $invId, 50.00, 'test', 'stripe', $ref);
-            invoxaAssertTrue($r2['success'] && $r2['duplicate'], 'second call with the same provider_ref should be a no-op');
+            enxureAssertTrue($r2['success'] && $r2['duplicate'], 'second call with the same provider_ref should be a no-op');
             $count = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_payments WHERE invoice_id = $invId")->fetch_assoc()['c'];
-            invoxaAssertEquals(1, $count, 'exactly one ledger row despite two calls');
+            enxureAssertEquals(1, $count, 'exactly one ledger row despite two calls');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Payments & Refunds', 'Refund', 'reopens paid invoice', 'Refunding a fully-paid invoice\'s full amount reopens it (status back to "sent") and drops paid_amount back to $0.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 80.00);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 80.00);
             recordInvoicePayment($mysqli, $settings, $invId, 80.00, 'test', 'stripe', 'test_charge_' . bin2hex(random_bytes(6)));
             $before = $mysqli->query("SELECT status FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals('paid', $before['status']);
+            enxureAssertEquals('paid', $before['status']);
             recordInvoiceRefund($mysqli, $settings, $invId, 80.00, 'stripe', 'test_refund_' . bin2hex(random_bytes(6)));
             $after = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals('sent', $after['status'], 'invoice reopens after a full refund');
-            invoxaAssertEquals(0.00, (float) $after['paid_amount']);
+            enxureAssertEquals('sent', $after['status'], 'invoice reopens after a full refund');
+            enxureAssertEquals(0.00, (float) $after['paid_amount']);
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Payments & Refunds', 'Payment ledger', 'partial then full payment on a five-figure invoice', 'Same as the $100 version above, but a $12,345.67 invoice paid $5,000.00 then the $7,345.67 remainder — checks the partial-payment arithmetic (invoice amount minus payments so far) holds up past the thousands-separator threshold, not just at small round numbers.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 12345.67);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 12345.67);
             $r1 = recordInvoicePayment($mysqli, $settings, $invId, 5000.00, 'test partial', 'manual');
-            invoxaAssertTrue($r1['success'] && !$r1['duplicate']);
+            enxureAssertTrue($r1['success'] && !$r1['duplicate']);
             $mid = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals('sent', $mid['status'], 'status stays open after partial payment');
-            invoxaAssertEquals(5000.00, (float) $mid['paid_amount']);
+            enxureAssertEquals('sent', $mid['status'], 'status stays open after partial payment');
+            enxureAssertEquals(5000.00, (float) $mid['paid_amount']);
             $r2 = recordInvoicePayment($mysqli, $settings, $invId, 7345.67, 'test remainder', 'manual');
-            invoxaAssertTrue($r2['success']);
+            enxureAssertTrue($r2['success']);
             $after = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals('paid', $after['status']);
-            invoxaAssertEquals(12345.67, (float) $after['paid_amount']);
+            enxureAssertEquals('paid', $after['status']);
+            enxureAssertEquals(12345.67, (float) $after['paid_amount']);
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Payments & Refunds', 'Refund', 'partial refund on a five-figure invoice leaves the correct remaining balance', 'A $12,345.67 invoice paid in full, then partially refunded $5,000.00, must reopen to "sent" (any refund that drops total paid below the invoice amount reopens it — see recordInvoiceRefund()) with paid_amount left at exactly $7,345.67, not a comma-truncated figure.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 12345.67);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 12345.67);
             recordInvoicePayment($mysqli, $settings, $invId, 12345.67, 'test', 'stripe', 'test_charge_' . bin2hex(random_bytes(6)));
             $before = $mysqli->query("SELECT status FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals('paid', $before['status']);
+            enxureAssertEquals('paid', $before['status']);
             recordInvoiceRefund($mysqli, $settings, $invId, 5000.00, 'stripe', 'test_refund_' . bin2hex(random_bytes(6)));
             $after = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            invoxaAssertEquals('sent', $after['status'], 'invoice reopens once total paid drops below the invoice amount');
-            invoxaAssertEquals(7345.67, (float) $after['paid_amount'], 'remaining paid_amount after the partial refund');
+            enxureAssertEquals('sent', $after['status'], 'invoice reopens once total paid drops below the invoice amount');
+            enxureAssertEquals(7345.67, (float) $after['paid_amount'], 'remaining paid_amount after the partial refund');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Payments & Refunds', 'Audit Log', 'payment creates a matching entry', 'recordInvoicePayment() writes its own invoxa_actions row (mark_paid/mark_partial_paid) against the right invoice — the same audit trail the Activity tab reads.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 25.00);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 25.00);
             recordInvoicePayment($mysqli, $settings, $invId, 25.00, 'test', 'manual');
             $row = $mysqli->query("SELECT action_type FROM invoxa_actions WHERE invoice_id = $invId AND action_type IN ('mark_paid', 'mark_partial_paid') ORDER BY id DESC LIMIT 1")->fetch_assoc();
-            invoxaAssertTrue((bool) $row, 'expected an audit log entry for this payment');
+            enxureAssertTrue((bool) $row, 'expected an audit log entry for this payment');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Payments & Refunds', 'Accounting journal', 'every entry balances', 'buildAccountingJournal() emits an invoice as one debit + one credit row of the same reference, and a payment against it the same way — for a fixture invoice paid in full, the rows sharing that invoice\'s reference always sum to equal debit and credit totals, which is what makes the export genuinely importable into a bookkeeping tool.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 60.00);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 60.00);
             $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $invId")->fetch_assoc()['invoice_number'];
             recordInvoicePayment($mysqli, $settings, $invId, 60.00, 'test', 'manual');
             $journal = buildAccountingJournal($mysqli, $settings, date('Y-m-d', strtotime('-1 day')), '');
             $ours = array_values(array_filter($journal, fn($r) => $r['ref'] === $invNum));
-            invoxaAssertEquals(4, count($ours), 'expected 2 rows for the invoice and 2 for its payment');
+            enxureAssertEquals(4, count($ours), 'expected 2 rows for the invoice and 2 for its payment');
             $debitTotal = array_sum(array_column($ours, 'debit'));
             $creditTotal = array_sum(array_column($ours, 'credit'));
-            invoxaAssertEquals(round($debitTotal, 2), round($creditTotal, 2), 'debits and credits should balance');
-            invoxaAssertEquals(120.0, round($debitTotal, 2), 'two $60 debit legs (invoice + payment)');
+            enxureAssertEquals(round($debitTotal, 2), round($creditTotal, 2), 'debits and credits should balance');
+            enxureAssertEquals(120.0, round($debitTotal, 2), 'two $60 debit legs (invoice + payment)');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Payments & Refunds', 'Accounting journal', 'still balances at five figures', 'Same balance check as above, for a $23,456.78 invoice paid in full — confirms buildAccountingJournal() (and whatever it sums internally) doesn\'t drift once amounts cross the comma threshold.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 23456.78);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 23456.78);
             $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $invId")->fetch_assoc()['invoice_number'];
             recordInvoicePayment($mysqli, $settings, $invId, 23456.78, 'test', 'manual');
             $journal = buildAccountingJournal($mysqli, $settings, date('Y-m-d', strtotime('-1 day')), '');
             $ours = array_values(array_filter($journal, fn($r) => $r['ref'] === $invNum));
-            invoxaAssertEquals(4, count($ours), 'expected 2 rows for the invoice and 2 for its payment');
+            enxureAssertEquals(4, count($ours), 'expected 2 rows for the invoice and 2 for its payment');
             $debitTotal = array_sum(array_column($ours, 'debit'));
             $creditTotal = array_sum(array_column($ours, 'credit'));
-            invoxaAssertEquals(round($debitTotal, 2), round($creditTotal, 2), 'debits and credits should balance');
-            invoxaAssertEquals(46913.56, round($debitTotal, 2), 'two $23,456.78 debit legs (invoice + payment)');
+            enxureAssertEquals(round($debitTotal, 2), round($creditTotal, 2), 'debits and credits should balance');
+            enxureAssertEquals(46913.56, round($debitTotal, 2), 'two $23,456.78 debit legs (invoice + payment)');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
-    $run('Payments & Refunds', 'Webhook', 'unmatched reference logs an audit entry', 'invoxaLogUnmatchedWebhook() — called when a Stripe/PayPal event references an invoice Invoxa no longer recognizes — writes a webhook_unmatched action naming the provider and the dangling reference, so the Audit Log still shows something happened even though nothing was credited.', function () use ($mysqli) {
+    $run('Payments & Refunds', 'Webhook', 'unmatched reference logs an audit entry', 'enxureLogUnmatchedWebhook() — called when a Stripe/PayPal event references an invoice Invoxa no longer recognizes — writes a webhook_unmatched action naming the provider and the dangling reference, so the Audit Log still shows something happened even though nothing was credited.', function () use ($mysqli) {
         $reference = 'ztest_ref_' . bin2hex(random_bytes(6));
         try {
-            invoxaLogUnmatchedWebhook($mysqli, 'stripe', 'checkout.session.completed', $reference);
+            enxureLogUnmatchedWebhook($mysqli, 'stripe', 'checkout.session.completed', $reference);
             $row = $mysqli->query("SELECT notes FROM invoxa_actions WHERE action_type = 'webhook_unmatched' AND notes LIKE '%" . $mysqli->real_escape_string($reference) . "%'")->fetch_assoc();
-            invoxaAssertTrue((bool) $row, 'expected a webhook_unmatched entry mentioning the reference');
-            invoxaAssertTrue(str_contains($row['notes'], 'Stripe'), 'provider name should be capitalized in the note');
+            enxureAssertTrue((bool) $row, 'expected a webhook_unmatched entry mentioning the reference');
+            enxureAssertTrue(str_contains($row['notes'], 'Stripe'), 'provider name should be capitalized in the note');
         } finally {
             $mysqli->query("DELETE FROM invoxa_actions WHERE action_type = 'webhook_unmatched' AND notes LIKE '%" . $mysqli->real_escape_string($reference) . "%'");
         }
@@ -1211,33 +1211,33 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             fputcsv($fh, ['Client Name', 'Email', 'Rate', 'Billing Frequency', 'Account Name', 'Account Number', 'Payment Terms Days', 'Phone', 'Address']);
             fputcsv($fh, [$name, 'csvtest@invalid.example', '1,200.00', 'monthly', '', '', '21', '', '']);
             rewind($fh);
-            $result = invoxaImportClientsCsvRows($mysqli, $fh);
-            invoxaAssertEquals(1, $result['imported'], 'one row should import');
+            $result = enxureImportClientsCsvRows($mysqli, $fh);
+            enxureAssertEquals(1, $result['imported'], 'one row should import');
             $row = $mysqli->query("SELECT monthly_rate FROM invoxa_clients WHERE client_name = '" . $mysqli->real_escape_string($name) . "'")->fetch_assoc();
-            invoxaAssertTrue((bool) $row, 'imported client should exist');
-            invoxaAssertEquals(1200.00, (float) $row['monthly_rate'], 'rate should be 1200, not comma-truncated to 1');
+            enxureAssertTrue((bool) $row, 'imported client should exist');
+            enxureAssertEquals(1200.00, (float) $row['monthly_rate'], 'rate should be 1200, not comma-truncated to 1');
         } finally {
             $mysqli->query("DELETE FROM invoxa_clients WHERE client_name = '" . $mysqli->real_escape_string($name) . "'");
         }
     });
     $run('CSV Import/Export', 'Invoice import', 'an amount and paid amount with commas import correctly', 'A CSV row with Amount "12,345.67" and Paid Amount "5,000.00" must import as exactly those figures, both past the thousands-separator threshold.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $invNum = 'ZTEST-CSV-' . strtoupper(bin2hex(random_bytes(3)));
             $fh = fopen('php://temp', 'r+');
             fputcsv($fh, ['Invoice Number', 'Client Name', 'Email', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date']);
             fputcsv($fh, [$invNum, 'Test Suite Fixture', 'testsuite@invalid.example', date('Y-m-d'), date('Y-m-d', strtotime('+21 days')), '12,345.67', 'USD', 'paid', '5,000.00', date('Y-m-d')]);
             rewind($fh);
-            $result = invoxaImportInvoicesCsvRows($mysqli, $fh, []);
-            invoxaAssertEquals(1, $result['imported'], 'one row should import');
+            $result = enxureImportInvoicesCsvRows($mysqli, $fh, []);
+            enxureAssertEquals(1, $result['imported'], 'one row should import');
             $row = $mysqli->query("SELECT amount, paid_amount FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
-            invoxaAssertTrue((bool) $row, 'imported invoice should exist');
-            invoxaAssertEquals(12345.67, (float) $row['amount'], 'amount should be 12,345.67, not comma-truncated to 12');
-            invoxaAssertEquals(5000.00, (float) $row['paid_amount'], 'paid amount should be 5,000.00, not comma-truncated to 5');
+            enxureAssertTrue((bool) $row, 'imported invoice should exist');
+            enxureAssertEquals(12345.67, (float) $row['amount'], 'amount should be 12,345.67, not comma-truncated to 12');
+            enxureAssertEquals(5000.00, (float) $row['paid_amount'], 'paid amount should be 5,000.00, not comma-truncated to 5');
         } finally {
             $mysqli->query("DELETE FROM invoxa_payments WHERE invoice_id IN (SELECT id FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "')");
             $mysqli->query("DELETE FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'");
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('CSV Import/Export', 'Expense import', 'an amount with a thousands-separator comma imports correctly', 'A CSV row with Amount "3,400.00" must import as exactly $3,400.00, not comma-truncated to $3.', function () use ($mysqli) {
@@ -1247,22 +1247,22 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             fputcsv($fh, ['Date', 'Vendor', 'Category', 'Amount', 'Description']);
             fputcsv($fh, [date('Y-m-d'), $vendor, 'software', '3,400.00', 'test fixture']);
             rewind($fh);
-            $result = invoxaImportExpensesCsvRows($mysqli, $fh);
-            invoxaAssertEquals(1, $result['imported'], 'one row should import');
+            $result = enxureImportExpensesCsvRows($mysqli, $fh);
+            enxureAssertEquals(1, $result['imported'], 'one row should import');
             $row = $mysqli->query("SELECT amount FROM invoxa_expenses WHERE vendor = '" . $mysqli->real_escape_string($vendor) . "'")->fetch_assoc();
-            invoxaAssertTrue((bool) $row, 'imported expense should exist');
-            invoxaAssertEquals(3400.00, (float) $row['amount'], 'amount should be 3,400.00, not comma-truncated to 3');
+            enxureAssertTrue((bool) $row, 'imported expense should exist');
+            enxureAssertEquals(3400.00, (float) $row['amount'], 'amount should be 3,400.00, not comma-truncated to 3');
         } finally {
             $mysqli->query("DELETE FROM invoxa_expenses WHERE vendor = '" . $mysqli->real_escape_string($vendor) . "'");
         }
     });
     $run('CSV Import/Export', 'Export → re-import round trip', 'a five-figure invoice survives export and re-import unchanged', 'Writes a $34,567.89 invoice through the exact query + fputcsv() shape "Export Invoices" uses, then feeds that CSV straight back through the invoice importer (with the invoice number blanked, as re-adding an edited spreadsheet row would) — the re-imported amount must still be $34,567.89, proving the two features agree on format in both directions, not just import in isolation.', function () use ($mysqli, $settings) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         $reimportedNum = null;
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 34567.89, 'USD');
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 34567.89, 'USD');
             $exportRow = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
-            $exportRow['currency'] = invoxaResolveCurrency($exportRow['currency'], $settings);
+            $exportRow['currency'] = enxureResolveCurrency($exportRow['currency'], $settings);
 
             $fh = fopen('php://temp', 'r+');
             fputcsv($fh, ['Invoice Number', 'Client Name', 'Email', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date']);
@@ -1270,60 +1270,60 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             fputcsv($fh, $exportRow);
             rewind($fh);
 
-            $result = invoxaImportInvoicesCsvRows($mysqli, $fh, $settings);
-            invoxaAssertEquals(1, $result['imported'], 'one row should import');
+            $result = enxureImportInvoicesCsvRows($mysqli, $fh, $settings);
+            enxureAssertEquals(1, $result['imported'], 'one row should import');
             $reimported = $mysqli->query("SELECT id, invoice_number, amount FROM invoxa_invoices WHERE client_key = '{$clientKey}' AND id != $invId ORDER BY id DESC LIMIT 1")->fetch_assoc();
-            invoxaAssertTrue((bool) $reimported, 're-imported invoice should exist');
+            enxureAssertTrue((bool) $reimported, 're-imported invoice should exist');
             $reimportedNum = $reimported['invoice_number'];
-            invoxaAssertEquals(34567.89, (float) $reimported['amount'], 're-imported amount should still be $34,567.89');
+            enxureAssertEquals(34567.89, (float) $reimported['amount'], 're-imported amount should still be $34,567.89');
         } finally {
             if ($reimportedNum) {
                 $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_number = '" . $mysqli->real_escape_string($reimportedNum) . "'");
                 $mysqli->query("DELETE FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($reimportedNum) . "'");
             }
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
 
     // ── External API ── the token lifecycle (create, authenticate, renew,
-    // revoke), exercised via invoxaCreateApiToken() and the same token_hash
-    // lookup invoxaAuthenticateApiRequest() runs — that function itself isn't
+    // revoke), exercised via enxureCreateApiToken() and the same token_hash
+    // lookup enxureAuthenticateApiRequest() runs — that function itself isn't
     // called directly since it reads a real Authorization header, which this
     // test has no HTTP request to provide.
-    $run('External API', 'Token', 'created and authenticates', 'invoxaCreateApiToken() returns a raw token whose SHA-256 hash matches what was persisted — the exact lookup invoxaAuthenticateApiRequest() runs against the Authorization header on a real request.', function () use ($mysqli) {
-        $created = invoxaCreateApiToken($mysqli, 'Test Suite Fixture Token', null);
+    $run('External API', 'Token', 'created and authenticates', 'enxureCreateApiToken() returns a raw token whose SHA-256 hash matches what was persisted — the exact lookup enxureAuthenticateApiRequest() runs against the Authorization header on a real request.', function () use ($mysqli) {
+        $created = enxureCreateApiToken($mysqli, 'Test Suite Fixture Token', null);
         try {
-            invoxaAssertTrue(str_starts_with($created['token'], 'ivx_'), 'token should use the ivx_ prefix');
+            enxureAssertTrue(str_starts_with($created['token'], 'ivx_'), 'token should use the ivx_ prefix');
             $hash = hash('sha256', $created['token']);
             $row = $mysqli->query("SELECT id, revoked_at, expires_at FROM invoxa_api_tokens WHERE token_hash = '" . $mysqli->real_escape_string($hash) . "'")->fetch_assoc();
-            invoxaAssertTrue((bool) $row && (int) $row['id'] === (int) $created['id'], 'stored hash should resolve back to the created token');
-            invoxaAssertTrue($row['revoked_at'] === null && $row['expires_at'] === null, 'a freshly created never-expiring token should be neither revoked nor expired');
+            enxureAssertTrue((bool) $row && (int) $row['id'] === (int) $created['id'], 'stored hash should resolve back to the created token');
+            enxureAssertTrue($row['revoked_at'] === null && $row['expires_at'] === null, 'a freshly created never-expiring token should be neither revoked nor expired');
         } finally {
             $mysqli->query("DELETE FROM invoxa_api_tokens WHERE id = " . (int) $created['id']);
         }
     });
-    $run('External API', 'Token', 'revoked token fails to authenticate', 'The same query invoxaAuthenticateApiRequest() runs (token_hash match AND revoked_at IS NULL) stops matching a token the instant it\'s revoked — mirroring what "Revoke" in Settings > API Access actually does.', function () use ($mysqli) {
-        $created = invoxaCreateApiToken($mysqli, 'Test Suite Fixture Token', null);
+    $run('External API', 'Token', 'revoked token fails to authenticate', 'The same query enxureAuthenticateApiRequest() runs (token_hash match AND revoked_at IS NULL) stops matching a token the instant it\'s revoked — mirroring what "Revoke" in Settings > API Access actually does.', function () use ($mysqli) {
+        $created = enxureCreateApiToken($mysqli, 'Test Suite Fixture Token', null);
         try {
             $hash = hash('sha256', $created['token']);
             $authSql = "SELECT id FROM invoxa_api_tokens WHERE token_hash = '" . $mysqli->real_escape_string($hash) . "' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())";
             $before = $mysqli->query($authSql)->fetch_assoc();
-            invoxaAssertTrue((bool) $before, 'token should authenticate before being revoked');
+            enxureAssertTrue((bool) $before, 'token should authenticate before being revoked');
             $mysqli->query("UPDATE invoxa_api_tokens SET revoked_at = NOW() WHERE id = " . (int) $created['id']);
             $after = $mysqli->query($authSql)->fetch_assoc();
-            invoxaAssertTrue(!$after, 'a revoked token should no longer authenticate');
+            enxureAssertTrue(!$after, 'a revoked token should no longer authenticate');
         } finally {
             $mysqli->query("DELETE FROM invoxa_api_tokens WHERE id = " . (int) $created['id']);
         }
     });
     $run('External API', 'Token', 'expired token fails to authenticate', 'A token created with its expiry already in the past fails the same "not expired" check a live request goes through, even though it was never explicitly revoked.', function () use ($mysqli) {
-        $created = invoxaCreateApiToken($mysqli, 'Test Suite Fixture Token', 30);
+        $created = enxureCreateApiToken($mysqli, 'Test Suite Fixture Token', 30);
         try {
             $mysqli->query("UPDATE invoxa_api_tokens SET expires_at = DATE_SUB(NOW(), INTERVAL 1 DAY) WHERE id = " . (int) $created['id']);
             $hash = hash('sha256', $created['token']);
             $authSql = "SELECT id FROM invoxa_api_tokens WHERE token_hash = '" . $mysqli->real_escape_string($hash) . "' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())";
             $row = $mysqli->query($authSql)->fetch_assoc();
-            invoxaAssertTrue(!$row, 'a token past its expiry should not authenticate');
+            enxureAssertTrue(!$row, 'a token past its expiry should not authenticate');
         } finally {
             $mysqli->query("DELETE FROM invoxa_api_tokens WHERE id = " . (int) $created['id']);
         }
@@ -1331,31 +1331,31 @@ function invoxaTestDefinitions($mysqli, array $settings): array
     // ── Billing Cron ── the double-billing guard's query, checked
     // directly rather than via run_recurring(), which would bill real clients.
     $run('Billing Cron', 'Double-billing guard', 'detects an invoice already billed this month', 'The same "already billed this period" query run_recurring() uses for monthly clients correctly finds an invoice dated today, and correctly finds none for a client with no invoices at all.', function () use ($mysqli) {
-        [$billedId, $billedKey] = invoxaTestCreateClient($mysqli);
-        [$freshId, $freshKey] = invoxaTestCreateClient($mysqli);
+        [$billedId, $billedKey] = enxureTestCreateClient($mysqli);
+        [$freshId, $freshKey] = enxureTestCreateClient($mysqli);
         try {
-            invoxaTestCreateInvoice($mysqli, $billedKey, 30.00);
+            enxureTestCreateInvoice($mysqli, $billedKey, 30.00);
             $guardSql = "SELECT COUNT(*) as c FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND MONTH(invoice_date) = MONTH(CURDATE()) AND YEAR(invoice_date) = YEAR(CURDATE())";
             $stmt = $mysqli->prepare($guardSql);
             $stmt->bind_param("s", $billedKey);
             $stmt->execute();
             $billedCount = (int) $stmt->get_result()->fetch_assoc()['c'];
-            invoxaAssertTrue($billedCount > 0, 'client with an invoice this month should be caught by the guard');
+            enxureAssertTrue($billedCount > 0, 'client with an invoice this month should be caught by the guard');
             $stmt2 = $mysqli->prepare($guardSql);
             $stmt2->bind_param("s", $freshKey);
             $stmt2->execute();
             $freshCount = (int) $stmt2->get_result()->fetch_assoc()['c'];
-            invoxaAssertEquals(0, $freshCount, 'client with no invoices should not be caught by the guard');
+            enxureAssertEquals(0, $freshCount, 'client with no invoices should not be caught by the guard');
         } finally {
-            invoxaTestCleanupClient($mysqli, $billedId, $billedKey);
-            invoxaTestCleanupClient($mysqli, $freshId, $freshKey);
+            enxureTestCleanupClient($mysqli, $billedId, $billedKey);
+            enxureTestCleanupClient($mysqli, $freshId, $freshKey);
         }
     });
     $run('Billing Cron', 'Recurring amount', 'a $1,200+ monthly rate bills the full amount, not just the leading digits', 'Builds the exact line item run_recurring() builds from a client\'s monthly_rate and runs it through computeInvoiceTotals() the same way — for a $1,242 rate this must total $1,242, not $1 (what a stray number_format() before that call would silently produce for any rate at or above $1,000).', function () {
         $rate = 1242.00;
         $recurLineItems = [['code' => 'WEB01', 'desc' => 'Website management', 'amount' => (float) $rate]];
         $recurTotals = computeInvoiceTotals($recurLineItems, 0.0, 0.0);
-        invoxaAssertEquals(1242.0, $recurTotals['total'], 'billed total matches the monthly rate');
+        enxureAssertEquals(1242.0, $recurTotals['total'], 'billed total matches the monthly rate');
     });
     $run('Billing Cron', 'Recurring amount', 'a range of rates from just under $1,000 to six figures, with and without discount/tax', 'Same run_recurring() line-item construction as the test above, swept across the values most likely to expose an off-by-comma regression: just under the threshold, exactly at it, a typical four-figure rate, and a six-figure rate — each checked both plain and with a discount/tax combination, since a client can have both set.', function () {
         $cases = [
@@ -1367,27 +1367,27 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         foreach ($cases as $case) {
             $recurLineItems = [['code' => 'WEB01', 'desc' => 'Website management', 'amount' => (float) $case['rate']]];
             $recurTotals = computeInvoiceTotals($recurLineItems, $case['discount'], $case['tax']);
-            invoxaAssertEquals($case['expected'], $recurTotals['total'], "rate {$case['rate']}");
+            enxureAssertEquals($case['expected'], $recurTotals['total'], "rate {$case['rate']}");
         }
     });
     $run('Billing Cron', 'Late fees', 'fee amount calculation, percent and flat, at scale', 'Replicates applyLateFees()\'s own fee-type branch (percent: round(outstanding * value / 100, 2); flat: the configured value untouched) against a $12,345.67 outstanding balance — a 5% fee must come out to $617.28, and a flat fee configured at $50 must stay exactly $50 rather than being scaled by the outstanding balance.', function () {
         $outstanding = 12345.67;
         $computeFee = fn(string $feeType, float $feeValue) => $feeType === 'flat' ? $feeValue : round($outstanding * $feeValue / 100, 2);
-        invoxaAssertEquals(617.28, $computeFee('percent', 5.0), '5% of $12,345.67');
-        invoxaAssertEquals(50.0, $computeFee('flat', 50.0), 'flat fee ignores the outstanding balance');
+        enxureAssertEquals(617.28, $computeFee('percent', 5.0), '5% of $12,345.67');
+        enxureAssertEquals(50.0, $computeFee('flat', 50.0), 'flat fee ignores the outstanding balance');
     });
     $run('Billing Cron', 'Late fees', 'eligibility query catches overdue, skips grace-period and already-charged invoices', 'The same eligibility check applyLateFees() runs (unpaid, non-quote, due_date past the grace period, no existing late_fee_charged action) picks up an invoice 10 days overdue against a 7-day grace period, but correctly skips one only 3 days overdue, and skips an eligible invoice that already has a late_fee_charged entry against it.', function () use ($mysqli) {
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $graceDays = 7;
-            $eligibleId = invoxaTestCreateInvoice($mysqli, $clientKey, 100.00);
+            $eligibleId = enxureTestCreateInvoice($mysqli, $clientKey, 100.00);
             $mysqli->query("UPDATE invoxa_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 10 DAY) WHERE id = $eligibleId");
-            $withinGraceId = invoxaTestCreateInvoice($mysqli, $clientKey, 100.00);
+            $withinGraceId = enxureTestCreateInvoice($mysqli, $clientKey, 100.00);
             $mysqli->query("UPDATE invoxa_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 3 DAY) WHERE id = $withinGraceId");
-            $alreadyChargedId = invoxaTestCreateInvoice($mysqli, $clientKey, 100.00);
+            $alreadyChargedId = enxureTestCreateInvoice($mysqli, $clientKey, 100.00);
             $mysqli->query("UPDATE invoxa_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 30 DAY) WHERE id = $alreadyChargedId");
             $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $alreadyChargedId")->fetch_assoc()['invoice_number'];
-            invoxaLogAction($mysqli, $alreadyChargedId, $invNum, 'late_fee_charged', 'test fixture');
+            enxureLogAction($mysqli, $alreadyChargedId, $invNum, 'late_fee_charged', 'test fixture');
 
             $eligibleSql = "SELECT i.id FROM invoxa_invoices i
                  WHERE i.is_quote = 0
@@ -1407,11 +1407,11 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             while ($r = $res->fetch_assoc()) {
                 $eligibleIds[] = (int) $r['id'];
             }
-            invoxaAssertTrue(in_array($eligibleId, $eligibleIds, true), 'invoice past the grace period should be eligible');
-            invoxaAssertTrue(!in_array($withinGraceId, $eligibleIds, true), 'invoice still within the grace period should not be eligible');
-            invoxaAssertTrue(!in_array($alreadyChargedId, $eligibleIds, true), 'invoice already charged a late fee should not be eligible again');
+            enxureAssertTrue(in_array($eligibleId, $eligibleIds, true), 'invoice past the grace period should be eligible');
+            enxureAssertTrue(!in_array($withinGraceId, $eligibleIds, true), 'invoice still within the grace period should not be eligible');
+            enxureAssertTrue(!in_array($alreadyChargedId, $eligibleIds, true), 'invoice already charged a late fee should not be eligible again');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
 
@@ -1419,20 +1419,20 @@ function invoxaTestDefinitions($mysqli, array $settings): array
     // substitution, generated invoice HTML) without calling PHPMailer or SMTP.
     $run('Email Content', 'renderEmailTemplate', 'substitutes tokens correctly', 'A template with {client_name}/{invoice_number} placeholders renders with those exact values substituted, and nothing else altered.', function () {
         $out = renderEmailTemplate('Hi {client_name}, invoice {invoice_number} is ready.', ['client_name' => 'Acme Co', 'invoice_number' => 'INV042']);
-        invoxaAssertEquals('Hi Acme Co, invoice INV042 is ready.', $out);
+        enxureAssertEquals('Hi Acme Co, invoice INV042 is ready.', $out);
     });
     $run('Email Content', 'generateInvoiceHTML', 'includes the client, number, and amount', 'The generated invoice HTML (the same markup that becomes the email body and the PDF) contains the client name, invoice number, and formatted amount passed in.', function () {
         $html = generateInvoiceHTML('Test Client Co', '2026-01-01', '2026-01-22', 'INVTEST01', '99.00', '', '', 'billing@example.com', [['code' => 'WEB01', 'desc' => 'Test line', 'amount' => '99.00']]);
-        invoxaAssertTrue(str_contains($html, 'Test Client Co'), 'missing client name');
-        invoxaAssertTrue(str_contains($html, 'INVTEST01'), 'missing invoice number');
-        invoxaAssertTrue(str_contains($html, '99.00'), 'missing amount');
+        enxureAssertTrue(str_contains($html, 'Test Client Co'), 'missing client name');
+        enxureAssertTrue(str_contains($html, 'INVTEST01'), 'missing invoice number');
+        enxureAssertTrue(str_contains($html, '99.00'), 'missing amount');
     });
     $run('Email Content', 'generateInvoiceHTML', 'Subtotal/Tax rows stay correct above $1,000', 'computeInvoiceTotals() normalizes a line item\'s amount to a display string (e.g. "1,200.00") as a side effect — generateInvoiceHTML() re-derives its own Subtotal/Discount/Tax rows from that same array, so this catches a regression where it re-parses the comma-formatted string instead of the raw number and renders "$1.00" instead of "$1,200.00".', function () {
         $items = [['code' => 'WEB01', 'desc' => 'Test line', 'amount' => 1200.0]];
         $totals = computeInvoiceTotals($items, 10, 15);
         $html = generateInvoiceHTML('Test Client Co', '2026-01-01', '2026-01-22', 'INVTEST02', number_format($totals['total'], 2), '', '', 'billing@example.com', $items, '#4a90e2', '', 'USD', '', $totals['discount_pct'], $totals['tax_rate']);
-        invoxaAssertTrue(str_contains($html, '$1,200.00'), 'Subtotal row should show $1,200.00');
-        invoxaAssertTrue(str_contains($html, '$162.00'), 'Tax row should show $162.00 (15% of the $1,080 net after discount)');
+        enxureAssertTrue(str_contains($html, '$1,200.00'), 'Subtotal row should show $1,200.00');
+        enxureAssertTrue(str_contains($html, '$162.00'), 'Tax row should show $162.00 (15% of the $1,080 net after discount)');
     });
     $run('Email Content', 'generateInvoiceHTML', 'Subtotal sums multiple large line items correctly', 'Two line items of $1,200 and $2,500 (each individually above the comma threshold) plus a 5% tax must render a $3,700 Subtotal — checks the re-derivation loop over array_column($lineItems, \'amount\') doesn\'t just happen to work for a single item.', function () {
         $items = [
@@ -1441,8 +1441,8 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         ];
         $totals = computeInvoiceTotals($items, 0, 5);
         $html = generateInvoiceHTML('Test Client Co', '2026-01-01', '2026-01-22', 'INVTEST03', number_format($totals['total'], 2), '', '', 'billing@example.com', $items, '#4a90e2', '', 'USD', '', $totals['discount_pct'], $totals['tax_rate']);
-        invoxaAssertTrue(str_contains($html, '$3,700.00'), 'Subtotal row should show $3,700.00 (1,200 + 2,500)');
-        invoxaAssertTrue(str_contains($html, '$185.00'), 'Tax row should show $185.00 (5% of 3,700)');
+        enxureAssertTrue(str_contains($html, '$3,700.00'), 'Subtotal row should show $3,700.00 (1,200 + 2,500)');
+        enxureAssertTrue(str_contains($html, '$185.00'), 'Tax row should show $185.00 (5% of 3,700)');
     });
 
     // ── Email Delivery ── unlike Email Content above, these actually call
@@ -1455,36 +1455,36 @@ function invoxaTestDefinitions($mysqli, array $settings): array
     // — it doubles as a real inbox for manually eyeballing what an email
     // actually looks like, not just disposable test scaffolding.
     $run('Email Delivery', 'sendReminderEmailForInvoice', 'reminder email is actually delivered', 'Sends a real overdue-reminder email through SMTP for a disposable test invoice and confirms it lands in Mailpit addressed to the right recipient, with the invoice number in the subject and the invoice HTML in the body — catches regressions the Email Content group can\'t, since pure-function tests never touch the PHPMailer/SMTP path at all.', function () use ($mysqli, $settings) {
-        $mailpitUrl = invoxaMailpitBaseUrl();
+        $mailpitUrl = enxureMailpitBaseUrl();
         if ($mailpitUrl === null) {
             throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
         }
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 150.00);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 150.00);
             $mysqli->query("UPDATE invoxa_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 10 DAY) WHERE id = $invId");
             $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
 
             $result = sendReminderEmailForInvoice($mysqli, $inv, $settings, getenv('SMTP_PASSWORD') ?: '');
-            invoxaAssertTrue($result['sent'], 'sendReminderEmailForInvoice() reported failure: ' . $result['error']);
+            enxureAssertTrue($result['sent'], 'sendReminderEmailForInvoice() reported failure: ' . $result['error']);
 
-            $msg = invoxaMailpitFindMessage($mailpitUrl, $inv['recipient_email'], $inv['invoice_number']);
-            invoxaAssertTrue($msg !== null, 'no message addressed to ' . $inv['recipient_email'] . ' with "' . $inv['invoice_number'] . '" in the subject appeared in Mailpit within the timeout');
-            $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
+            $msg = enxureMailpitFindMessage($mailpitUrl, $inv['recipient_email'], $inv['invoice_number']);
+            enxureAssertTrue($msg !== null, 'no message addressed to ' . $inv['recipient_email'] . ' with "' . $inv['invoice_number'] . '" in the subject appeared in Mailpit within the timeout');
+            $full = enxureMailpitGetMessage($mailpitUrl, $msg['ID']);
             $body = ($full['HTML'] ?? '') ?: ($full['Text'] ?? '');
-            invoxaAssertTrue(str_contains($body, $inv['invoice_number']), 'delivered message body does not contain the invoice number');
+            enxureAssertTrue(str_contains($body, $inv['invoice_number']), 'delivered message body does not contain the invoice number');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Email Delivery', 'resendInvoiceEmail', 'resent invoice email is actually delivered', 'Resends a disposable test invoice\'s stored HTML through SMTP and confirms it lands in Mailpit addressed to the right recipient with that exact HTML as the body — the same code path the invoice row\'s Resend Invoice Email button uses.', function () use ($mysqli, $settings) {
-        $mailpitUrl = invoxaMailpitBaseUrl();
+        $mailpitUrl = enxureMailpitBaseUrl();
         if ($mailpitUrl === null) {
             throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
         }
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $invId = invoxaTestCreateInvoice($mysqli, $clientKey, 90.00);
+            $invId = enxureTestCreateInvoice($mysqli, $clientKey, 90.00);
             $marker = 'ZT-RESEND-' . bin2hex(random_bytes(4));
             $html = '<p>Test Suite Fixture invoice body ' . $marker . '</p>';
             $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET html_content = ? WHERE id = ?");
@@ -1493,24 +1493,24 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
 
             $result = resendInvoiceEmail($mysqli, $inv, $settings, getenv('SMTP_PASSWORD') ?: '');
-            invoxaAssertTrue($result['sent'], 'resendInvoiceEmail() reported failure: ' . $result['error']);
+            enxureAssertTrue($result['sent'], 'resendInvoiceEmail() reported failure: ' . $result['error']);
 
-            $msg = invoxaMailpitFindMessage($mailpitUrl, $inv['recipient_email'], $marker);
-            invoxaAssertTrue($msg !== null, 'no message addressed to ' . $inv['recipient_email'] . ' containing "' . $marker . '" appeared in Mailpit within the timeout');
-            $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
+            $msg = enxureMailpitFindMessage($mailpitUrl, $inv['recipient_email'], $marker);
+            enxureAssertTrue($msg !== null, 'no message addressed to ' . $inv['recipient_email'] . ' containing "' . $marker . '" appeared in Mailpit within the timeout');
+            $full = enxureMailpitGetMessage($mailpitUrl, $msg['ID']);
             $body = ($full['HTML'] ?? '') ?: ($full['Text'] ?? '');
-            invoxaAssertTrue(str_contains($body, $marker), 'delivered message body does not contain the stored HTML marker');
-            invoxaAssertTrue(count($full['Attachments'] ?? []) > 0, 'delivered message is missing the invoice HTML attachment');
+            enxureAssertTrue(str_contains($body, $marker), 'delivered message body does not contain the stored HTML marker');
+            enxureAssertTrue(count($full['Attachments'] ?? []) > 0, 'delivered message is missing the invoice HTML attachment');
         } finally {
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
     $run('Email Delivery', 'processInvoice', 'a full invoice is generated and delivered', 'Sends a real, fully-rendered invoice (not just a bare DB row) through SMTP for a disposable test client and confirms it lands in Mailpit with the invoice number and line item in the body — the actual code path invoice creation uses end to end: number generation, HTML rendering, and SMTP send.', function () use ($mysqli, $settings) {
-        $mailpitUrl = invoxaMailpitBaseUrl();
+        $mailpitUrl = enxureMailpitBaseUrl();
         if ($mailpitUrl === null) {
             throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
         }
-        [$clientId, $clientKey] = invoxaTestCreateClient($mysqli);
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         $marker = 'Email Delivery test line item ' . bin2hex(random_bytes(4));
         $result = null;
         try {
@@ -1526,79 +1526,79 @@ function invoxaTestDefinitions($mysqli, array $settings): array
                 'payment_terms_days' => 21,
             ];
             $result = processInvoice($mysqli, $client, 275.00, $marker, getenv('SMTP_PASSWORD') ?: '');
-            invoxaAssertTrue($result['success'], 'processInvoice() reported failure: ' . $result['error']);
+            enxureAssertTrue($result['success'], 'processInvoice() reported failure: ' . $result['error']);
 
             // Matched on the invoice number, not the line-item marker — the
             // marker renders too far down generateInvoiceHTML()'s markup to
             // reliably land inside Mailpit's list-view Snippet (a truncated
             // preview), unlike the invoice number near the top. The marker is
             // still checked below, just against the untruncated full body.
-            $msg = invoxaMailpitFindMessage($mailpitUrl, $client['email'], $result['invNum']);
-            invoxaAssertTrue($msg !== null, 'no message addressed to ' . $client['email'] . ' with "' . $result['invNum'] . '" appeared in Mailpit within the timeout');
-            $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
+            $msg = enxureMailpitFindMessage($mailpitUrl, $client['email'], $result['invNum']);
+            enxureAssertTrue($msg !== null, 'no message addressed to ' . $client['email'] . ' with "' . $result['invNum'] . '" appeared in Mailpit within the timeout');
+            $full = enxureMailpitGetMessage($mailpitUrl, $msg['ID']);
             $body = ($full['HTML'] ?? '') ?: ($full['Text'] ?? '');
-            invoxaAssertTrue(str_contains($body, $result['invNum']), 'delivered invoice body does not contain the invoice number');
-            invoxaAssertTrue(str_contains($body, $marker), 'delivered invoice body does not contain the line item description');
+            enxureAssertTrue(str_contains($body, $result['invNum']), 'delivered invoice body does not contain the invoice number');
+            enxureAssertTrue(str_contains($body, $marker), 'delivered invoice body does not contain the line item description');
         } finally {
             if ($result !== null && !empty($result['invNum'])) {
                 @unlink(INVOICES_DIR . 'test_suite_fixture/' . $result['invNum'] . '.html');
             }
-            invoxaTestCleanupClient($mysqli, $clientId, $clientKey);
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
             @rmdir(INVOICES_DIR . 'test_suite_fixture');
         }
     });
-    $run('Email Delivery', 'invoxaSendPasswordResetEmail', 'password reset email is actually delivered', 'Sends a real password-reset email through SMTP and confirms it lands in Mailpit with the reset link, bearing the exact token passed in, in the body — one of the account-lifecycle emails, not just invoice-related ones.', function () {
-        $mailpitUrl = invoxaMailpitBaseUrl();
+    $run('Email Delivery', 'enxureSendPasswordResetEmail', 'password reset email is actually delivered', 'Sends a real password-reset email through SMTP and confirms it lands in Mailpit with the reset link, bearing the exact token passed in, in the body — one of the account-lifecycle emails, not just invoice-related ones.', function () {
+        $mailpitUrl = enxureMailpitBaseUrl();
         if ($mailpitUrl === null) {
             throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
         }
         $to = 'zt' . bin2hex(random_bytes(4)) . '@invalid.example';
         $token = bin2hex(random_bytes(16));
-        $sent = invoxaSendPasswordResetEmail('Test Suite Fixture', $to, $token);
-        invoxaAssertTrue($sent, 'invoxaSendPasswordResetEmail() reported failure');
-        $msg = invoxaMailpitFindMessage($mailpitUrl, $to, 'Password Reset');
-        invoxaAssertTrue($msg !== null, 'no password reset message appeared in Mailpit within the timeout');
-        $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
-        invoxaAssertTrue(str_contains($full['HTML'] ?? '', $token), 'delivered message does not contain the reset token');
+        $sent = enxureSendPasswordResetEmail('Test Suite Fixture', $to, $token);
+        enxureAssertTrue($sent, 'enxureSendPasswordResetEmail() reported failure');
+        $msg = enxureMailpitFindMessage($mailpitUrl, $to, 'Password Reset');
+        enxureAssertTrue($msg !== null, 'no password reset message appeared in Mailpit within the timeout');
+        $full = enxureMailpitGetMessage($mailpitUrl, $msg['ID']);
+        enxureAssertTrue(str_contains($full['HTML'] ?? '', $token), 'delivered message does not contain the reset token');
     });
-    $run('Email Delivery', 'invoxaSendWelcomeEmail', 'welcome email is actually delivered', 'Sends a real new-account welcome email through SMTP and confirms it lands in Mailpit with the set-password link, bearing the exact token passed in, in the body.', function () {
-        $mailpitUrl = invoxaMailpitBaseUrl();
+    $run('Email Delivery', 'enxureSendWelcomeEmail', 'welcome email is actually delivered', 'Sends a real new-account welcome email through SMTP and confirms it lands in Mailpit with the set-password link, bearing the exact token passed in, in the body.', function () {
+        $mailpitUrl = enxureMailpitBaseUrl();
         if ($mailpitUrl === null) {
             throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
         }
         $to = 'zt' . bin2hex(random_bytes(4)) . '@invalid.example';
         $token = bin2hex(random_bytes(16));
-        $sent = invoxaSendWelcomeEmail('Test Suite Fixture', $to, $token);
-        invoxaAssertTrue($sent, 'invoxaSendWelcomeEmail() reported failure');
-        $msg = invoxaMailpitFindMessage($mailpitUrl, $to, 'account is ready');
-        invoxaAssertTrue($msg !== null, 'no welcome message appeared in Mailpit within the timeout');
-        $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
-        invoxaAssertTrue(str_contains($full['HTML'] ?? '', $token), 'delivered message does not contain the set-password token');
+        $sent = enxureSendWelcomeEmail('Test Suite Fixture', $to, $token);
+        enxureAssertTrue($sent, 'enxureSendWelcomeEmail() reported failure');
+        $msg = enxureMailpitFindMessage($mailpitUrl, $to, 'account is ready');
+        enxureAssertTrue($msg !== null, 'no welcome message appeared in Mailpit within the timeout');
+        $full = enxureMailpitGetMessage($mailpitUrl, $msg['ID']);
+        enxureAssertTrue(str_contains($full['HTML'] ?? '', $token), 'delivered message does not contain the set-password token');
     });
-    $run('Email Delivery', 'invoxaSendVerificationEmail', 'verification email is actually delivered', 'Sends a real email-confirmation message through SMTP and confirms it lands in Mailpit with the verify link, bearing the exact token passed in, in the body.', function () {
-        $mailpitUrl = invoxaMailpitBaseUrl();
+    $run('Email Delivery', 'enxureSendVerificationEmail', 'verification email is actually delivered', 'Sends a real email-confirmation message through SMTP and confirms it lands in Mailpit with the verify link, bearing the exact token passed in, in the body.', function () {
+        $mailpitUrl = enxureMailpitBaseUrl();
         if ($mailpitUrl === null) {
             throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
         }
         $to = 'zt' . bin2hex(random_bytes(4)) . '@invalid.example';
         $token = bin2hex(random_bytes(16));
-        $sent = invoxaSendVerificationEmail('Test Suite Fixture', $to, $token);
-        invoxaAssertTrue($sent, 'invoxaSendVerificationEmail() reported failure');
-        $msg = invoxaMailpitFindMessage($mailpitUrl, $to, 'Confirm Your Email');
-        invoxaAssertTrue($msg !== null, 'no verification message appeared in Mailpit within the timeout');
-        $full = invoxaMailpitGetMessage($mailpitUrl, $msg['ID']);
-        invoxaAssertTrue(str_contains($full['HTML'] ?? '', $token), 'delivered message does not contain the verification token');
+        $sent = enxureSendVerificationEmail('Test Suite Fixture', $to, $token);
+        enxureAssertTrue($sent, 'enxureSendVerificationEmail() reported failure');
+        $msg = enxureMailpitFindMessage($mailpitUrl, $to, 'Confirm Your Email');
+        enxureAssertTrue($msg !== null, 'no verification message appeared in Mailpit within the timeout');
+        $full = enxureMailpitGetMessage($mailpitUrl, $msg['ID']);
+        enxureAssertTrue(str_contains($full['HTML'] ?? '', $token), 'delivered message does not contain the verification token');
     });
-    $run('Email Delivery', 'invoxaSendTestEmail', 'SMTP test email is actually delivered', 'Sends the real SMTP test message that Settings > Email\'s Send Test Email button triggers and confirms it lands in Mailpit — the simplest possible check that SMTP itself is reachable and authenticating, independent of any invoice/reminder/account-email template logic.', function () use ($mysqli, $settings) {
-        $mailpitUrl = invoxaMailpitBaseUrl();
+    $run('Email Delivery', 'enxureSendTestEmail', 'SMTP test email is actually delivered', 'Sends the real SMTP test message that Settings > Email\'s Send Test Email button triggers and confirms it lands in Mailpit — the simplest possible check that SMTP itself is reachable and authenticating, independent of any invoice/reminder/account-email template logic.', function () use ($mysqli, $settings) {
+        $mailpitUrl = enxureMailpitBaseUrl();
         if ($mailpitUrl === null) {
             throw new InvoxaTestSkipped('SMTP_HOST is not "mailpit" — this check only runs on the Mailpit-backed test instance.');
         }
         $to = 'zt' . bin2hex(random_bytes(4)) . '@invalid.example';
-        $result = invoxaSendTestEmail($mysqli, $settings, getenv('SMTP_PASSWORD') ?: '', $to);
-        invoxaAssertTrue($result['sent'], 'invoxaSendTestEmail() reported failure: ' . $result['error']);
-        $msg = invoxaMailpitFindMessage($mailpitUrl, $to, 'SMTP Test');
-        invoxaAssertTrue($msg !== null, 'no SMTP test message appeared in Mailpit within the timeout');
+        $result = enxureSendTestEmail($mysqli, $settings, getenv('SMTP_PASSWORD') ?: '', $to);
+        enxureAssertTrue($result['sent'], 'enxureSendTestEmail() reported failure: ' . $result['error']);
+        $msg = enxureMailpitFindMessage($mailpitUrl, $to, 'SMTP Test');
+        enxureAssertTrue($msg !== null, 'no SMTP test message appeared in Mailpit within the timeout');
     });
 
     // ── Security ── crypto/signature checks that are pure functions, plus the
@@ -1607,64 +1607,64 @@ function invoxaTestDefinitions($mysqli, array $settings): array
     $run('Security', 'TOTP', 'current code verifies', 'A freshly generated secret\'s current 30-second TOTP code passes verifyTotpCode().', function () {
         $secret = generateTotpSecret();
         $code = totpCodeAt($secret, (int) floor(time() / 30));
-        invoxaAssertTrue(verifyTotpCode($secret, $code));
+        enxureAssertTrue(verifyTotpCode($secret, $code));
     });
     $run('Security', 'TOTP', 'wrong code rejected', 'An incorrect 6-digit code fails verifyTotpCode() against a freshly generated secret.', function () {
         $secret = generateTotpSecret();
         $real = totpCodeAt($secret, (int) floor(time() / 30));
         $wrong = ($real === '000000') ? '111111' : '000000';
-        invoxaAssertTrue(!verifyTotpCode($secret, $wrong));
+        enxureAssertTrue(!verifyTotpCode($secret, $wrong));
     });
     $run('Security', 'TOTP', 'tolerates one step of clock drift', 'verifyTotpCode()\'s default ±1 step window accepts a code from 30 seconds ago (a slightly slow phone clock), but not one from 60 seconds ago — two steps out is still rejected.', function () {
         $secret = generateTotpSecret();
         $currentStep = (int) floor(time() / 30);
         $oneStepBack = totpCodeAt($secret, $currentStep - 1);
         $twoStepsBack = totpCodeAt($secret, $currentStep - 2);
-        invoxaAssertTrue(verifyTotpCode($secret, $oneStepBack), 'a code from one step ago should still verify');
-        invoxaAssertTrue(!verifyTotpCode($secret, $twoStepsBack), 'a code from two steps ago should be rejected');
+        enxureAssertTrue(verifyTotpCode($secret, $oneStepBack), 'a code from one step ago should still verify');
+        enxureAssertTrue(!verifyTotpCode($secret, $twoStepsBack), 'a code from two steps ago should be rejected');
     });
     $run('Security', 'Stripe webhook signature', 'valid signature accepted', 'A signature correctly computed as HMAC-SHA256 over "{timestamp}.{payload}" verifies successfully.', function () {
         $payload = '{"type":"test"}';
         $secret = 'whsec_testsecret';
         $ts = time();
         $sig = hash_hmac('sha256', $ts . '.' . $payload, $secret);
-        invoxaAssertTrue(stripeVerifyWebhookSignature($payload, "t={$ts},v1={$sig}", $secret));
+        enxureAssertTrue(stripeVerifyWebhookSignature($payload, "t={$ts},v1={$sig}", $secret));
     });
     $run('Security', 'Stripe webhook signature', 'tampered payload rejected', 'Changing the payload after signing invalidates the signature check, as it should.', function () {
         $payload = '{"type":"test"}';
         $secret = 'whsec_testsecret';
         $ts = time();
         $sig = hash_hmac('sha256', $ts . '.' . $payload, $secret);
-        invoxaAssertTrue(!stripeVerifyWebhookSignature('{"type":"tampered"}', "t={$ts},v1={$sig}", $secret));
+        enxureAssertTrue(!stripeVerifyWebhookSignature('{"type":"tampered"}', "t={$ts},v1={$sig}", $secret));
     });
     $run('Security', 'Stripe webhook signature', 'stale timestamp rejected', 'A signature computed from a timestamp far in the past is rejected — this is what blocks replay attacks.', function () {
         $payload = '{"type":"test"}';
         $secret = 'whsec_testsecret';
         $ts = time() - 999999;
         $sig = hash_hmac('sha256', $ts . '.' . $payload, $secret);
-        invoxaAssertTrue(!stripeVerifyWebhookSignature($payload, "t={$ts},v1={$sig}", $secret));
+        enxureAssertTrue(!stripeVerifyWebhookSignature($payload, "t={$ts},v1={$sig}", $secret));
     });
     $run('Security', 'Backup codes', 'format & uniqueness', '10 generated backup codes are all unique and every one matches the XXXXX-XXXXX uppercase-hex format.', function () {
-        $codes = invoxaGenerateBackupCodes(10);
-        invoxaAssertEquals(10, count($codes));
-        invoxaAssertEquals(10, count(array_unique($codes)));
+        $codes = enxureGenerateBackupCodes(10);
+        enxureAssertEquals(10, count($codes));
+        enxureAssertEquals(10, count(array_unique($codes)));
         foreach ($codes as $c) {
-            invoxaAssertTrue((bool) preg_match('/^[0-9A-F]{5}-[0-9A-F]{5}$/', $c), "code format: $c");
+            enxureAssertTrue((bool) preg_match('/^[0-9A-F]{5}-[0-9A-F]{5}$/', $c), "code format: $c");
         }
     });
     $run('Security', 'Backup codes', 'single-use consumption', 'A backup code works the first time it\'s used; reusing that exact same code a second time is rejected.', function () use ($mysqli) {
-        // A fake, out-of-range user_id — invoxaConsumeBackupCode() only ever
+        // A fake, out-of-range user_id — enxureConsumeBackupCode() only ever
         // queries invoxa_totp_backup_codes by user_id, never invoxa_users, so
         // this never touches the real admin account.
         $fakeUserId = 999900000 + random_int(1, 99999);
         try {
-            $codes = invoxaGenerateBackupCodes(1);
+            $codes = enxureGenerateBackupCodes(1);
             $hash = password_hash(str_replace('-', '', $codes[0]), PASSWORD_DEFAULT);
             $stmt = $mysqli->prepare("INSERT INTO invoxa_totp_backup_codes (user_id, code_hash) VALUES (?, ?)");
             $stmt->bind_param("is", $fakeUserId, $hash);
             $stmt->execute();
-            invoxaAssertTrue(invoxaConsumeBackupCode($mysqli, $fakeUserId, $codes[0]), 'valid unused code is accepted');
-            invoxaAssertTrue(!invoxaConsumeBackupCode($mysqli, $fakeUserId, $codes[0]), 'the same code cannot be used twice');
+            enxureAssertTrue(enxureConsumeBackupCode($mysqli, $fakeUserId, $codes[0]), 'valid unused code is accepted');
+            enxureAssertTrue(!enxureConsumeBackupCode($mysqli, $fakeUserId, $codes[0]), 'the same code cannot be used twice');
         } finally {
             $mysqli->query("DELETE FROM invoxa_totp_backup_codes WHERE user_id = " . (int) $fakeUserId);
         }
@@ -1678,14 +1678,14 @@ function invoxaTestDefinitions($mysqli, array $settings): array
     $run('Receipt OCR', 'parseReceiptOcrText', 'extracts vendor and total from OCR text', 'Given typical multi-line receipt OCR output, the vendor is the first line that looks like a name (not a price/date row) and the amount comes from the line labeled TOTAL, not an earlier line-item price.', function () {
         $text = "ACME HARDWARE\n123 Main St\nWidget           12.00\nGadget           18.50\nSUBTOTAL         30.50\nTAX               2.49\nTOTAL            32.99\nTHANK YOU";
         $parsed = parseReceiptOcrText($text);
-        invoxaAssertEquals('ACME HARDWARE', $parsed['vendor']);
-        invoxaAssertEquals(32.99, $parsed['amount']);
+        enxureAssertEquals('ACME HARDWARE', $parsed['vendor']);
+        enxureAssertEquals(32.99, $parsed['amount']);
     });
     $run('Receipt OCR', 'parseReceiptOcrText', 'falls back to the largest amount when nothing is labeled TOTAL', 'With no line recognizable as a total (a cropped photo, an unusual layout), the parser falls back to the largest dollar figure on the receipt, since the grand total is almost always the biggest number printed.', function () {
         $text = "COFFEE SHOP\nLatte    4.50\nMuffin   3.25\n7.75";
         $parsed = parseReceiptOcrText($text);
-        invoxaAssertEquals('COFFEE SHOP', $parsed['vendor']);
-        invoxaAssertEquals(7.75, $parsed['amount']);
+        enxureAssertEquals('COFFEE SHOP', $parsed['vendor']);
+        enxureAssertEquals(7.75, $parsed['amount']);
     });
     $run('Receipt OCR', 'End-to-end', 'reads vendor and total off a rendered receipt image', 'A receipt-shaped PNG with a known store name and total is generated on the fly (GD, no fixture file to maintain), run through the same tesseract shell_exec() the real upload path uses, and the parsed result must match. Counts as a pass with nothing asserted if this environment is missing the gd extension or the tesseract binary — those are this one check\'s dependencies, not the app\'s.', function () {
         if (!function_exists('imagecreate') || trim((string) shell_exec('command -v tesseract 2>/dev/null')) === '') {
@@ -1713,8 +1713,8 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         try {
             $text = (string) shell_exec('tesseract ' . escapeshellarg($path) . ' stdout 2>/dev/null');
             $parsed = parseReceiptOcrText($text);
-            invoxaAssertTrue(str_contains(strtoupper((string) $parsed['vendor']), 'TEST HARDWARE CO'), 'vendor should contain the rendered store name, got: ' . var_export($parsed['vendor'], true));
-            invoxaAssertEquals(45.67, $parsed['amount']);
+            enxureAssertTrue(str_contains(strtoupper((string) $parsed['vendor']), 'TEST HARDWARE CO'), 'vendor should contain the rendered store name, got: ' . var_export($parsed['vendor'], true));
+            enxureAssertEquals(45.67, $parsed['amount']);
         } finally {
             @unlink($path);
         }
@@ -1730,10 +1730,10 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $ins2->bind_param("i", $expenseId);
             $ins2->execute();
             $rows = $mysqli->query("SELECT filename, doc_type FROM invoxa_expense_receipts WHERE expense_id = $expenseId")->fetch_all(MYSQLI_ASSOC);
-            invoxaAssertEquals(2, count($rows), 'both attachments should be stored');
+            enxureAssertEquals(2, count($rows), 'both attachments should be stored');
             $byType = array_column($rows, 'filename', 'doc_type');
-            invoxaAssertEquals('inv.pdf', $byType['invoice'] ?? null, 'invoice row');
-            invoxaAssertEquals('rcpt.jpg', $byType['receipt'] ?? null, 'receipt row');
+            enxureAssertEquals('inv.pdf', $byType['invoice'] ?? null, 'invoice row');
+            enxureAssertEquals('rcpt.jpg', $byType['receipt'] ?? null, 'receipt row');
         } finally {
             $mysqli->query("DELETE FROM invoxa_expense_receipts WHERE expense_id = $expenseId");
             $mysqli->query("DELETE FROM invoxa_expenses WHERE id = $expenseId");
@@ -1751,7 +1751,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $upd->bind_param("i", $receiptId);
             $upd->execute();
             $docType = $mysqli->query("SELECT doc_type FROM invoxa_expense_receipts WHERE id = $receiptId")->fetch_assoc()['doc_type'];
-            invoxaAssertEquals('receipt', $docType, 'doc_type should flip to receipt');
+            enxureAssertEquals('receipt', $docType, 'doc_type should flip to receipt');
         } finally {
             $mysqli->query("DELETE FROM invoxa_expense_receipts WHERE expense_id = $expenseId");
             $mysqli->query("DELETE FROM invoxa_expenses WHERE id = $expenseId");
@@ -1769,7 +1769,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         $fixtureId = $mysqli->insert_id;
         try {
             $selfIncluded = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != $fixtureId AND id = $fixtureId")->fetch_assoc()['c'];
-            invoxaAssertEquals(0, $selfIncluded, 'the target admin itself should never be counted as an "other" admin');
+            enxureAssertEquals(0, $selfIncluded, 'the target admin itself should never be counted as an "other" admin');
             $before = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != $fixtureId")->fetch_assoc()['c'];
             $secondAdmin = 'zt_admin2_' . bin2hex(random_bytes(4));
             $stmt2 = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, 'zt2@invalid.example', 'admin', 'x')");
@@ -1778,7 +1778,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
             $secondId = $mysqli->insert_id;
             try {
                 $after = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != $fixtureId")->fetch_assoc()['c'];
-                invoxaAssertEquals($before + 1, $after, 'adding a second admin should increase the "other admins" count by exactly one');
+                enxureAssertEquals($before + 1, $after, 'adding a second admin should increase the "other admins" count by exactly one');
             } finally {
                 $mysqli->query("DELETE FROM invoxa_users WHERE id = $secondId");
             }
@@ -1794,28 +1794,28 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         $id = $mysqli->insert_id;
         try {
             $role = $mysqli->query("SELECT role FROM invoxa_users WHERE id = $id")->fetch_assoc()['role'];
-            invoxaAssertEquals('member', $role, 'newly created user should be member');
+            enxureAssertEquals('member', $role, 'newly created user should be member');
             $upd = $mysqli->prepare("UPDATE invoxa_users SET role = 'admin' WHERE id = ?");
             $upd->bind_param("i", $id);
             $upd->execute();
             $role2 = $mysqli->query("SELECT role FROM invoxa_users WHERE id = $id")->fetch_assoc()['role'];
-            invoxaAssertEquals('admin', $role2, 'role should update to admin');
+            enxureAssertEquals('admin', $role2, 'role should update to admin');
         } finally {
             $mysqli->query("DELETE FROM invoxa_users WHERE id = $id");
         }
     });
 
-    $run('Users & Roles', 'Audit Log attribution', 'invoxaLogAction() stamps the current session\'s user id/username on the row it writes', 'invoxa_actions rows carry performed_by_user_id/performed_by_username (the username is denormalized so the Audit Log stays readable even after that user is later deleted) — confirms invoxaLogAction(), the one shared helper every audit entry now goes through, actually stamps them rather than leaving the row anonymous.', function () use ($mysqli) {
+    $run('Users & Roles', 'Audit Log attribution', 'enxureLogAction() stamps the current session\'s user id/username on the row it writes', 'invoxa_actions rows carry performed_by_user_id/performed_by_username (the username is denormalized so the Audit Log stays readable even after that user is later deleted) — confirms enxureLogAction(), the one shared helper every audit entry now goes through, actually stamps them rather than leaving the row anonymous.', function () use ($mysqli) {
         global $__actorUserId, $__actorUsername;
         $marker = 'zt_audit_' . bin2hex(random_bytes(4));
-        invoxaLogAction($mysqli, null, '', 'note_added', $marker);
+        enxureLogAction($mysqli, null, '', 'note_added', $marker);
         try {
             $row = $mysqli->query("SELECT performed_by_user_id, performed_by_username FROM invoxa_actions WHERE notes = '" . $mysqli->real_escape_string($marker) . "' ORDER BY id DESC LIMIT 1")->fetch_assoc();
-            invoxaAssertTrue($row !== null, 'expected the logged row to exist');
+            enxureAssertTrue($row !== null, 'expected the logged row to exist');
             $expectedUserId = $__actorUserId !== null ? (string) $__actorUserId : null;
             $actualUserId = $row['performed_by_user_id'] !== null ? (string) $row['performed_by_user_id'] : null;
-            invoxaAssertEquals($expectedUserId, $actualUserId, 'performed_by_user_id should match the current session');
-            invoxaAssertEquals($__actorUsername, $row['performed_by_username'], 'performed_by_username should match the current session');
+            enxureAssertEquals($expectedUserId, $actualUserId, 'performed_by_user_id should match the current session');
+            enxureAssertEquals($__actorUsername, $row['performed_by_username'], 'performed_by_username should match the current session');
         } finally {
             $mysqli->query("DELETE FROM invoxa_actions WHERE notes = '" . $mysqli->real_escape_string($marker) . "'");
         }
@@ -1826,7 +1826,7 @@ function invoxaTestDefinitions($mysqli, array $settings): array
 
 // $selected — test names to run, or null to run everything. Unknown names
 // are silently ignored, so a stale checkbox list in another tab can't crash a run.
-function invoxaRunTestSuite($mysqli, array $settings, ?array $selected = null): array
+function enxureRunTestSuite($mysqli, array $settings, ?array $selected = null): array
 {
     $settings['notification_channel'] = 'none';
     $hadGlobalChannel = array_key_exists('notification_channel', $GLOBALS['settings'] ?? []);
@@ -1834,7 +1834,7 @@ function invoxaRunTestSuite($mysqli, array $settings, ?array $selected = null): 
     $GLOBALS['settings']['notification_channel'] = 'none';
     $results = [];
     try {
-        foreach (invoxaTestDefinitions($mysqli, $settings) as $name => $test) {
+        foreach (enxureTestDefinitions($mysqli, $settings) as $name => $test) {
             if ($selected !== null && !in_array($name, $selected, true)) {
                 continue;
             }
@@ -1863,7 +1863,7 @@ function invoxaRunTestSuite($mysqli, array $settings, ?array $selected = null): 
     ];
 }
 
-function invoxaHandleSaveOffsiteBackup($mysqli): void
+function enxureHandleSaveOffsiteBackup($mysqli): void
 {
     $enabled = ($_POST['offsite_backup_enabled'] ?? '0') === '1' ? '1' : '0';
     $remoteName = trim($_POST['offsite_remote_name'] ?? '');
@@ -1889,9 +1889,9 @@ function invoxaHandleSaveOffsiteBackup($mysqli): void
 // backup_YYYY-MM-DD.sql, or backup_YYYY-MM-DD_1.sql, _2.sql, ... if that day
 // already has one — so a second backup taken on the same day (a manual click
 // after an automatic run, or two manual clicks) gets its own file instead of
-// silently overwriting the first. invoxaHandleImportBackup()'s filename regex
+// silently overwriting the first. enxureHandleImportBackup()'s filename regex
 // already accepts this suffixed shape.
-function invoxaNextBackupFilename(): string
+function enxureNextBackupFilename(): string
 {
     $base = 'backup_' . date('Y-m-d');
     $filename = $base . '.sql';
@@ -1906,7 +1906,7 @@ function invoxaNextBackupFilename(): string
 // Deletes local backups beyond 'local_backup_retention_count' (0 = keep
 // forever), newest first. Shared by the manual "Create Backup" button and the
 // automatic cron-driven backup so the limit is enforced identically either way.
-function invoxaPruneLocalBackups(array $settings): void
+function enxurePruneLocalBackups(array $settings): void
 {
     $retainCount = (int) ($settings['local_backup_retention_count'] ?? 0);
     if ($retainCount <= 0) {
@@ -1920,12 +1920,12 @@ function invoxaPruneLocalBackups(array $settings): void
 }
 
 // Dumps $tables (every table when empty) to a new file in BACKUPS_DIR via
-// invoxaNextBackupFilename(), then prunes older backups down to
+// enxureNextBackupFilename(), then prunes older backups down to
 // 'local_backup_retention_count'. Shared by the manual "Create Backup" button
-// (invoxaHandleBackupDb) and the automatic cron-driven backup
-// (invoxaRunAutoBackup) so both create files the same way and obey the same
+// (enxureHandleBackupDb) and the automatic cron-driven backup
+// (enxureRunAutoBackup) so both create files the same way and obey the same
 // retention limit. Returns the filename written.
-function invoxaCreateDatabaseBackup($mysqli, array $settings, array $tables = []): string
+function enxureCreateDatabaseBackup($mysqli, array $settings, array $tables = []): string
 {
     if (!$tables) {
         $result = $mysqli->query("SHOW TABLES");
@@ -1963,17 +1963,17 @@ function invoxaCreateDatabaseBackup($mysqli, array $settings, array $tables = []
     if (!is_dir(BACKUPS_DIR)) {
         @mkdir(BACKUPS_DIR, 0777, true);
     }
-    $filename = invoxaNextBackupFilename();
+    $filename = enxureNextBackupFilename();
     if (file_put_contents(BACKUPS_DIR . $filename, $sql) === false) {
         throw new Exception("Failed to write to file.");
     }
 
-    invoxaPruneLocalBackups($settings);
+    enxurePruneLocalBackups($settings);
 
     return $filename;
 }
 
-function invoxaHandleBackupDb($mysqli, array $settings): void
+function enxureHandleBackupDb($mysqli, array $settings): void
 {
     error_reporting(0);
     ob_start();
@@ -1988,9 +1988,9 @@ function invoxaHandleBackupDb($mysqli, array $settings): void
                 }
             }
         }
-        $filename = invoxaCreateDatabaseBackup($mysqli, $settings, $tables);
+        $filename = enxureCreateDatabaseBackup($mysqli, $settings, $tables);
         ob_clean();
-        echo json_encode(['success' => true, 'downloadUrl' => '/invoxa-backups/' . $filename]);
+        echo json_encode(['success' => true, 'downloadUrl' => '/enxure-backups/' . $filename]);
     } catch (Throwable $e) {
         ob_clean();
         echo json_encode(['success' => false, 'error' => $e->getMessage() . ' on line ' . $e->getLine()]);
@@ -2003,22 +2003,22 @@ function invoxaHandleBackupDb($mysqli, array $settings): void
 // cron/entrypoint.sh) rather than riding run_recurring's, since backups
 // aren't a licensed feature and run_recurring's action is rejected outright
 // without a valid license (see the $__licensePaidActions check in
-// invoxa.php). Uses the same invoxaCreateDatabaseBackup(), so it obeys
+// enxure.php). Uses the same enxureCreateDatabaseBackup(), so it obeys
 // local_backup_retention_count exactly like a manual backup does.
-function invoxaRunAutoBackup($mysqli, array $settings): array
+function enxureRunAutoBackup($mysqli, array $settings): array
 {
     try {
-        $filename = invoxaCreateDatabaseBackup($mysqli, $settings);
-        invoxaLogAction($mysqli, null, '', 'backup_created', "Automatic backup created: {$filename}");
+        $filename = enxureCreateDatabaseBackup($mysqli, $settings);
+        enxureLogAction($mysqli, null, '', 'backup_created', "Automatic backup created: {$filename}");
         return ['success' => true, 'filename' => $filename];
     } catch (Throwable $e) {
         $error = $e->getMessage();
-        invoxaLogAction($mysqli, null, '', 'backup_failed', "Automatic backup failed: {$error}");
+        enxureLogAction($mysqli, null, '', 'backup_failed', "Automatic backup failed: {$error}");
         return ['success' => false, 'error' => $error];
     }
 }
 
-function invoxaHandleListBackups(): void
+function enxureHandleListBackups(): void
 {
     $files = [];
     foreach (glob(BACKUPS_DIR . 'backup_*.sql') as $f) {
@@ -2029,7 +2029,7 @@ function invoxaHandleListBackups(): void
     exit;
 }
 
-function invoxaHandleImportBackup(): void
+function enxureHandleImportBackup(): void
 {
     error_reporting(0);
     ob_start();
@@ -2057,7 +2057,7 @@ function invoxaHandleImportBackup(): void
             throw new Exception('Failed to read the uploaded file.');
         }
         $remapped = false;
-        $content = invoxaRemapLegacyTableNames($content, $remapped);
+        $content = enxureRemapLegacyTableNames($content, $remapped);
         if (file_put_contents(BACKUPS_DIR . $safeName, $content) === false) {
             throw new Exception('Failed to save the uploaded file.');
         }
@@ -2070,7 +2070,7 @@ function invoxaHandleImportBackup(): void
     exit;
 }
 
-function invoxaHandleFactoryReset($mysqli, int $currentUserId): void
+function enxureHandleFactoryReset($mysqli, int $currentUserId): void
 {
     error_reporting(0);
     ob_start();
@@ -2083,7 +2083,7 @@ function invoxaHandleFactoryReset($mysqli, int $currentUserId): void
         if (!$user || !password_verify($_POST['password'] ?? '', $user['password_hash'])) {
             throw new Exception('Current password is incorrect.');
         }
-        invoxaWipeAllData($mysqli);
+        enxureWipeAllData($mysqli);
         $_SESSION = [];
         session_destroy();
         ob_clean();
@@ -2095,7 +2095,7 @@ function invoxaHandleFactoryReset($mysqli, int $currentUserId): void
     exit;
 }
 
-function invoxaHandleSeedDemoData($mysqli, array $settings): void
+function enxureHandleSeedDemoData($mysqli, array $settings): void
 {
     error_reporting(0);
     ob_start();
@@ -2110,7 +2110,7 @@ function invoxaHandleSeedDemoData($mysqli, array $settings): void
     exit;
 }
 
-function invoxaHandleClearDemoData($mysqli): void
+function enxureHandleClearDemoData($mysqli): void
 {
     error_reporting(0);
     ob_start();
@@ -2125,7 +2125,7 @@ function invoxaHandleClearDemoData($mysqli): void
     exit;
 }
 
-function invoxaHandleRunTestSuite($mysqli, array $settings): void
+function enxureHandleRunTestSuite($mysqli, array $settings): void
 {
     $selected = null;
     if (isset($_POST['tests'])) {
@@ -2134,11 +2134,11 @@ function invoxaHandleRunTestSuite($mysqli, array $settings): void
             $selected = $decoded;
         }
     }
-    echo json_encode(array_merge(['success' => true], invoxaRunTestSuite($mysqli, $settings, $selected)));
+    echo json_encode(array_merge(['success' => true], enxureRunTestSuite($mysqli, $settings, $selected)));
     exit;
 }
 
-function invoxaHandlePreviewRestore(): void
+function enxureHandlePreviewRestore(): void
 {
     $filename = basename($_POST['filename'] ?? '');
     if (!preg_match('/^backup_\d{4}-\d{2}-\d{2}(_\d+)?\.sql$/', $filename)) {
@@ -2165,7 +2165,7 @@ function invoxaHandlePreviewRestore(): void
     exit;
 }
 
-function invoxaHandleRestoreDbBackup($mysqli): void
+function enxureHandleRestoreDbBackup($mysqli): void
 {
     error_reporting(0);
     ob_start();
@@ -2206,7 +2206,7 @@ function invoxaHandleRestoreDbBackup($mysqli): void
     exit;
 }
 
-function invoxaHandleSaveAuditRetention($mysqli): void
+function enxureHandleSaveAuditRetention($mysqli): void
 {
     $days = in_array($_POST['audit_log_retention_days'] ?? '', ['0', '30', '180', '365'], true)
         ? $_POST['audit_log_retention_days'] : '0';
@@ -2217,7 +2217,7 @@ function invoxaHandleSaveAuditRetention($mysqli): void
     exit;
 }
 
-function invoxaHandleSaveBackupRetention($mysqli): void
+function enxureHandleSaveBackupRetention($mysqli): void
 {
     $count = (int) ($_POST['local_backup_retention_count'] ?? 0);
     if ($count < 0 || $count > 365)
@@ -2230,7 +2230,7 @@ function invoxaHandleSaveBackupRetention($mysqli): void
     exit;
 }
 
-function invoxaHandleSyncMissing($mysqli, array $settings): void
+function enxureHandleSyncMissing($mysqli, array $settings): void
 {
     global $__actorUserId, $__actorUsername;
     $files = json_decode($_POST['files'], true);
@@ -2247,7 +2247,7 @@ function invoxaHandleSyncMissing($mysqli, array $settings): void
     $insertInvoice = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?) ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), html_content = VALUES(html_content), amount = VALUES(amount), currency = VALUES(currency), client_key = VALUES(client_key), client_name = VALUES(client_name)");
     $insertAction = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_number, action_type, notes, performed_by_user_id, performed_by_username) SELECT ?, 'synced', 'Imported via Web UI Sync', ?, ? WHERE NOT EXISTS (SELECT 1 FROM invoxa_actions WHERE invoice_number = ? AND action_type = 'synced')");
     foreach ($files as $filePath) {
-        $fullPath = "/usr/share/nginx/html/invoxa-invoices/" . preg_replace('#^invoices/#', '', $filePath);
+        $fullPath = "/usr/share/nginx/html/enxure-invoices/" . preg_replace('#^invoices/#', '', $filePath);
         if (!file_exists($fullPath)) {
             $errors++;
             continue;
@@ -2263,7 +2263,7 @@ function invoxaHandleSyncMissing($mysqli, array $settings): void
         }
         $html = file_get_contents($fullPath);
         $amount = (float) preg_replace('/[^0-9.]/', '', extractField($html, 'Amount Due') ?? '0');
-        $currency = invoxaResolveCurrency($client['currency'] ?? '', $settings);
+        $currency = enxureResolveCurrency($client['currency'] ?? '', $settings);
 
         $filenameInvNum = pathinfo($filename, PATHINFO_FILENAME);
         $internalInvNum = extractField($html, 'Invoice Number');
@@ -2293,7 +2293,7 @@ function invoxaHandleSyncMissing($mysqli, array $settings): void
     exit;
 }
 
-function invoxaHandleRestoreMissing($mysqli): void
+function enxureHandleRestoreMissing($mysqli): void
 {
     $ids = json_decode($_POST['ids'], true);
     $restored = 0;
@@ -2308,7 +2308,7 @@ function invoxaHandleRestoreMissing($mysqli): void
     while ($row = $res->fetch_assoc()) {
         if (!$row['file_path'])
             continue;
-        $fullPath = "/usr/share/nginx/html/invoxa-invoices/" . preg_replace('#^invoices/#', '', $row['file_path']);
+        $fullPath = "/usr/share/nginx/html/enxure-invoices/" . preg_replace('#^invoices/#', '', $row['file_path']);
         $dir = dirname($fullPath);
         if (!is_dir($dir))
             @mkdir($dir, 0777, true);
@@ -2322,7 +2322,7 @@ function invoxaHandleRestoreMissing($mysqli): void
     exit;
 }
 
-function invoxaHandleDeleteMissingDb($mysqli): void
+function enxureHandleDeleteMissingDb($mysqli): void
 {
     $ids = json_decode($_POST['ids'], true);
     if (empty($ids)) {
@@ -2336,14 +2336,14 @@ function invoxaHandleDeleteMissingDb($mysqli): void
     exit;
 }
 
-function invoxaHandleDeleteUntrackedFile(): void
+function enxureHandleDeleteUntrackedFile(): void
 {
     $filePath = $_POST['file'] ?? '';
     if (!preg_match('#^invoices/[\w\-]+/[\w\-]+\.html$#', $filePath)) {
         echo json_encode(['success' => false, 'error' => 'Invalid file path']);
         exit;
     }
-    $fullPath = '/usr/share/nginx/html/invoxa-invoices/' . preg_replace('#^invoices/#', '', $filePath);
+    $fullPath = '/usr/share/nginx/html/enxure-invoices/' . preg_replace('#^invoices/#', '', $filePath);
     if (file_exists($fullPath)) {
         @unlink($fullPath);
         echo json_encode(['success' => true]);
@@ -2353,7 +2353,7 @@ function invoxaHandleDeleteUntrackedFile(): void
     exit;
 }
 
-function invoxaHandleDeleteAllUntrackedFiles(): void
+function enxureHandleDeleteAllUntrackedFiles(): void
 {
     $files = json_decode($_POST['files'] ?? '[]', true) ?: [];
     $deleted = 0;
@@ -2363,7 +2363,7 @@ function invoxaHandleDeleteAllUntrackedFiles(): void
             $errors++;
             continue;
         }
-        $fullPath = '/usr/share/nginx/html/invoxa-invoices/' . preg_replace('#^invoices/#', '', $filePath);
+        $fullPath = '/usr/share/nginx/html/enxure-invoices/' . preg_replace('#^invoices/#', '', $filePath);
         if (file_exists($fullPath) && @unlink($fullPath)) {
             $deleted++;
         } else {
@@ -2374,13 +2374,13 @@ function invoxaHandleDeleteAllUntrackedFiles(): void
     exit;
 }
 
-function invoxaHandleDeleteSingleDbEntry($mysqli): void
+function enxureHandleDeleteSingleDbEntry($mysqli): void
 {
     $id = (int) ($_POST['id'] ?? 0);
     $row = $mysqli->query("SELECT file_path FROM invoxa_invoices WHERE id = $id")->fetch_assoc();
     if ($row) {
         if ($row['file_path']) {
-            $fp = '/usr/share/nginx/html/invoxa-invoices/' . preg_replace('#^invoices/#', '', $row['file_path']);
+            $fp = '/usr/share/nginx/html/enxure-invoices/' . preg_replace('#^invoices/#', '', $row['file_path']);
             if (file_exists($fp))
                 @unlink($fp);
         }

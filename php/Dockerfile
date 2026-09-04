@@ -1,4 +1,4 @@
-# Build context is the docker-invoxa/ root — see docker-compose.yml.
+# Build context is the docker-enxure/ root — see docker-compose.yml.
 FROM php:8.3-fpm
 
 RUN apt-get update \
@@ -11,9 +11,9 @@ RUN apt-get update \
     && docker-php-ext-configure gd --with-webp \
     && docker-php-ext-install gd
 
-COPY php/php.ini /usr/local/etc/php/conf.d/invoxa.ini
+COPY php/php.ini /usr/local/etc/php/conf.d/enxure.ini
 COPY php/www.conf /usr/local/etc/php-fpm.d/www.conf
-COPY php/docker-entrypoint.sh /usr/local/bin/invoxa-entrypoint.sh
-RUN chmod +x /usr/local/bin/invoxa-entrypoint.sh
+COPY php/docker-entrypoint.sh /usr/local/bin/enxure-entrypoint.sh
+RUN chmod +x /usr/local/bin/enxure-entrypoint.sh
 
-ENTRYPOINT ["/usr/local/bin/invoxa-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/enxure-entrypoint.sh"]

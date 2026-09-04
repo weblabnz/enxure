@@ -76,7 +76,7 @@ function verifyTotpCode(string $base32Secret, string $code, int $window = 1): bo
 
 // otpauth:// is the standard URI scheme authenticator apps use for setup.
 // No QR library is vendored, so it's shown as a copyable value instead.
-function totpOtpauthUri(string $secret, string $accountLabel, string $issuer = 'Invoxa'): string
+function totpOtpauthUri(string $secret, string $accountLabel, string $issuer = 'enXure'): string
 {
     $label = rawurlencode($issuer) . ':' . rawurlencode($accountLabel);
     return 'otpauth://totp/' . $label . '?secret=' . $secret . '&issuer=' . rawurlencode($issuer) . '&algorithm=SHA1&digits=6&period=30';
@@ -84,9 +84,9 @@ function totpOtpauthUri(string $secret, string $accountLabel, string $issuer = '
 
 // Generates one-time-use 2FA backup codes, shown to the admin once (at
 // totp_setup_confirm / totp_regenerate_backup_codes) and stored only as
-// password_hash()es (see invoxaConsumeBackupCode()). XXXXX-XXXXX uppercase
+// password_hash()es (see enxureConsumeBackupCode()). XXXXX-XXXXX uppercase
 // hex — easy to read/type, ~40 bits of entropy per code.
-function invoxaGenerateBackupCodes(int $count = 10): array
+function enxureGenerateBackupCodes(int $count = 10): array
 {
     $codes = [];
     for ($i = 0; $i < $count; $i++) {
@@ -99,10 +99,10 @@ function invoxaGenerateBackupCodes(int $count = 10): array
 // Replaces any existing backup codes (both on initial enable and on
 // regeneration — the old set should stop working either way) and returns
 // the plaintext codes for the caller to show the admin once.
-function invoxaIssueBackupCodes($mysqli, int $userId): array
+function enxureIssueBackupCodes($mysqli, int $userId): array
 {
     $mysqli->query("DELETE FROM invoxa_totp_backup_codes WHERE user_id = " . (int) $userId);
-    $codes = invoxaGenerateBackupCodes();
+    $codes = enxureGenerateBackupCodes();
     $insert = $mysqli->prepare("INSERT INTO invoxa_totp_backup_codes (user_id, code_hash) VALUES (?, ?)");
     foreach ($codes as $code) {
         $hash = password_hash(str_replace('-', '', $code), PASSWORD_DEFAULT);
@@ -114,7 +114,7 @@ function invoxaIssueBackupCodes($mysqli, int $userId): array
 
 // Minutes remaining on a locked_until value, or 0 if not locked — shared by
 // the password and TOTP/backup-code lockout checks for consistent wording.
-function invoxaLockoutMinutesRemaining(?string $lockedUntil): int
+function enxureLockoutMinutesRemaining(?string $lockedUntil): int
 {
     if (empty($lockedUntil)) {
         return 0;
@@ -126,7 +126,7 @@ function invoxaLockoutMinutesRemaining(?string $lockedUntil): int
 // Records one failed login attempt (wrong password, TOTP, or backup code
 // all count the same) and locks the account at LOGIN_MAX_ATTEMPTS. The
 // counter resets to 0 on lockout so only the lockout period gates retry.
-function invoxaRegisterFailedLogin($mysqli, int $userId, int $currentAttempts): void
+function enxureRegisterFailedLogin($mysqli, int $userId, int $currentAttempts): void
 {
     $attempts = $currentAttempts + 1;
     if ($attempts >= LOGIN_MAX_ATTEMPTS) {
@@ -141,12 +141,12 @@ function invoxaRegisterFailedLogin($mysqli, int $userId, int $currentAttempts): 
     }
 }
 
-function invoxaSendPasswordResetEmail(string $username, string $toEmail, string $rawToken): bool
+function enxureSendPasswordResetEmail(string $username, string $toEmail, string $rawToken): bool
 {
     require_once PHPMAILER_DIR . 'PHPMailer.php';
     require_once PHPMAILER_DIR . 'SMTP.php';
     require_once PHPMAILER_DIR . 'Exception.php';
-    $fromName = 'Invoxa (No-Reply)';
+    $fromName = 'enXure (No-Reply)';
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
     $baseUrl = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '');
     $resetLink = $baseUrl . '/?reset_token=' . $rawToken;
@@ -166,9 +166,9 @@ function invoxaSendPasswordResetEmail(string $username, string $toEmail, string 
         $mail->CharSet = 'UTF-8';
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($toEmail);
-        $mail->Subject = 'Invoxa - Password Reset Request';
+        $mail->Subject = 'enXure - Password Reset Request';
         $mail->isHTML(true);
-        $mail->Body = '<p>Your Invoxa username is <strong>' . htmlspecialchars($username) . '</strong>.</p>'
+        $mail->Body = '<p>Your enXure username is <strong>' . htmlspecialchars($username) . '</strong>.</p>'
             . '<p><a href="' . htmlspecialchars($resetLink) . '">Reset your password</a> - this link expires in 30 minutes.</p>'
             . '<p>If you didn\'t request this, you can ignore this email.</p>';
         $mail->send();
@@ -178,12 +178,12 @@ function invoxaSendPasswordResetEmail(string $username, string $toEmail, string 
     }
 }
 
-function invoxaSendWelcomeEmail(string $username, string $toEmail, string $rawToken): bool
+function enxureSendWelcomeEmail(string $username, string $toEmail, string $rawToken): bool
 {
     require_once PHPMAILER_DIR . 'PHPMailer.php';
     require_once PHPMAILER_DIR . 'SMTP.php';
     require_once PHPMAILER_DIR . 'Exception.php';
-    $fromName = 'Invoxa (No-Reply)';
+    $fromName = 'enXure (No-Reply)';
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
     $baseUrl = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '');
     $setPasswordLink = $baseUrl . '/?reset_token=' . $rawToken;
@@ -203,9 +203,9 @@ function invoxaSendWelcomeEmail(string $username, string $toEmail, string $rawTo
         $mail->CharSet = 'UTF-8';
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($toEmail);
-        $mail->Subject = 'Invoxa - Your account is ready';
+        $mail->Subject = 'enXure - Your account is ready';
         $mail->isHTML(true);
-        $mail->Body = '<p>An Invoxa account has been created for you. Your username is <strong>' . htmlspecialchars($username) . '</strong>.</p>'
+        $mail->Body = '<p>An enXure account has been created for you. Your username is <strong>' . htmlspecialchars($username) . '</strong>.</p>'
             . '<p>Your administrator set an initial password for you, but for security we recommend setting your own instead: <a href="' . htmlspecialchars($setPasswordLink) . '">set your password</a> - this link expires in 24 hours.</p>'
             . '<p>If you\'d rather use the password your administrator gave you, you can ignore this email and log in directly.</p>';
         $mail->send();
@@ -215,22 +215,22 @@ function invoxaSendWelcomeEmail(string $username, string $toEmail, string $rawTo
     }
 }
 
-function invoxaIssueUserWelcomeEmail($mysqli, int $userId, string $username, string $email): bool
+function enxureIssueUserWelcomeEmail($mysqli, int $userId, string $username, string $email): bool
 {
     $rawToken = bin2hex(random_bytes(32));
     $resetTokenHash = hash('sha256', $rawToken);
     $stmt = $mysqli->prepare("UPDATE invoxa_users SET reset_token_hash = ?, reset_token_expires = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?");
     $stmt->bind_param("si", $resetTokenHash, $userId);
     $stmt->execute();
-    return invoxaSendWelcomeEmail($username, $email, $rawToken);
+    return enxureSendWelcomeEmail($username, $email, $rawToken);
 }
 
-function invoxaSendVerificationEmail(string $username, string $toEmail, string $rawToken): bool
+function enxureSendVerificationEmail(string $username, string $toEmail, string $rawToken): bool
 {
     require_once PHPMAILER_DIR . 'PHPMailer.php';
     require_once PHPMAILER_DIR . 'SMTP.php';
     require_once PHPMAILER_DIR . 'Exception.php';
-    $fromName = 'Invoxa (No-Reply)';
+    $fromName = 'enXure (No-Reply)';
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
     $baseUrl = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '');
     $verifyLink = $baseUrl . '/?verify_token=' . $rawToken;
@@ -250,7 +250,7 @@ function invoxaSendVerificationEmail(string $username, string $toEmail, string $
         $mail->CharSet = 'UTF-8';
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($toEmail);
-        $mail->Subject = 'Invoxa - Confirm Your Email';
+        $mail->Subject = 'enXure - Confirm Your Email';
         $mail->isHTML(true);
         $mail->Body = '<p>Hi ' . htmlspecialchars($username) . ',</p>'
             . '<p><a href="' . htmlspecialchars($verifyLink) . '">Confirm this email address</a> - this link expires in 24 hours.</p>'
@@ -262,20 +262,20 @@ function invoxaSendVerificationEmail(string $username, string $toEmail, string $
     }
 }
 
-function invoxaIssueEmailVerification($mysqli, int $userId, string $username, string $email): bool
+function enxureIssueEmailVerification($mysqli, int $userId, string $username, string $email): bool
 {
     $rawToken = bin2hex(random_bytes(32));
     $verifyHash = hash('sha256', $rawToken);
     $stmt = $mysqli->prepare("UPDATE invoxa_users SET verify_token_hash = ?, verify_token_expires = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?");
     $stmt->bind_param("si", $verifyHash, $userId);
     $stmt->execute();
-    return invoxaSendVerificationEmail($username, $email, $rawToken);
+    return enxureSendVerificationEmail($username, $email, $rawToken);
 }
 
-function invoxaWipeAllData($mysqli): void
+function enxureWipeAllData($mysqli): void
 {
     $tables = [];
-    $res = $mysqli->query("SHOW TABLES LIKE 'invoxa\\_%'");
+    $res = $mysqli->query("SHOW TABLES LIKE 'enxure\\_%'");
     while ($row = $res->fetch_row()) {
         $tables[] = $row[0];
     }
@@ -299,7 +299,7 @@ function invoxaWipeAllData($mysqli): void
 // Checks $code against every unused backup code for this user (hashed
 // storage means no direct lookup) and marks the match used. Not worth
 // optimizing — a rarely-hit recovery path.
-function invoxaConsumeBackupCode($mysqli, int $userId, string $code): bool
+function enxureConsumeBackupCode($mysqli, int $userId, string $code): bool
 {
     $normalized = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $code));
     if ($normalized === '') {
@@ -323,16 +323,16 @@ function invoxaConsumeBackupCode($mysqli, int $userId, string $code): bool
 // ── External API tokens ──────────────────────────────────────────────────────
 // 'ivx_' prefix (like Stripe's sk_/pk_ or GitHub's ghp_) makes a token
 // recognizable on sight — a convenience, not a security property.
-function invoxaGenerateApiToken(): string
+function enxureGenerateApiToken(): string
 {
     return 'ivx_' . bin2hex(random_bytes(20));
 }
 
 // Returns the raw token — the only time it's ever available; only its hash
 // and a short prefix are persisted.
-function invoxaCreateApiToken($mysqli, string $label, ?int $expiresDays): array
+function enxureCreateApiToken($mysqli, string $label, ?int $expiresDays): array
 {
-    $raw = invoxaGenerateApiToken();
+    $raw = enxureGenerateApiToken();
     $hash = hash('sha256', $raw);
     $prefix = substr($raw, 0, 10);
     if ($expiresDays === null) {
@@ -350,19 +350,19 @@ function invoxaCreateApiToken($mysqli, string $label, ?int $expiresDays): array
 // missing, unknown, and revoked/expired tokens all return null the same
 // way, so no error message reveals which case applies. Touches
 // last_used_at on success for Settings > API Access.
-function invoxaAuthenticateApiRequest($mysqli): ?array
+function enxureAuthenticateApiRequest($mysqli): ?array
 {
     // The API is a paid feature — re-checked on every request, not just at
     // token creation, so a deactivated license stops authenticating tokens.
     $licenseRow = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'license_key'")->fetch_assoc();
     $license = trim((string) ($licenseRow['setting_value'] ?? ''));
     $parts = $license === '' ? [] : explode('.', $license, 2);
-    if (getenv('INVOXA_DEMO_MODE') || count($parts) !== 2) {
+    if (getenv('ENXURE_DEMO_MODE') || count($parts) !== 2) {
         return null;
     }
     $payload = base64_decode($parts[0], true);
     $signature = base64_decode($parts[1], true);
-    $publicKey = base64_decode(INVOXA_LICENSE_PUBLIC_KEY_B64, true);
+    $publicKey = base64_decode(ENXURE_LICENSE_PUBLIC_KEY_B64, true);
     if ($payload === false || $signature === false || $publicKey === false
         || strlen($signature) !== SODIUM_CRYPTO_SIGN_BYTES
         || strlen($publicKey) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
@@ -378,8 +378,8 @@ function invoxaAuthenticateApiRequest($mysqli): ?array
     if ($ownerEmail === '' || strcasecmp($ownerEmail, trim($fields[0])) !== 0) {
         return null;
     }
-    $host = invoxaNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
-    if ($host === '' || $host !== invoxaNormaliseDomain($fields[1])) {
+    $host = enxureNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
+    if ($host === '' || $host !== enxureNormaliseDomain($fields[1])) {
         return null;
     }
     $header = '';

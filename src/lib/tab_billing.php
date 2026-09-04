@@ -16,7 +16,7 @@
                                 <option value="<?= $c['id'] ?>"
                                     data-outstanding="<?= round(max(0, ($c['total_billed'] ?? 0) - ($c['total_paid'] ?? 0)), 2) ?>"
                                     data-terms="<?= (int) ($c['payment_terms_days'] ?? 21) ?>"
-                                    data-currency="<?= htmlspecialchars(invoxaResolveCurrency($c['currency'] ?? '', $settings)) ?>"><?= htmlspecialchars($c['client_name']) ?>
+                                    data-currency="<?= htmlspecialchars(enxureResolveCurrency($c['currency'] ?? '', $settings)) ?>"><?= htmlspecialchars($c['client_name']) ?>
                                     (<?= htmlspecialchars($c['email']) ?>)</option>
                             <?php endforeach; ?>
                         </select>

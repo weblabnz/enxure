@@ -3,7 +3,7 @@
 // INSTALL.md). Supports headings, paragraphs, bold/italic, inline code,
 // fenced code blocks, links, ordered/unordered lists, and GFM pipe tables —
 // not a general-purpose parser.
-function invoxaMarkdownInline(string $text): string
+function enxureMarkdownInline(string $text): string
 {
     $text = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
     // The one bit of raw HTML markdown source is allowed to use — a line
@@ -35,7 +35,7 @@ function invoxaMarkdownInline(string $text): string
         if (preg_match('/^(README|INSTALL)\.md(?:#([a-zA-Z0-9-]+))?$/i', $url, $dm)) {
             $target = strtolower($dm[1]) === 'install' ? 'install' : 'readme';
             $anchor = $dm[2] ?? '';
-            return '<a href="javascript:void(0)" onclick="invoxaGoToDoc(\'' . $target . '\', ' . ($anchor !== '' ? "'{$anchor}'" : 'null') . '); return false;">' . $m[1] . '</a>';
+            return '<a href="javascript:void(0)" onclick="enxureGoToDoc(\'' . $target . '\', ' . ($anchor !== '' ? "'{$anchor}'" : 'null') . '); return false;">' . $m[1] . '</a>';
         }
         // A same-document anchor (e.g. "#licensing", linking to a heading
         // elsewhere in this same file) needs to jump in place, not open a new
@@ -57,7 +57,7 @@ function invoxaMarkdownInline(string $text): string
 // punctuation) — matches the anchors README.md/INSTALL.md's own cross-links
 // already use (e.g. "## Migrating to a new server" -> "migrating-to-a-new-server"),
 // so a rendered heading's id lines up with an incoming #anchor link.
-function invoxaSlugify(string $text): string
+function enxureSlugify(string $text): string
 {
     $slug = strtolower($text);
     $slug = preg_replace('/[^a-z0-9\s-]/', '', $slug);
@@ -65,7 +65,7 @@ function invoxaSlugify(string $text): string
     return trim($slug, '-');
 }
 
-function invoxaRenderMarkdown(string $md): string
+function enxureRenderMarkdown(string $md): string
 {
     $lines = preg_split('/\r\n|\n/', $md);
     $html = [];
@@ -106,7 +106,7 @@ function invoxaRenderMarkdown(string $md): string
             $closeLists();
             $level = strlen($m[1]);
             $title = trim($m[2]);
-            $html[] = "<h{$level} id=\"" . invoxaSlugify($title) . "\">" . invoxaMarkdownInline($title) . "</h{$level}>";
+            $html[] = "<h{$level} id=\"" . enxureSlugify($title) . "\">" . enxureMarkdownInline($title) . "</h{$level}>";
             $i++;
             continue;
         }
@@ -127,11 +127,11 @@ function invoxaRenderMarkdown(string $md): string
         if (strpos($line, '|') !== false && $i + 1 < $n && preg_match('/^\s*\|?[\s:|-]+\|[\s:|-]*\|?\s*$/', $lines[$i + 1])) {
             $closeLists();
             $headerCells = array_map('trim', explode('|', trim(trim($line), '|')));
-            $html[] = '<table><thead><tr>' . implode('', array_map(fn($c) => '<th>' . invoxaMarkdownInline($c) . '</th>', $headerCells)) . '</tr></thead><tbody>';
+            $html[] = '<table><thead><tr>' . implode('', array_map(fn($c) => '<th>' . enxureMarkdownInline($c) . '</th>', $headerCells)) . '</tr></thead><tbody>';
             $i += 2;
             while ($i < $n && strpos($lines[$i], '|') !== false && trim($lines[$i]) !== '') {
                 $cells = array_map('trim', explode('|', trim(trim($lines[$i]), '|')));
-                $html[] = '<tr>' . implode('', array_map(fn($c) => '<td>' . invoxaMarkdownInline($c) . '</td>', $cells)) . '</tr>';
+                $html[] = '<tr>' . implode('', array_map(fn($c) => '<td>' . enxureMarkdownInline($c) . '</td>', $cells)) . '</tr>';
                 $i++;
             }
             $html[] = '</tbody></table>';
@@ -145,7 +145,7 @@ function invoxaRenderMarkdown(string $md): string
                 $listStack[] = 'ul';
                 $html[] = '<ul>';
             }
-            $html[] = '<li>' . invoxaMarkdownInline($m[1]) . '</li>';
+            $html[] = '<li>' . enxureMarkdownInline($m[1]) . '</li>';
             $i++;
             continue;
         }
@@ -157,7 +157,7 @@ function invoxaRenderMarkdown(string $md): string
                 $listStack[] = 'ol';
                 $html[] = '<ol>';
             }
-            $html[] = '<li>' . invoxaMarkdownInline($m[1]) . '</li>';
+            $html[] = '<li>' . enxureMarkdownInline($m[1]) . '</li>';
             $i++;
             continue;
         }
@@ -177,14 +177,14 @@ function invoxaRenderMarkdown(string $md): string
             $para[] = $lines[$i];
             $i++;
         }
-        $html[] = '<p>' . invoxaMarkdownInline(implode(' ', $para)) . '</p>';
+        $html[] = '<p>' . enxureMarkdownInline(implode(' ', $para)) . '</p>';
     }
     $closeLists();
 
     return '<div class="doc-content">' . implode("\n", $html) . '</div>';
 }
 
-function invoxaChangelogCategoryMeta(string $category): array
+function enxureChangelogCategoryMeta(string $category): array
 {
     switch (strtolower($category)) {
         case 'added': return ['success', 'fa-plus'];
@@ -198,7 +198,7 @@ function invoxaChangelogCategoryMeta(string $category): array
 // Timeline layout tailored to CHANGELOG.md's own convention — `## [x.y.z] -
 // YYYY-MM-DD` release headings each followed by `### Added`/`Changed`/
 // `Fixed`/`Removed` bullet groups — rather than the generic renderer above.
-function invoxaRenderChangelog(string $md): string
+function enxureRenderChangelog(string $md): string
 {
     $lines = preg_split('/\r\n|\n/', $md);
     $n = count($lines);
@@ -241,7 +241,7 @@ function invoxaRenderChangelog(string $md): string
         $entries[] = ['version' => $version, 'date' => $date, 'categories' => $categories, 'notes' => $notes];
     }
 
-    $html = [invoxaRenderMarkdown(implode("\n", $intro))];
+    $html = [enxureRenderMarkdown(implode("\n", $intro))];
 
     $visibleCount = 8;
     $html[] = '<div class="changelog-timeline">';
@@ -259,15 +259,15 @@ function invoxaRenderChangelog(string $md): string
         $html[] = '<span class="changelog-date">' . ($dt ? $dt->format('M j, Y') : htmlspecialchars($entry['date'], ENT_QUOTES, 'UTF-8')) . '</span>';
         $html[] = '</div>';
         if ($entry['notes']) {
-            $html[] = '<p class="changelog-notes">' . invoxaMarkdownInline(implode(' ', $entry['notes'])) . '</p>';
+            $html[] = '<p class="changelog-notes">' . enxureMarkdownInline(implode(' ', $entry['notes'])) . '</p>';
         }
         foreach ($entry['categories'] as $cat => $items) {
-            [$color, $icon] = invoxaChangelogCategoryMeta($cat);
+            [$color, $icon] = enxureChangelogCategoryMeta($cat);
             $html[] = '<div class="changelog-category changelog-category-' . $color . '">';
             $html[] = '<div class="changelog-category-label"><i class="fa-solid ' . $icon . '"></i>' . htmlspecialchars($cat, ENT_QUOTES, 'UTF-8') . '</div>';
             $html[] = '<ul>';
             foreach ($items as $item) {
-                $html[] = '<li>' . invoxaMarkdownInline($item) . '</li>';
+                $html[] = '<li>' . enxureMarkdownInline($item) . '</li>';
             }
             $html[] = '</ul>';
             $html[] = '</div>';

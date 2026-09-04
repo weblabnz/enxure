@@ -136,7 +136,7 @@
                                 <div class="pref-item">
                                     <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">App Accent Color</label>
                                     <div id="accentPresetGrid" style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-top:0.5rem; align-items:center;">
-                                        <?php foreach (invoxaBrandPresets() as $__accentName => $__accentHex): ?>
+                                        <?php foreach (enxureBrandPresets() as $__accentName => $__accentHex): ?>
                                             <button type="button" class="accent-preset-swatch" data-color="<?= htmlspecialchars($__accentHex) ?>"
                                                 title="<?= htmlspecialchars($__accentName) ?>"
                                                 onclick="applyAccentColor('<?= htmlspecialchars($__accentHex) ?>')"
@@ -146,7 +146,7 @@
                                             style="width:auto; margin:0; padding:0.35rem 0.75rem; font-size:0.78rem;"
                                             onclick="resetAccentColor()">Reset to Theme Default</button>
                                     </div>
-                                    <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.5rem;">Recolors the Invoxa interface itself — buttons, links, highlights — separate from Branding, which only affects invoices and the Client Portal your clients see.</p>
+                                    <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.5rem;">Recolors the enXure interface itself — buttons, links, highlights — separate from Branding, which only affects invoices and the Client Portal your clients see.</p>
                                 </div>
 
                                 <div class="pref-item">
@@ -155,7 +155,7 @@
                                         style="font-family:monospace; font-size:0.8rem; white-space:pre; margin-top:0.5rem;"
                                         placeholder="/* Any CSS you write here is injected into the app immediately, on this browser only. */"></textarea>
                                     <script>
-                                        document.getElementById('customCssInput').value = localStorage.getItem('invoxa_custom_css') || '';
+                                        document.getElementById('customCssInput').value = localStorage.getItem('enxure_custom_css') || '';
                                     </script>
                                     <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
                                         <button type="button" class="btn" onclick="applyCustomCss()"><i class="fa-solid fa-check"></i> Apply Custom CSS</button>
@@ -167,11 +167,11 @@
                                     <label
                                         style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-primary); font-weight: 500;">
                                         <input type="checkbox" id="welcomeFlashToggle" checked
-                                            onchange="localStorage.setItem('invoxa_show_welcome', this.checked ? '1' : '0')"
+                                            onchange="localStorage.setItem('enxure_show_welcome', this.checked ? '1' : '0')"
                                             style="width:18px;height:18px;"> Show Welcome Message on Login
                                     </label>
                                     <script>
-                                        document.getElementById('welcomeFlashToggle').checked = localStorage.getItem('invoxa_show_welcome') !== '0';
+                                        document.getElementById('welcomeFlashToggle').checked = localStorage.getItem('enxure_show_welcome') !== '0';
                                     </script>
                                     <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.85rem;">The brief "Welcome back" card shown right after signing in.</p>
                                 </div>
@@ -180,7 +180,7 @@
                                     <div class="form-group" style="margin-bottom:0;">
                                         <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Default Landing Tab</label>
                                         <select id="defaultTabSelect" class="form-control" style="max-width:320px;"
-                                            onchange="localStorage.setItem('invoxa_default_tab', this.value)">
+                                            onchange="localStorage.setItem('enxure_default_tab', this.value)">
                                             <option value="dashboard">Dashboard</option>
                                             <option value="invoices">Invoices</option>
                                             <option value="clients">Clients</option>
@@ -188,7 +188,7 @@
                                             <option value="billing">Ad Hoc Invoice</option>
                                         </select>
                                         <script>
-                                            document.getElementById('defaultTabSelect').value = localStorage.getItem('invoxa_default_tab') || 'dashboard';
+                                            document.getElementById('defaultTabSelect').value = localStorage.getItem('enxure_default_tab') || 'dashboard';
                                         </script>
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Which tab opens right after you log in.</p>
                                     </div>
@@ -198,14 +198,14 @@
                                     <div class="form-group" style="margin-bottom:0;">
                                         <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Default Table Page Size</label>
                                         <select id="defaultPageSizeSelect" class="form-control" style="max-width:320px;"
-                                            onchange="localStorage.setItem('invoxa_table_page_size', this.value)">
+                                            onchange="localStorage.setItem('enxure_table_page_size', this.value)">
                                             <option value="12">12 rows</option>
                                             <option value="30">30 rows</option>
                                             <option value="50">50 rows</option>
                                             <option value="99999">All</option>
                                         </select>
                                         <script>
-                                            document.getElementById('defaultPageSizeSelect').value = localStorage.getItem('invoxa_table_page_size') || '12';
+                                            document.getElementById('defaultPageSizeSelect').value = localStorage.getItem('enxure_table_page_size') || '12';
                                         </script>
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Applies to Invoices, Clients, and Quotes — takes effect on your next visit to each tab.</p>
                                     </div>
@@ -747,7 +747,7 @@
                                     <div class="form-group">
                                         <label class="form-label" for="publicUrl">Public URL</label>
                                         <input type="text" id="publicUrl" name="public_url" class="form-control"
-                                            placeholder="https://invoxa.example.com"
+                                            placeholder="https://enxure.example.com"
                                             value="<?= htmlspecialchars($settings['public_url'] ?? '') ?>">
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
                                             The address clients reach this app on. Required for Pay Now links to work
@@ -1011,7 +1011,7 @@
                                         <input type="text" id="businessName" name="business_name" class="form-control"
                                             value="<?= htmlspecialchars($settings['business_name'] ?? '') ?>"
                                             placeholder="Your Business Name">
-                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Used as the sender name and subject line on invoices sent to your clients. Leave blank to use "Invoxa".</p>
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Used as the sender name and subject line on invoices sent to your clients. Leave blank to use "enXure".</p>
                                     </div>
                                     <div class="pref-item">
                                         <label class="form-label" for="vatNumber">GST / VAT Number</label>
@@ -1024,7 +1024,7 @@
                                         <label class="form-label" for="brandColor">Primary Brand Color</label>
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin:-0.25rem 0 0.75rem;">Pick a preset or choose your own — carries through to invoices, quotes, and the Client Portal.</p>
                                         <div id="brandPresetGrid" style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.85rem; align-items:center;">
-                                            <?php foreach (invoxaBrandPresets() as $__presetName => $__presetHex): ?>
+                                            <?php foreach (enxureBrandPresets() as $__presetName => $__presetHex): ?>
                                                 <button type="button" class="brand-preset-swatch" data-color="<?= htmlspecialchars($__presetHex) ?>"
                                                     title="<?= htmlspecialchars($__presetName) ?>"
                                                     onclick="selectBrandPreset('<?= htmlspecialchars($__presetHex) ?>')"
@@ -1053,7 +1053,7 @@
                                             <input type="checkbox" id="hidePoweredByToggle" name="hide_powered_by"
                                                 value="1" <?= ($settings['hide_powered_by'] ?? '0') === '1' ? 'checked' : '' ?>
                                                 <?= $licenseValid ? '' : 'disabled' ?> style="width:16px;height:16px;">
-                                            Remove "Powered by Invoxa" from invoices &amp; emails
+                                            Remove "Powered by enXure" from invoices &amp; emails
                                         </label>
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
                                             <?= $licenseValid
@@ -1065,7 +1065,7 @@
                                         <label class="form-label" for="logoUpload">Invoice Logo</label>
                                         <input type="file" id="logoUpload" name="logo" class="form-control" accept="image/*"
                                             style="padding:0.5rem;">
-                                        <?php if (file_exists('/usr/share/nginx/html/invoxa-invoices/invoxa_logo.jpg')): ?>
+                                        <?php if (file_exists('/usr/share/nginx/html/enxure-invoices/enxure_logo.jpg')): ?>
                                             <div style="margin-top:0.5rem; color:var(--success); font-size:0.85rem;"><i
                                                     class="fa-solid fa-check"></i> Custom logo uploaded</div>
                                         <?php endif; ?>
@@ -1111,7 +1111,7 @@
                                             <textarea id="customInvoiceTemplate" name="custom_invoice_template" class="form-control"
                                                 rows="14" spellcheck="false"
                                                 style="font-family:monospace; font-size:0.8rem; white-space:pre;"
-                                                placeholder="Click &quot;Load Default Template&quot; below to start from Invoxa's built-in layout."><?= htmlspecialchars($settings['custom_invoice_template'] ?? '') ?></textarea>
+                                                placeholder="Click &quot;Load Default Template&quot; below to start from enXure's built-in layout."><?= htmlspecialchars($settings['custom_invoice_template'] ?? '') ?></textarea>
                                             <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
                                                 <button type="button" class="btn" onclick="loadDefaultInvoiceTemplate()"><i
                                                         class="fa-solid fa-rotate-left"></i> Load Default Template</button>
@@ -1331,7 +1331,7 @@
                                         <span style="color:var(--warning); font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Not licensed</span>
                                         <?php
                                         $__licenseMsgs = [
-                                            'empty' => 'Invoxa is free and open source — everything works without a key. A license unlocks seven paid extras: Stripe/PayPal payment collection, recurring billing automation, the Client Portal, the external API, Reporting & Statistics, adding teammates beyond your own account (Settings > Users), and removing the "Powered by Invoxa" credit.',
+                                            'empty' => 'enXure is free and open source — everything works without a key. A license unlocks seven paid extras: Stripe/PayPal payment collection, recurring billing automation, the Client Portal, the external API, Reporting & Statistics, adding teammates beyond your own account (Settings > Users), and removing the "Powered by enXure" credit.',
                                             'demo_mode' => 'This is a public demo instance — paid features stay locked here regardless of any key entered, so you can see them (dimmed) without anyone being able to actually use them. Buy a license to unlock them on your own instance.',
                                             'malformed' => 'That license key doesn\'t look valid — check you copied the whole string with nothing missing.',
                                             'bad_signature' => 'That license key failed verification — check you copied it exactly, with nothing missing or altered.',

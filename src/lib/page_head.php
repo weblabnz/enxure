@@ -4,26 +4,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/svg+xml" href="assets/img/invoxa-mark.svg" />
+    <link rel="icon" type="image/svg+xml" href="assets/img/enxure-mark.svg" />
     <link rel="alternate icon" href="assets/img/favicon.ico" />
     <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <meta name="theme-color" content="#0a0f1c" />
-    <title>Invoxa<?= INSTANCE_LABEL ? ' (' . htmlspecialchars(INSTANCE_LABEL) . ')' : '' ?></title>
+    <title>enXure<?= INSTANCE_LABEL ? ' (' . htmlspecialchars(INSTANCE_LABEL) . ')' : '' ?></title>
     <script>
-        function invoxaResolveTheme() {
-            const pref = localStorage.getItem('invoxa_theme') || 'system';
+        function enxureResolveTheme() {
+            const pref = localStorage.getItem('enxure_theme') || 'system';
             if (pref === 'light' || pref === 'dark') return pref;
             return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
         }
-        document.documentElement.setAttribute('data-theme', invoxaResolveTheme());
-        document.documentElement.setAttribute('data-density', localStorage.getItem('invoxa_density') || 'comfortable');
-        document.documentElement.setAttribute('data-corners', localStorage.getItem('invoxa_corners') || 'rounded');
-        const savedAccent = localStorage.getItem('invoxa_accent');
+        document.documentElement.setAttribute('data-theme', enxureResolveTheme());
+        document.documentElement.setAttribute('data-density', localStorage.getItem('enxure_density') || 'comfortable');
+        document.documentElement.setAttribute('data-corners', localStorage.getItem('enxure_corners') || 'rounded');
+        const savedAccent = localStorage.getItem('enxure_accent');
         if (savedAccent) {
             document.documentElement.style.setProperty('--accent', savedAccent);
-            document.documentElement.style.setProperty('--accent-hover', localStorage.getItem('invoxa_accent_hover') || savedAccent);
-            document.documentElement.style.setProperty('--accent-soft', localStorage.getItem('invoxa_accent_soft') || savedAccent);
+            document.documentElement.style.setProperty('--accent-hover', localStorage.getItem('enxure_accent_hover') || savedAccent);
+            document.documentElement.style.setProperty('--accent-soft', localStorage.getItem('enxure_accent_soft') || savedAccent);
         }
     </script>
     <!--<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">-->
@@ -2254,12 +2254,12 @@
         }
     </style>
     <script>
-        const savedCustomCss = localStorage.getItem('invoxa_custom_css');
+        const savedCustomCss = localStorage.getItem('enxure_custom_css');
         if (savedCustomCss) {
-            const invoxaCustomCssStyle = document.createElement('style');
-            invoxaCustomCssStyle.id = 'invoxaCustomCssStyle';
-            invoxaCustomCssStyle.textContent = savedCustomCss;
-            document.head.appendChild(invoxaCustomCssStyle);
+            const enxureCustomCssStyle = document.createElement('style');
+            enxureCustomCssStyle.id = 'enxureCustomCssStyle';
+            enxureCustomCssStyle.textContent = savedCustomCss;
+            document.head.appendChild(enxureCustomCssStyle);
         }
     </script>
 </head>

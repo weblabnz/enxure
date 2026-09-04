@@ -34,18 +34,18 @@ fi
 # each save for edits to be picked up promptly — see the directory
 # permissions below.
 if [ ! -f "$CRONTAB_FILE" ] || ! grep -q "run_recurring" "$CRONTAB_FILE" 2>/dev/null; then
-    echo "$CRON_SCHEDULE curl -s -S -X POST -d \"action=run_recurring&cron_key=$CRON_SECRET\" http://nginx/invoxa.php >> /var/log/invoxa-cron.log 2>&1" >>"$CRONTAB_FILE"
+    echo "$CRON_SCHEDULE curl -s -S -X POST -d \"action=run_recurring&cron_key=$CRON_SECRET\" http://nginx/enxure.php >> /var/log/enxure-cron.log 2>&1" >>"$CRONTAB_FILE"
 fi
 
 # Automatic backups get their own fixed daily line rather than sharing the
 # schedule above: run_recurring's action is rejected outright without a
-# license (see invoxa.php's $__licensePaidActions), but backups aren't a
+# license (see enxure.php's $__licensePaidActions), but backups aren't a
 # licensed feature and must keep working either way. Whether this actually
 # does anything each time it fires is decided server-side by the
 # auto_backup_enabled setting (Data Management > Backup & Restore) — off by
 # default — not by this schedule.
 if [ ! -f "$CRONTAB_FILE" ] || ! grep -q "run_auto_backup" "$CRONTAB_FILE" 2>/dev/null; then
-    echo "30 2 * * * curl -s -S -X POST -d \"action=run_auto_backup&cron_key=$CRON_SECRET\" http://nginx/invoxa.php >> /var/log/invoxa-cron.log 2>&1" >>"$CRONTAB_FILE"
+    echo "30 2 * * * curl -s -S -X POST -d \"action=run_auto_backup&cron_key=$CRON_SECRET\" http://nginx/enxure.php >> /var/log/enxure-cron.log 2>&1" >>"$CRONTAB_FILE"
 fi
 
 # The app saves schedule changes to this file as www-data, not root — fix
@@ -60,7 +60,7 @@ chmod 660 "$CRONTAB_FILE" 2>/dev/null || true
 chown root:33 /etc/crontabs 2>/dev/null || true
 chmod 770 /etc/crontabs 2>/dev/null || true
 
-touch /var/log/invoxa-cron.log
+touch /var/log/enxure-cron.log
 # crond's own startup/wakeup logging goes to stdout (`docker compose logs
 # cron`). This file holds only actual job output from the crontab line's own
 # redirect — one entry per real cron firing.

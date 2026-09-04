@@ -17,9 +17,9 @@ jobs:
   test-suite:
     runs-on: ubuntu-latest
     steps:
-      - name: Run Test Suite against invoxa-test
+      - name: Run Test Suite against enxure-test
         run: |
-          resp=$(curl -sf -X POST --data "action=run_test_suite&cron_key=${{ secrets.TEST_CRON_SECRET }}" http://invoxa-test-nginx/invoxa.php)
+          resp=$(curl -sf -X POST --data "action=run_test_suite&cron_key=${{ secrets.TEST_CRON_SECRET }}" http://enxure-test-nginx/enxure.php)
           echo "$resp"
           failed=$(echo "$resp" | grep -oP '"failed":\K[0-9]+')
           [ "$failed" = "0" ]

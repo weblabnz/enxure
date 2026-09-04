@@ -3,12 +3,12 @@ set -e
 
 # Ensures php-fpm (running as www-data) can write to the bind-mounted
 # invoices/backups folders.
-mkdir -p /usr/share/nginx/html/invoxa-invoices /usr/share/nginx/html/invoxa-backups /usr/share/nginx/html/docs/screenshots /etc/invoxa-crontab
-chown -R www-data:www-data /usr/share/nginx/html/invoxa-invoices /usr/share/nginx/html/invoxa-backups /usr/share/nginx/html/docs/screenshots
+mkdir -p /usr/share/nginx/html/enxure-invoices /usr/share/nginx/html/enxure-backups /usr/share/nginx/html/docs/screenshots /etc/enxure-crontab
+chown -R www-data:www-data /usr/share/nginx/html/enxure-invoices /usr/share/nginx/html/enxure-backups /usr/share/nginx/html/docs/screenshots
 
 # If CRON_SECRET isn't set in .env, generate a unique one on first boot and
 # persist it so it survives restarts and no manual setup step is required.
-SECRET_FILE=/etc/invoxa-crontab/.cron_secret
+SECRET_FILE=/etc/enxure-crontab/.cron_secret
 if [ -z "$CRON_SECRET" ]; then
     if [ ! -s "$SECRET_FILE" ]; then
         TMP="$SECRET_FILE.$$.tmp"

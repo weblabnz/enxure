@@ -173,7 +173,7 @@ if (isset($_GET['reset_token'])) {
         $authError = "This reset link is invalid or has expired.";
     }
 }
-$authMode = $userCount == 0 ? 'signup' : (isset($_SESSION['invoxa_2fa_pending_user']) ? 'totp' : ($resetTokenUser ? 'reset' : (isset($_GET['forgot']) ? 'forgot' : 'login')));
+$authMode = $userCount == 0 ? 'signup' : (isset($_SESSION['enxure_2fa_pending_user']) ? 'totp' : ($resetTokenUser ? 'reset' : (isset($_GET['forgot']) ? 'forgot' : 'login')));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
     if ($_POST['auth_action'] === 'signup' && $userCount == 0) {
@@ -185,11 +185,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
             $stmt = $mysqli->prepare("INSERT INTO invoxa_users (username, email, password_hash) VALUES (?, ?, ?)");
             $stmt->bind_param("sss", $user, $email, $hash);
             $stmt->execute();
-            invoxaIssueEmailVerification($mysqli, (int) $mysqli->insert_id, $user, $email);
+            enxureIssueEmailVerification($mysqli, (int) $mysqli->insert_id, $user, $email);
             session_regenerate_id(true);
-            $_SESSION['invoxa_auth'] = true;
-            $_SESSION['invoxa_username'] = $user;
-            $_SESSION['invoxa_user_id'] = (int) $mysqli->insert_id;
+            $_SESSION['enxure_auth'] = true;
+            $_SESSION['enxure_username'] = $user;
+            $_SESSION['enxure_user_id'] = (int) $mysqli->insert_id;
             header("Location: ?login=1&welcome=1");
             exit;
         } elseif ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -207,7 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
         $stmt->execute();
         $res = $stmt->get_result();
         if ($row = $res->fetch_assoc()) {
-            $lockWait = invoxaLockoutMinutesRemaining($row['locked_until']);
+            $lockWait = enxureLockoutMinutesRemaining($row['locked_until']);
             if ($lockWait > 0) {
                 $authError = "Too many failed attempts. Try again in {$lockWait} minute" . ($lockWait === 1 ? '' : 's') . ".";
             } elseif (password_verify($pass, $row['password_hash'])) {
@@ -215,26 +215,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
                     // Correct password but 2FA is enabled — hold off on a real session
                     // until verify_totp succeeds. No redirect needed; the render
                     // block below reads $authMode fresh.
-                    $_SESSION['invoxa_2fa_pending_user'] = $user;
+                    $_SESSION['enxure_2fa_pending_user'] = $user;
                     $authMode = 'totp';
                 } else {
                     $mysqli->query("UPDATE invoxa_users SET failed_login_attempts = 0, locked_until = NULL WHERE id = " . (int) $row['id']);
                     session_regenerate_id(true);
-                    $_SESSION['invoxa_auth'] = true;
-                    $_SESSION['invoxa_username'] = $user;
-                    $_SESSION['invoxa_user_id'] = (int) $row['id'];
+                    $_SESSION['enxure_auth'] = true;
+                    $_SESSION['enxure_username'] = $user;
+                    $_SESSION['enxure_user_id'] = (int) $row['id'];
                     header("Location: ?login=1");
                     exit;
                 }
             } else {
-                invoxaRegisterFailedLogin($mysqli, (int) $row['id'], (int) $row['failed_login_attempts']);
+                enxureRegisterFailedLogin($mysqli, (int) $row['id'], (int) $row['failed_login_attempts']);
                 $authError = "Invalid username or password.";
             }
         } else {
             $authError = "Invalid username or password.";
         }
     } elseif ($_POST['auth_action'] === 'verify_totp') {
-        $pendingUser = $_SESSION['invoxa_2fa_pending_user'] ?? null;
+        $pendingUser = $_SESSION['enxure_2fa_pending_user'] ?? null;
         if (!$pendingUser) {
             $authError = "Login session expired — enter your password again.";
             $authMode = 'login';
@@ -243,27 +243,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
             $stmt->bind_param("s", $pendingUser);
             $stmt->execute();
             $row = $stmt->get_result()->fetch_assoc();
-            $lockWait = $row ? invoxaLockoutMinutesRemaining($row['locked_until']) : 0;
+            $lockWait = $row ? enxureLockoutMinutesRemaining($row['locked_until']) : 0;
             $code = trim($_POST['code'] ?? '');
             $codeOk = $row && !empty($row['totp_secret']) && (
-                verifyTotpCode($row['totp_secret'], $code) || invoxaConsumeBackupCode($mysqli, (int) $row['id'], $code)
+                verifyTotpCode($row['totp_secret'], $code) || enxureConsumeBackupCode($mysqli, (int) $row['id'], $code)
             );
             if ($lockWait > 0) {
-                unset($_SESSION['invoxa_2fa_pending_user']);
+                unset($_SESSION['enxure_2fa_pending_user']);
                 $authError = "Too many failed attempts. Try again in {$lockWait} minute" . ($lockWait === 1 ? '' : 's') . ".";
                 $authMode = 'login';
             } elseif ($codeOk) {
                 $mysqli->query("UPDATE invoxa_users SET failed_login_attempts = 0, locked_until = NULL WHERE id = " . (int) $row['id']);
-                unset($_SESSION['invoxa_2fa_pending_user']);
+                unset($_SESSION['enxure_2fa_pending_user']);
                 session_regenerate_id(true);
-                $_SESSION['invoxa_auth'] = true;
-                $_SESSION['invoxa_username'] = $pendingUser;
-                $_SESSION['invoxa_user_id'] = (int) $row['id'];
+                $_SESSION['enxure_auth'] = true;
+                $_SESSION['enxure_username'] = $pendingUser;
+                $_SESSION['enxure_user_id'] = (int) $row['id'];
                 header("Location: ?login=1");
                 exit;
             } else {
                 if ($row) {
-                    invoxaRegisterFailedLogin($mysqli, (int) $row['id'], (int) $row['failed_login_attempts']);
+                    enxureRegisterFailedLogin($mysqli, (int) $row['id'], (int) $row['failed_login_attempts']);
                 }
                 $authError = "Invalid code. Try again.";
                 $authMode = 'totp';
@@ -282,7 +282,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
                 $stmt = $mysqli->prepare("UPDATE invoxa_users SET reset_token_hash = ?, reset_token_expires = DATE_ADD(NOW(), INTERVAL 30 MINUTE) WHERE id = ?");
                 $stmt->bind_param("si", $resetTokenHash, $row['id']);
                 $stmt->execute();
-                invoxaSendPasswordResetEmail($row['username'], $email, $rawToken);
+                enxureSendPasswordResetEmail($row['username'], $email, $rawToken);
             }
         }
         $authMode = 'forgot';
@@ -312,9 +312,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
                 $stmt->bind_param("si", $hash, $row['id']);
                 $stmt->execute();
                 session_regenerate_id(true);
-                $_SESSION['invoxa_auth'] = true;
-                $_SESSION['invoxa_username'] = $row['username'];
-                $_SESSION['invoxa_user_id'] = (int) $row['id'];
+                $_SESSION['enxure_auth'] = true;
+                $_SESSION['enxure_username'] = $row['username'];
+                $_SESSION['enxure_user_id'] = (int) $row['id'];
                 header("Location: ?login=1");
                 exit;
             }
@@ -333,7 +333,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
             $authError = "Type RESET to confirm.";
             $authMode = 'reset';
         } else {
-            invoxaWipeAllData($mysqli);
+            enxureWipeAllData($mysqli);
             session_destroy();
             header("Location: ?");
             exit;
@@ -345,7 +345,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
     }
 }
 
-$isAuth = isset($_SESSION['invoxa_auth']) && $_SESSION['invoxa_auth'] === true;
+$isAuth = isset($_SESSION['enxure_auth']) && $_SESSION['enxure_auth'] === true;
 $isCron = CRON_SECRET !== '' && isset($_REQUEST['cron_key']) && hash_equals(CRON_SECRET, (string) $_REQUEST['cron_key']);
 
 // The logged-in user's id/role — every "my account" or "am I allowed to do
@@ -355,20 +355,20 @@ $currentUserId = 0;
 $currentUserRole = 'admin';
 $currentUsername = null;
 if ($isAuth) {
-    $currentUserId = (int) ($_SESSION['invoxa_user_id'] ?? 0);
+    $currentUserId = (int) ($_SESSION['enxure_user_id'] ?? 0);
     if ($currentUserId > 0) {
         $__curUserRow = $mysqli->query("SELECT role, username FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
         $currentUserRole = $__curUserRow['role'] ?? 'admin';
         $currentUsername = $__curUserRow['username'] ?? null;
-    } elseif (isset($_SESSION['invoxa_username'])) {
+    } elseif (isset($_SESSION['enxure_username'])) {
         // A session created before multi-user existed never stored an id —
         // resolve and cache it once instead of forcing a re-login.
-        $legacyRow = $mysqli->query("SELECT id, role FROM invoxa_users WHERE username = '" . $mysqli->real_escape_string($_SESSION['invoxa_username']) . "'")->fetch_assoc();
+        $legacyRow = $mysqli->query("SELECT id, role FROM invoxa_users WHERE username = '" . $mysqli->real_escape_string($_SESSION['enxure_username']) . "'")->fetch_assoc();
         if ($legacyRow) {
             $currentUserId = (int) $legacyRow['id'];
             $currentUserRole = $legacyRow['role'];
-            $currentUsername = $_SESSION['invoxa_username'];
-            $_SESSION['invoxa_user_id'] = $currentUserId;
+            $currentUsername = $_SESSION['enxure_username'];
+            $_SESSION['enxure_user_id'] = $currentUserId;
         }
     }
 }
@@ -377,7 +377,7 @@ $isAdmin = $currentUserRole === 'admin';
 $__actorUserId = $currentUserId > 0 ? $currentUserId : null;
 $__actorUsername = $currentUsername;
 
-function invoxaLogAction($mysqli, $invoiceId, string $invoiceNumber, string $actionType, string $notes = ''): void
+function enxureLogAction($mysqli, $invoiceId, string $invoiceNumber, string $actionType, string $notes = ''): void
 {
     global $__actorUserId, $__actorUsername;
     $stmt = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_id, invoice_number, action_type, notes, performed_by_user_id, performed_by_username) VALUES (?, ?, ?, ?, ?, ?)");
@@ -409,7 +409,7 @@ require_once __DIR__ . '/license.php';
 // hide-test since it's a deliberate, temporary preview of Demo Data. Two
 // shapes: one for invoxa_invoices (no is_test column of its own, only via
 // its client), one for invoxa_clients' own column.
-function invoxaTestViewFilter(bool $hideTest, bool $showTestOnly, string $keyword = 'AND', string $keyCol = 'client_key'): string
+function enxureTestViewFilter(bool $hideTest, bool $showTestOnly, string $keyword = 'AND', string $keyCol = 'client_key'): string
 {
     if ($showTestOnly) {
         return "$keyword $keyCol IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)";
@@ -419,7 +419,7 @@ function invoxaTestViewFilter(bool $hideTest, bool $showTestOnly, string $keywor
     }
     return '';
 }
-function invoxaTestViewClientFilter(bool $hideTest, bool $showTestOnly, string $keyword = 'AND', string $col = 'is_test'): string
+function enxureTestViewClientFilter(bool $hideTest, bool $showTestOnly, string $keyword = 'AND', string $col = 'is_test'): string
 {
     if ($showTestOnly) {
         return "$keyword $col = 1";

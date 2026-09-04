@@ -4,12 +4,12 @@
 // handlers. Pure Stripe/PayPal API mechanics (no $mysqli) stay in
 // invoice_helpers.php; everything here needs the database.
 
-function invoxaPaymentAccessOk($mysqli, array $settings): bool
+function enxurePaymentAccessOk($mysqli, array $settings): bool
 {
-    if (getenv('INVOXA_DEMO_MODE')) {
+    if (getenv('ENXURE_DEMO_MODE')) {
         return false;
     }
-    $host = invoxaNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
+    $host = enxureNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
     if ($host === '') {
         return false;
     }
@@ -20,7 +20,7 @@ function invoxaPaymentAccessOk($mysqli, array $settings): bool
     }
     $payload = base64_decode(substr($license, 0, $dot), true);
     $signature = base64_decode(substr($license, $dot + 1), true);
-    $publicKey = base64_decode(INVOXA_LICENSE_PUBLIC_KEY_B64, true);
+    $publicKey = base64_decode(ENXURE_LICENSE_PUBLIC_KEY_B64, true);
     if ($payload === false || $signature === false || $publicKey === false
         || strlen($signature) !== SODIUM_CRYPTO_SIGN_BYTES
         || strlen($publicKey) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
@@ -28,7 +28,7 @@ function invoxaPaymentAccessOk($mysqli, array $settings): bool
         return false;
     }
     $fields = explode('|', $payload);
-    if (count($fields) !== 3 || $host !== invoxaNormaliseDomain($fields[1])) {
+    if (count($fields) !== 3 || $host !== enxureNormaliseDomain($fields[1])) {
         return false;
     }
     $owner = $mysqli->query("SELECT email FROM invoxa_users ORDER BY id ASC LIMIT 1")->fetch_assoc();
@@ -36,7 +36,7 @@ function invoxaPaymentAccessOk($mysqli, array $settings): bool
     return $ownerEmail !== '' && strcasecmp($ownerEmail, trim($fields[0])) === 0;
 }
 
-function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $licenseValid): void
+function enxureHandlePublicPaymentRoutes($mysqli, array $settings, bool $licenseValid): void
 {
     // ── Online Payments (Stripe / PayPal) — public routes ───────────────────────
     // Outside the $isAuth gate, same reasoning as the Client Portal above — a
@@ -44,7 +44,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
     // the only path that actually credits a payment (see recordInvoicePayment()
     // and its uniq_provider_ref idempotency key); the return-URL handlers below
     // also call it for an instant "Paid!" page, safely racing the webhook.
-    $__businessName = $settings['business_name'] ?? 'Invoxa';
+    $__businessName = $settings['business_name'] ?? 'enXure';
     
     if (isset($_GET['pay'])) {
         header('Content-Type: text/html; charset=utf-8');
@@ -55,33 +55,33 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
         $payInv = $stmt->get_result()->fetch_assoc();
         if (!$payInv || in_array($payInv['status'], ['void', 'draft'], true)) {
             http_response_code(404);
-            echo invoxaSimplePage($__businessName, 'Invoice not found', 'This payment link is invalid. Contact ' . htmlspecialchars($__businessName) . ' if you think this is a mistake.');
+            echo enxureSimplePage($__businessName, 'Invoice not found', 'This payment link is invalid. Contact ' . htmlspecialchars($__businessName) . ' if you think this is a mistake.');
             exit;
         }
         $remaining = round((float) $payInv['amount'] - (float) ($payInv['paid_amount'] ?? 0), 2);
         if ($payInv['status'] === 'paid' || $remaining <= 0) {
-            echo invoxaSimplePage($__businessName, 'Already paid', 'This invoice is already paid in full. Thank you!');
+            echo enxureSimplePage($__businessName, 'Already paid', 'This invoice is already paid in full. Thank you!');
             exit;
         }
         // Payment collection is a paid feature — re-checked here at the moment of
         // taking payment, not just when save_payment_settings first turned it on,
         // so a deactivated license genuinely stops collecting payments.
-        if (!invoxaPaymentAccessOk($mysqli, $settings)) {
-            echo invoxaSimplePage($__businessName, 'Online payment unavailable', 'Online payment isn\'t set up for this invoice yet. Please contact ' . htmlspecialchars($__businessName) . ' for payment instructions.');
+        if (!enxurePaymentAccessOk($mysqli, $settings)) {
+            echo enxureSimplePage($__businessName, 'Online payment unavailable', 'Online payment isn\'t set up for this invoice yet. Please contact ' . htmlspecialchars($__businessName) . ' for payment instructions.');
             exit;
         }
         $stripeOn = ($settings['stripe_enabled'] ?? '0') === '1' && trim($settings['stripe_secret_key'] ?? '') !== '';
         $paypalOn = ($settings['paypal_enabled'] ?? '0') === '1' && trim($settings['paypal_client_id'] ?? '') !== '' && trim($settings['paypal_client_secret'] ?? '') !== '';
         if (!$stripeOn && !$paypalOn) {
-            echo invoxaSimplePage($__businessName, 'Online payment unavailable', 'Online payment isn\'t set up for this invoice yet. Please contact ' . htmlspecialchars($__businessName) . ' for payment instructions.');
+            echo enxureSimplePage($__businessName, 'Online payment unavailable', 'Online payment isn\'t set up for this invoice yet. Please contact ' . htmlspecialchars($__businessName) . ' for payment instructions.');
             exit;
         }
-        $publicBase = invoxaPublicBaseUrl($settings);
+        $publicBase = enxurePublicBaseUrl($settings);
         if ($publicBase === null) {
-            echo invoxaSimplePage($__businessName, 'Payment temporarily unavailable', 'Something isn\'t configured correctly on our end. Please contact ' . htmlspecialchars($__businessName) . ' directly.');
+            echo enxureSimplePage($__businessName, 'Payment temporarily unavailable', 'Something isn\'t configured correctly on our end. Please contact ' . htmlspecialchars($__businessName) . ' directly.');
             exit;
         }
-        $currencyCode = invoxaResolveCurrency($payInv['currency'] ?? '', $settings);
+        $currencyCode = enxureResolveCurrency($payInv['currency'] ?? '', $settings);
         $description = 'Invoice ' . $invNum . ' — ' . $__businessName;
         $requested = in_array($_GET['gateway'] ?? '', ['stripe', 'paypal'], true) ? $_GET['gateway'] : null;
         $chosenGateway = null;
@@ -107,7 +107,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
                 $publicBase . '/?stripe_cancel=1&invoice=' . rawurlencode($invNum)
             );
             if (!$result['success']) {
-                echo invoxaSimplePage($__businessName, 'Payment unavailable', 'Stripe couldn\'t start this payment right now: ' . htmlspecialchars($result['error']) . '. Please try again later or contact ' . htmlspecialchars($__businessName) . '.');
+                echo enxureSimplePage($__businessName, 'Payment unavailable', 'Stripe couldn\'t start this payment right now: ' . htmlspecialchars($result['error']) . '. Please try again later or contact ' . htmlspecialchars($__businessName) . '.');
                 exit;
             }
             header('Location: ' . $result['url']);
@@ -117,7 +117,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
             $env = $settings['paypal_environment'] ?? 'sandbox';
             $tokenResult = paypalGetAccessToken($settings['paypal_client_id'], $settings['paypal_client_secret'], $env);
             if (!$tokenResult['success']) {
-                echo invoxaSimplePage($__businessName, 'Payment unavailable', 'PayPal couldn\'t start this payment right now. Please try again later or contact ' . htmlspecialchars($__businessName) . '.');
+                echo enxureSimplePage($__businessName, 'Payment unavailable', 'PayPal couldn\'t start this payment right now. Please try again later or contact ' . htmlspecialchars($__businessName) . '.');
                 exit;
             }
             $order = paypalCreateOrder(
@@ -131,7 +131,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
                 $publicBase . '/?paypal_cancel=1&invoice=' . rawurlencode($invNum)
             );
             if (!$order['success']) {
-                echo invoxaSimplePage($__businessName, 'Payment unavailable', 'PayPal couldn\'t start this payment right now: ' . htmlspecialchars($order['error']) . '. Please try again later or contact ' . htmlspecialchars($__businessName) . '.');
+                echo enxureSimplePage($__businessName, 'Payment unavailable', 'PayPal couldn\'t start this payment right now: ' . htmlspecialchars($order['error']) . '. Please try again later or contact ' . htmlspecialchars($__businessName) . '.');
                 exit;
             }
             header('Location: ' . $order['approve_url']);
@@ -144,7 +144,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
             $chooserLinks .= '<p style="margin-top:1rem;"><a href="?pay=' . rawurlencode($invNum) . '&gateway=stripe" style="display:inline-block;background:#4f7cff;color:#fff;text-decoration:none;padding:0.7rem 1.4rem;border-radius:8px;font-weight:600;">Pay with Card (Stripe)</a></p>';
         if ($paypalOn)
             $chooserLinks .= '<p style="margin-top:1rem;"><a href="?pay=' . rawurlencode($invNum) . '&gateway=paypal" style="display:inline-block;background:#ffc439;color:#111;text-decoration:none;padding:0.7rem 1.4rem;border-radius:8px;font-weight:600;">Pay with PayPal</a></p>';
-        echo invoxaSimplePage($__businessName, 'Pay Invoice ' . htmlspecialchars($invNum), htmlspecialchars($currencyCode) . ' ' . number_format($remaining, 2) . ' due.' . $chooserLinks);
+        echo enxureSimplePage($__businessName, 'Pay Invoice ' . htmlspecialchars($invNum), htmlspecialchars($currencyCode) . ' ' . number_format($remaining, 2) . ' due.' . $chooserLinks);
         exit;
     }
     
@@ -153,7 +153,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
         $sessionId = (string) ($_GET['session_id'] ?? '');
         $stripeKey = trim($settings['stripe_secret_key'] ?? '');
         if ($sessionId === '' || $stripeKey === '') {
-            echo invoxaSimplePage($__businessName, 'Something went wrong', 'We couldn\'t confirm this payment. If you were charged, contact ' . htmlspecialchars($__businessName) . ' and we\'ll sort it out.');
+            echo enxureSimplePage($__businessName, 'Something went wrong', 'We couldn\'t confirm this payment. If you were charged, contact ' . htmlspecialchars($__businessName) . ' and we\'ll sort it out.');
             exit;
         }
         $result = stripeRetrieveCheckoutSession($stripeKey, $sessionId);
@@ -165,13 +165,13 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
                 $amountPaid = stripeAmountFromMinorUnits((int) ($session['amount_total'] ?? 0), $session['currency'] ?? 'usd');
                 recordInvoicePayment($mysqli, $settings, (int) $invRow['id'], $amountPaid, 'Paid via Stripe Checkout', 'stripe', $sessionId);
             }
-            echo invoxaSimplePage($__businessName, 'Payment received', 'Thank you! Your payment for invoice ' . htmlspecialchars($invNum) . ' has been received.');
+            echo enxureSimplePage($__businessName, 'Payment received', 'Thank you! Your payment for invoice ' . htmlspecialchars($invNum) . ' has been received.');
             exit;
         }
         // Not confirmed paid yet (e.g. a bank-debit payment method that settles
         // asynchronously) — the webhook will still credit it once Stripe confirms;
         // this is just what the payer sees right now.
-        echo invoxaSimplePage($__businessName, 'Payment processing', 'Your payment is being processed. You\'ll receive a receipt once it\'s confirmed — no need to try again.');
+        echo enxureSimplePage($__businessName, 'Payment processing', 'Your payment is being processed. You\'ll receive a receipt once it\'s confirmed — no need to try again.');
         exit;
     }
     
@@ -179,7 +179,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
         header('Content-Type: text/html; charset=utf-8');
         $invNum = (string) ($_GET['invoice'] ?? '');
         $retryLink = $invNum !== '' ? ' <a href="?pay=' . rawurlencode($invNum) . '">Try again</a>.' : '';
-        echo invoxaSimplePage($__businessName, 'Payment cancelled', 'No charge was made.' . $retryLink);
+        echo enxureSimplePage($__businessName, 'Payment cancelled', 'No charge was made.' . $retryLink);
         exit;
     }
     
@@ -192,7 +192,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
         $clientId = trim($settings['paypal_client_id'] ?? '');
         $clientSecret = trim($settings['paypal_client_secret'] ?? '');
         if ($orderId === '' || $clientId === '' || $clientSecret === '') {
-            echo invoxaSimplePage($__businessName, 'Something went wrong', 'We couldn\'t confirm this payment. If you were charged, contact ' . htmlspecialchars($__businessName) . ' and we\'ll sort it out.');
+            echo enxureSimplePage($__businessName, 'Something went wrong', 'We couldn\'t confirm this payment. If you were charged, contact ' . htmlspecialchars($__businessName) . ' and we\'ll sort it out.');
             exit;
         }
         $tokenResult = paypalGetAccessToken($clientId, $clientSecret, $env);
@@ -203,10 +203,10 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
             if ($invRow) {
                 recordInvoicePayment($mysqli, $settings, (int) $invRow['id'], $capture['amount'], 'Paid via PayPal', 'paypal', $capture['capture_id']);
             }
-            echo invoxaSimplePage($__businessName, 'Payment received', 'Thank you! Your payment for invoice ' . htmlspecialchars($customId) . ' has been received.');
+            echo enxureSimplePage($__businessName, 'Payment received', 'Thank you! Your payment for invoice ' . htmlspecialchars($customId) . ' has been received.');
             exit;
         }
-        echo invoxaSimplePage($__businessName, 'Payment not completed', 'PayPal didn\'t complete this payment. No charge was made — you can close this page and try again.');
+        echo enxureSimplePage($__businessName, 'Payment not completed', 'PayPal didn\'t complete this payment. No charge was made — you can close this page and try again.');
         exit;
     }
     
@@ -214,7 +214,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
         header('Content-Type: text/html; charset=utf-8');
         $invNum = (string) ($_GET['invoice'] ?? '');
         $retryLink = $invNum !== '' ? ' <a href="?pay=' . rawurlencode($invNum) . '">Try again</a>.' : '';
-        echo invoxaSimplePage($__businessName, 'Payment cancelled', 'No charge was made.' . $retryLink);
+        echo enxureSimplePage($__businessName, 'Payment cancelled', 'No charge was made.' . $retryLink);
         exit;
     }
     
@@ -242,7 +242,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
                     $amountPaid = stripeAmountFromMinorUnits((int) ($session['amount_total'] ?? 0), $session['currency'] ?? 'usd');
                     recordInvoicePayment($mysqli, $settings, (int) $invRow['id'], $amountPaid, 'Paid via Stripe (webhook)', 'stripe', $session['id']);
                 } else {
-                    invoxaLogUnmatchedWebhook($mysqli, 'stripe', $type, $invNum);
+                    enxureLogUnmatchedWebhook($mysqli, 'stripe', $type, $invNum);
                 }
             }
         } elseif ($type === 'charge.refunded') {
@@ -266,7 +266,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
                     // mistaken for a duplicate of the first one.
                     recordInvoiceRefund($mysqli, $settings, (int) $invRow['id'], $refundedAmount, 'stripe', $chargeId . ':' . $charge['amount_refunded']);
                 } else {
-                    invoxaLogUnmatchedWebhook($mysqli, 'stripe', $type, $invNum);
+                    enxureLogUnmatchedWebhook($mysqli, 'stripe', $type, $invNum);
                 }
             }
         }
@@ -321,7 +321,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
                     $amountPaid = (float) ($resource['amount']['value'] ?? 0);
                     recordInvoicePayment($mysqli, $settings, (int) $invRow['id'], $amountPaid, 'Paid via PayPal (webhook)', 'paypal', $captureId);
                 } else {
-                    invoxaLogUnmatchedWebhook($mysqli, 'paypal', $eventType, $customId);
+                    enxureLogUnmatchedWebhook($mysqli, 'paypal', $eventType, $customId);
                 }
             }
         } elseif ($eventType === 'PAYMENT.CAPTURE.REFUNDED') {
@@ -345,7 +345,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
                 if ($origRow) {
                     recordInvoiceRefund($mysqli, $settings, (int) $origRow['invoice_id'], $refundAmount, 'paypal', $refundId);
                 } else {
-                    invoxaLogUnmatchedWebhook($mysqli, 'paypal', $eventType, $captureId);
+                    enxureLogUnmatchedWebhook($mysqli, 'paypal', $eventType, $captureId);
                 }
             }
         }
@@ -367,7 +367,7 @@ function invoxaHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
 // payments never pass $providerRef, so they're never deduplicated against
 // each other.
 // Special-cased since ucfirst('api') would give 'Api' instead of 'API'.
-function invoxaProviderLabel(string $provider): string
+function enxureProviderLabel(string $provider): string
 {
     return $provider === 'api' ? 'API' : ucfirst($provider);
 }
@@ -418,22 +418,22 @@ function recordInvoicePayment($mysqli, array $settings, int $invoiceId, float $a
     $stmt->bind_param("sdi", $newStatus, $totalPaid, $invoiceId);
     $stmt->execute();
 
-    $sourceLabel = $provider === 'manual' ? '' : ' via ' . invoxaProviderLabel($provider);
+    $sourceLabel = $provider === 'manual' ? '' : ' via ' . enxureProviderLabel($provider);
     $actionType = $isPartial ? 'mark_partial_paid' : 'mark_paid';
     $notes = ($isPartial ? "Partial payment logged: $" : "Marked as paid: $") . number_format($amount, 2)
         . " (total paid to date: $" . number_format($totalPaid, 2) . " of $" . number_format($invAmount, 2) . ")"
         . $sourceLabel
         . ($note !== '' ? " — {$note}" : '');
-    invoxaLogAction($mysqli, $invoiceId, $invNum, $actionType, $notes);
+    enxureLogAction($mysqli, $invoiceId, $invNum, $actionType, $notes);
 
-    $currencyCode = invoxaResolveCurrency($invRow['currency'] ?? '', $settings);
+    $currencyCode = enxureResolveCurrency($invRow['currency'] ?? '', $settings);
     notifyChannel($mysqli, $settings, 'notify_on_payment', ($isPartial ? "\xF0\x9F\x92\xB0 Partial payment received" : "\xE2\x9C\x85 Invoice paid in full") . " — {$invNum} ({$invRow['client_name']}){$sourceLabel}: {$currencyCode} " . number_format($amount, 2));
 
     return ['success' => true, 'duplicate' => false, 'is_partial' => $isPartial, 'total_paid' => $totalPaid, 'invoice_amount' => $invAmount, 'invoice_number' => $invNum];
 }
 
 // Reverses money out of the ledger when Stripe/PayPal reports a refund
-// (a dashboard refund doesn't touch Invoxa on its own). Recorded as a
+// (a dashboard refund doesn't touch enXure on its own). Recorded as a
 // negative-amount row in the same invoxa_payments ledger recordInvoicePayment()
 // writes to, so every existing SUM(amount) read of paid_amount stays correct.
 // Uses the same (provider, provider_ref) idempotency guarantee as payments.
@@ -477,17 +477,17 @@ function recordInvoiceRefund($mysqli, array $settings, int $invoiceId, float $re
     $stmt->bind_param("sdi", $newStatus, $totalPaid, $invoiceId);
     $stmt->execute();
 
-    $sourceLabel = ' via ' . invoxaProviderLabel($provider);
+    $sourceLabel = ' via ' . enxureProviderLabel($provider);
     $notes = "Refund issued: $" . number_format($refundAmount, 2) . " (total paid now: $" . number_format($totalPaid, 2) . " of $" . number_format($invAmount, 2) . ")" . $sourceLabel;
-    invoxaLogAction($mysqli, $invoiceId, $invRow['invoice_number'], 'refund_issued', $notes);
+    enxureLogAction($mysqli, $invoiceId, $invRow['invoice_number'], 'refund_issued', $notes);
 
-    $currencyCode = invoxaResolveCurrency($invRow['currency'] ?? '', $settings);
+    $currencyCode = enxureResolveCurrency($invRow['currency'] ?? '', $settings);
     notifyChannel($mysqli, $settings, 'notify_on_refund', "\xE2\x86\xA9\xEF\xB8\x8F Refund issued — {$invRow['invoice_number']} ({$invRow['client_name']}){$sourceLabel}: {$currencyCode} " . number_format($refundAmount, 2));
 
     return ['success' => true, 'duplicate' => false, 'total_paid' => $totalPaid, 'invoice_number' => $invRow['invoice_number']];
 }
 
-function invoxaHandleMarkPaid($mysqli, array $settings): void
+function enxureHandleMarkPaid($mysqli, array $settings): void
 {
 // $amount is this installment only, not a cumulative total — recorded as
 // its own row in invoxa_payments so part-payments build a real history.
@@ -503,7 +503,7 @@ echo json_encode(['success' => true]);
 exit;
 }
 
-function invoxaHandleGetInvoicePayments($mysqli): void
+function enxureHandleGetInvoicePayments($mysqli): void
 {
 // Backs the "Payment History" list in the Mark Paid modal, so a new
 // installment can be sized against what's already been paid.
@@ -516,7 +516,7 @@ echo json_encode(['success' => true, 'payments' => $payments]);
 exit;
 }
 
-function invoxaHandleMarkUnpaid($mysqli): void
+function enxureHandleMarkUnpaid($mysqli): void
 {
 $id = (int) $_POST['id'];
 // Full reset, not just undoing the latest installment — clears the whole
@@ -528,12 +528,12 @@ $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = 'sent', paid_at = 
 $stmt->bind_param("i", $id);
 $stmt->execute();
 $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $id")->fetch_assoc()['invoice_number'] ?? '';
-invoxaLogAction($mysqli, $id, $invNum, 'mark_unpaid', 'Marked as unpaid — payment history cleared');
+enxureLogAction($mysqli, $id, $invNum, 'mark_unpaid', 'Marked as unpaid — payment history cleared');
 echo json_encode(['success' => true]);
 exit;
 }
 
-function invoxaHandleSavePaymentSettings($mysqli): void
+function enxureHandleSavePaymentSettings($mysqli): void
 {
 $stripeEnabled = ($_POST['stripe_enabled'] ?? '0') === '1' ? '1' : '0';
 $paypalEnabled = ($_POST['paypal_enabled'] ?? '0') === '1' ? '1' : '0';
@@ -557,7 +557,7 @@ echo json_encode(['success' => true]);
 exit;
 }
 
-function invoxaHandleTestStripeConnection(): void
+function enxureHandleTestStripeConnection(): void
 {
 // Tests against whatever key is currently typed in the form, not the
 // saved setting, so you don't have to Save blind first.
@@ -575,7 +575,7 @@ echo json_encode(['success' => true, 'account' => $res['body']['id'] ?? '']);
 exit;
 }
 
-function invoxaHandleTestPaypalConnection(): void
+function enxureHandleTestPaypalConnection(): void
 {
 $clientId = trim($_POST['paypal_client_id'] ?? '');
 $clientSecret = trim($_POST['paypal_client_secret'] ?? '');

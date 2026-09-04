@@ -20,7 +20,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: "Thanks for the interest! This GitHub repo is a read-only mirror — Invoxa's development happens on [GitLab](https://gitlab.com/weblabnz/invoxa), so please open your merge request there instead. Closing this PR."
+              body: "Thanks for the interest! This GitHub repo is a read-only mirror — enXure's development happens on [GitLab](https://gitlab.com/weblabnz/enxure), so please open your merge request there instead. Closing this PR."
             });
             await github.rest.pulls.update({
               owner: context.repo.owner,

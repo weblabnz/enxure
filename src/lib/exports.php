@@ -20,9 +20,9 @@ function buildAccountingJournal($mysqli, array $settings, string $startDate, str
 {
     $categories = expenseCategories();
     $rows = [];
-    $defaultCcy = invoxaResolveCurrency('', $settings);
+    $defaultCcy = enxureResolveCurrency('', $settings);
     $ccyAccount = function (string $account, string $recordCurrency) use ($settings, $defaultCcy): string {
-        $ccy = invoxaResolveCurrency($recordCurrency, $settings);
+        $ccy = enxureResolveCurrency($recordCurrency, $settings);
         return $ccy === $defaultCcy ? $account : "$account ($ccy)";
     };
 
@@ -31,7 +31,7 @@ function buildAccountingJournal($mysqli, array $settings, string $startDate, str
         $date = substr($r['invoice_date'], 0, 10);
         $memo = "Invoice {$r['invoice_number']} — {$r['client_name']}";
         $amount = round((float) $r['amount'], 2);
-        $ccy = invoxaResolveCurrency($r['currency'] ?? '', $settings);
+        $ccy = enxureResolveCurrency($r['currency'] ?? '', $settings);
         $rows[] = ['date' => $date, 'account' => $ccyAccount('Accounts Receivable', $r['currency']), 'debit' => $amount, 'credit' => 0, 'memo' => $memo, 'ref' => $r['invoice_number'], 'currency' => $ccy];
         $rows[] = ['date' => $date, 'account' => $ccyAccount('Sales Income', $r['currency']), 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => $r['invoice_number'], 'currency' => $ccy];
     }
@@ -41,7 +41,7 @@ function buildAccountingJournal($mysqli, array $settings, string $startDate, str
         $date = substr($r['paid_at'], 0, 10);
         $memo = "Payment received for invoice {$r['invoice_number']} — {$r['client_name']}";
         $amount = round((float) $r['paid_amount'], 2);
-        $ccy = invoxaResolveCurrency($r['currency'] ?? '', $settings);
+        $ccy = enxureResolveCurrency($r['currency'] ?? '', $settings);
         $rows[] = ['date' => $date, 'account' => $ccyAccount('Cash & Bank', $r['currency']), 'debit' => $amount, 'credit' => 0, 'memo' => $memo, 'ref' => $r['invoice_number'], 'currency' => $ccy];
         $rows[] = ['date' => $date, 'account' => $ccyAccount('Accounts Receivable', $r['currency']), 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => $r['invoice_number'], 'currency' => $ccy];
     }
@@ -60,7 +60,7 @@ function buildAccountingJournal($mysqli, array $settings, string $startDate, str
     return $rows;
 }
 
-function invoxaHandlePreviewAdhocPdf($mysqli, array $settings, bool $licenseValid): void
+function enxureHandlePreviewAdhocPdf($mysqli, array $settings, bool $licenseValid): void
 {
 // Same as preview_adhoc but renders straight to PDF, for previewing an
 // invoice that hasn't been saved yet (no invoxa_invoices row to look up
@@ -87,7 +87,7 @@ $dueDate = validDateOverride($_POST['due_date'] ?? null) ?: date("Y-m-d", strtot
 $invNum = generateInvoiceNumber($mysqli, $client['client_key'], $client['client_name'], $settings);
 $brandColor = $settings['brand_color'] ?? '#4a90e2';
 $footerText = $settings['footer_text'] ?? '';
-$currencyCode = invoxaResolveCurrency($client['currency'] ?? '', $settings);
+$currencyCode = enxureResolveCurrency($client['currency'] ?? '', $settings);
 $html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'), vatNumber: $settings['vat_number'] ?? '', recipientPhone: $client['phone'] ?? '', recipientAddress: $client['address'] ?? '', customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null, businessName: $settings['business_name'] ?? '');
 try {
     $pdf = generateInvoicePdf($html);
@@ -102,7 +102,7 @@ echo $pdf;
 exit;
 }
 
-function invoxaHandleInvoicePdfExport($mysqli): void
+function enxureHandleInvoicePdfExport($mysqli): void
 {
     // Server-side PDF export (dompdf) for the "Download PDF" button — replaces
     // the old client-side html2pdf.js screenshot hack, which couldn't produce
@@ -127,14 +127,14 @@ function invoxaHandleInvoicePdfExport($mysqli): void
     exit;
 }
 
-function invoxaHandleExportRoutes($mysqli, array $settings): void
+function enxureHandleExportRoutes($mysqli, array $settings): void
 {
     $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_settings (setting_key VARCHAR(50) PRIMARY KEY, setting_value TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
     $hideTestRes = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'hide_test'");
     $hideTest = ($hideTestRes && $hideTestRes->num_rows > 0) ? ($hideTestRes->fetch_assoc()['setting_value'] === '1') : true;
     $showTestOnlyRes = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
     $showTestOnly = ($showTestOnlyRes && $showTestOnlyRes->num_rows > 0) ? ($showTestOnlyRes->fetch_assoc()['setting_value'] === '1') : false;
-    $testFilter = invoxaTestViewFilter($hideTest, $showTestOnly);
+    $testFilter = enxureTestViewFilter($hideTest, $showTestOnly);
     if ($_GET['export'] === 'invoices') {
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="invoices_export_' . date('Ymd') . '.csv"');
@@ -142,7 +142,7 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
         fputcsv($out, ['Invoice Number', 'Client Name', 'Email', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date'], ',', '"', "\\");
         $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE 1 $testFilter ORDER BY invoice_date DESC");
         while ($r = $res->fetch_assoc()) {
-            $r['currency'] = invoxaResolveCurrency($r['currency'], $settings);
+            $r['currency'] = enxureResolveCurrency($r['currency'], $settings);
             fputcsv($out, $r, ',', '"', "\\");
         }
         fclose($out);
@@ -159,7 +159,7 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
             exit('PHP\'s zip extension isn\'t available in this container — rebuild the php service (docker compose build php) to pick up the Dockerfile change that adds it, then try again.');
         }
         $res = $mysqli->query("SELECT id, invoice_number, is_quote, html_content FROM invoxa_invoices WHERE html_content IS NOT NULL AND html_content != '' $testFilter ORDER BY invoice_date DESC");
-        $tmpZip = tempnam(sys_get_temp_dir(), 'invoxa_pdf_export_');
+        $tmpZip = tempnam(sys_get_temp_dir(), 'enxure_pdf_export_');
         $zip = new ZipArchive();
         if ($zip->open($tmpZip, ZipArchive::OVERWRITE) !== true) {
             @unlink($tmpZip);
@@ -213,7 +213,7 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
         fputcsv($out, ['Invoice Number', 'Client Name', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date'], ',', '"', "\\");
         $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter ORDER BY invoice_date ASC");
         while ($r = $res->fetch_assoc()) {
-            $r['currency'] = invoxaResolveCurrency($r['currency'], $settings);
+            $r['currency'] = enxureResolveCurrency($r['currency'], $settings);
             fputcsv($out, $r, ',', '"', "\\");
         }
         fclose($out);
@@ -225,7 +225,7 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
         $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1), $now);
         $startStr = $taxYearStart->format('Y-m-d');
         $taxYearLabel = $taxYearStart->format('Y') . '-' . $now->format('Y');
-        $defaultCcy = invoxaResolveCurrency('', $settings);
+        $defaultCcy = enxureResolveCurrency('', $settings);
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="invoices_monthly_summary_' . $taxYearLabel . '_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
@@ -250,7 +250,7 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
         ");
         $rowsByMonthCcy = [];
         while ($r = $res->fetch_assoc()) {
-            $ccy = invoxaResolveCurrency($r['currency'], $settings);
+            $ccy = enxureResolveCurrency($r['currency'], $settings);
             $key = $r['month'] . '|' . $ccy;
             if (!isset($rowsByMonthCcy[$key])) {
                 $rowsByMonthCcy[$key] = ['month' => $r['month'], 'currency' => $ccy, 'total_invoiced' => 0.0, 'total_paid' => 0.0, 'outstanding' => 0.0, 'unpaid_count' => 0];
@@ -298,9 +298,9 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
         header('Content-Disposition: attachment; filename="clients_export_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
         fputcsv($out, ['Client Name', 'Email', 'Phone', 'Address', 'Rate', 'Currency', 'Billing Frequency', 'Invoices', 'Total Billed', 'Total Paid', 'Outstanding'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT c.client_name, c.email, c.phone, c.address, c.monthly_rate, c.currency, c.billing_frequency, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM invoxa_clients c LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') WHERE 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
+        $res = $mysqli->query("SELECT c.client_name, c.email, c.phone, c.address, c.monthly_rate, c.currency, c.billing_frequency, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM invoxa_clients c LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') WHERE 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
         while ($r = $res->fetch_assoc()) {
-            $r['currency'] = invoxaResolveCurrency($r['currency'], $settings);
+            $r['currency'] = enxureResolveCurrency($r['currency'], $settings);
             $r['outstanding'] = max(0, $r['total_billed'] - $r['total_paid']);
             fputcsv($out, $r, ',', '"', "\\");
         }
@@ -333,7 +333,7 @@ function invoxaHandleExportRoutes($mysqli, array $settings): void
         fputcsv($out, ['Quote Number', 'Client Name', 'Email', 'Quote Date', 'Amount', 'Currency', 'Expires'], ',', '"', "\\");
         $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, amount, currency, quote_expires_at FROM invoxa_invoices WHERE is_quote = 1 $testFilter ORDER BY invoice_date DESC");
         while ($r = $res->fetch_assoc()) {
-            $r['currency'] = invoxaResolveCurrency($r['currency'], $settings);
+            $r['currency'] = enxureResolveCurrency($r['currency'], $settings);
             fputcsv($out, $r, ',', '"', "\\");
         }
         fclose($out);

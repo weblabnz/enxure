@@ -56,7 +56,7 @@
                             <div class="card-body doc-content">
                                 <?php
                                 $__readmeFile = DOCS_DIR . 'README.md';
-                                echo is_file($__readmeFile) ? invoxaRenderMarkdown(file_get_contents($__readmeFile)) : '<p>Document not found.</p>';
+                                echo is_file($__readmeFile) ? enxureRenderMarkdown(file_get_contents($__readmeFile)) : '<p>Document not found.</p>';
                                 ?>
                             </div>
                         </div>
@@ -66,7 +66,7 @@
                             <div class="card-body doc-content">
                                 <?php
                                 $__installFile = DOCS_DIR . 'INSTALL.md';
-                                echo is_file($__installFile) ? invoxaRenderMarkdown(file_get_contents($__installFile)) : '<p>Document not found.</p>';
+                                echo is_file($__installFile) ? enxureRenderMarkdown(file_get_contents($__installFile)) : '<p>Document not found.</p>';
                                 ?>
                             </div>
                         </div>
@@ -108,7 +108,7 @@
                             <div class="card-body doc-content">
                                 <?php
                                 $__changelogFile = DOCS_DIR . 'CHANGELOG.md';
-                                echo is_file($__changelogFile) ? invoxaRenderChangelog(file_get_contents($__changelogFile)) : '<p>Document not found.</p>';
+                                echo is_file($__changelogFile) ? enxureRenderChangelog(file_get_contents($__changelogFile)) : '<p>Document not found.</p>';
                                 ?>
                             </div>
                         </div>
@@ -118,14 +118,14 @@
                         <div class="card">
                             <div class="card-body doc-content">
                                 <h1>License</h1>
-                                <p>Invoxa is free and open source software, licensed under the GNU Affero General
+                                <p>enXure is free and open source software, licensed under the GNU Affero General
                                     Public License v3.0 (AGPL-3.0). You can self-host it, read every line of it, and
                                     modify your own copy — the full, unmodified license text is reproduced below
                                     exactly as it must be distributed. A paid license key is a separate, optional
                                     unlock for seven specific features (Stripe/PayPal payment collection, recurring
                                     billing automation, the Client Portal, the external API, Reporting &amp;
                                     Statistics, adding teammates beyond your own account, and removing the "Powered
-                                    by Invoxa" credit) — see <strong>Security</strong> under Features for how that
+                                    by enXure" credit) — see <strong>Security</strong> under Features for how that
                                     works.</p>
                                 <?php
                                 $__licenseFile = DOCS_DIR . 'LICENSE';
@@ -141,12 +141,12 @@
                         <div class="card">
                             <div class="card-body doc-content">
                                 <h1>Source Code</h1>
-                                <p>Invoxa's source is public on GitLab: <a href="https://gitlab.com/weblabnz/invoxa"
-                                        target="_blank">gitlab.com/weblabnz/invoxa</a>. Read the code, file an issue, or
+                                <p>enXure's source is public on GitLab: <a href="https://gitlab.com/weblabnz/enxure"
+                                        target="_blank">gitlab.com/weblabnz/enxure</a>. Read the code, file an issue, or
                                     fork it for your own self-hosted copy — see <strong>License (AGPL-3.0)</strong> for
                                     what that license requires if you distribute a modified version.</p>
                                 <p>Don't want a GitLab account just to report something? Email
-                                    <code>contact-project+weblabnz-invoxa-inv@incoming.gitlab.com</code> instead — it
+                                    <code>contact-project+weblabnz-enxure-inv@incoming.gitlab.com</code> instead — it
                                     creates the same issue either way.</p>
                             </div>
                         </div>
@@ -155,7 +155,7 @@
                     <div class="subnav-pane" id="docs-pane-overview">
                         <div class="card">
                             <div class="card-body doc-content">
-                                <h1>What Invoxa Does</h1>
+                                <h1>What enXure Does</h1>
                                 <p>A self-hosted invoicing and billing tool for one business — one or more
                                     accounts (Settings &gt; Users), each Admin or Member. Each topic under
                                     <strong>Features</strong> in the sidebar covers one part in more depth — this
@@ -193,7 +193,7 @@
                                     items as the job needs — each row has its own code, description, and amount, and
                                     any row can be removed again before sending. Two invoice-level fields sit under
                                     the line items: <strong>Discount %</strong> and <strong>Tax %</strong>, both
-                                    optional. As soon as either is non-zero, Invoxa switches on a live
+                                    optional. As soon as either is non-zero, enXure switches on a live
                                     Subtotal/Discount/Tax/Total breakdown so the math is visible before you send
                                     anything — leave both at zero and the invoice just totals the line items
                                     directly, no breakdown shown.</p>
@@ -251,7 +251,7 @@
                                     frequency; a client billed weekly and one billed annually can happily share the
                                     same cron trigger.</p>
                                 <h2>Double-billing guard</h2>
-                                <p>Before generating an invoice for a client, Invoxa checks whether that client
+                                <p>Before generating an invoice for a client, enXure checks whether that client
                                     already has an invoice in the current period — the current week/month/quarter/
                                     year, matched against their own frequency — and skips them if one already exists.
                                     That's what makes a misconfigured cron schedule (say, hourly instead of monthly)
@@ -325,7 +325,7 @@
                                     faster-feeling confirmation screen; it is never itself trusted to mark anything
                                     paid, so a closed tab or a flaky redirect can't cause a missed payment.</p>
                                 <h2>Refunds</h2>
-                                <p>A refund issued from the Stripe or PayPal dashboard (not from inside Invoxa —
+                                <p>A refund issued from the Stripe or PayPal dashboard (not from inside enXure —
                                     there's no refund button here, by design) reopens the invoice and reduces its
                                     recorded paid amount, arriving through that same webhook path. It requires
                                     subscribing your existing webhook to one extra event per gateway —
@@ -399,12 +399,12 @@
                                 <p>From Settings &gt; Account, the Two-Factor Authentication card's
                                     <strong>Enable Two-Factor Authentication</strong> button generates a fresh TOTP
                                     secret and shows it on screen
-                                    for you to add to any standard authenticator app (Invoxa implements TOTP and
+                                    for you to add to any standard authenticator app (enXure implements TOTP and
                                     base32 itself — no external service is contacted). You confirm setup by entering
                                     the 6-digit code the app produces; from that point on, login requires the
                                     password followed by a fresh code. At the same moment setup is confirmed, ten
                                     single-use <strong>backup codes</strong> are generated and shown exactly once —
-                                    save them somewhere safe, since Invoxa doesn't display them again. Each backup
+                                    save them somewhere safe, since enXure doesn't display them again. Each backup
                                     code can substitute for a TOTP code at login exactly once; once used, or once
                                     <strong>Regenerate Backup Codes</strong> is clicked, it's dead. Both
                                     <strong>Regenerate Backup Codes</strong> and <strong>Disable Two-Factor
@@ -429,14 +429,14 @@
                                     manage the rest. Adding a second (or further) account requires a license —
                                     editing or removing an existing one stays free either way, the same pattern as
                                     API tokens and the Client Portal below.</p>
-                                <h2>Invoxa is open source — licensing only unlocks seven extras</h2>
-                                <p>Invoxa is free and open source (AGPL-3.0): client and invoice management, quotes,
+                                <h2>enXure is open source — licensing only unlocks seven extras</h2>
+                                <p>enXure is free and open source (AGPL-3.0): client and invoice management, quotes,
                                     manual payments, backups, and 2FA all work fully with no license key at all — an
                                     unlicensed install is never locked out of its own account or its own data. A
                                     license is a paid, optional unlock for seven specific capabilities: Stripe/PayPal
                                     payment collection, recurring billing automation, the Client Portal, the
                                     external API, Reporting &amp; Statistics, adding teammates beyond your own
-                                    account, and removing the "Powered by Invoxa" credit line from invoices and
+                                    account, and removing the "Powered by enXure" credit line from invoices and
                                     emails. Everything else in this Docs section works exactly the same whether or
                                     not you've added a key.</p>
                             </div>
@@ -516,7 +516,7 @@
                                     account-security event — 2FA enabled/disabled, API token created/revoked/deleted,
                                     a login lockout — is written here with a timestamp, making it the one place to
                                     answer "what actually happened, and when" on this instance. It also records when
-                                    a Stripe or PayPal webhook arrives referencing an invoice number Invoxa doesn't
+                                    a Stripe or PayPal webhook arrives referencing an invoice number enXure doesn't
                                     recognize, rather than silently dropping it. Retention is configurable from Data
                                     Management (30, 180, or 365 days, or kept forever) — older entries are pruned
                                     automatically once a retention period is set, rather than growing the table

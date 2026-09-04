@@ -1,10 +1,10 @@
 <?php
 /**
- * Invoxa license verification.
+ * enXure license verification.
  *
- * Invoxa is open source (AGPL-3.0, see ../../LICENSE) and ships as plain,
+ * enXure is open source (AGPL-3.0, see ../../LICENSE) and ships as plain,
  * readable source. The license key doesn't gate access to the source, only
- * a handful of paid features at runtime (see invoxa.php).
+ * a handful of paid features at runtime (see enxure.php).
  *
  * Offline check only, no network calls. A license is a single string:
  *   base64(email|domain|issued_date) + '.' + base64(ed25519 signature)
@@ -23,7 +23,7 @@
  * technical lock.
  */
 
-define('INVOXA_LICENSE_PUBLIC_KEY_B64', 'JkJJB397P8ayL0GbfAUDQ/bZRJxNgsqSlS4wcN7KuJo=');
+define('ENXURE_LICENSE_PUBLIC_KEY_B64', 'JkJJB397P8ayL0GbfAUDQ/bZRJxNgsqSlS4wcN7KuJo=');
 
 /**
  * @param bool $skipDomainCheck Pass true only for requests already authenticated
@@ -39,7 +39,7 @@ function licenseIsValid($mysqli, array $settings, bool $skipDomainCheck = false,
 {
     // Public demo instances set this so paid features can never be unlocked,
     // even with a valid key — the check below never reads the license_key.
-    if (getenv('INVOXA_DEMO_MODE')) {
+    if (getenv('ENXURE_DEMO_MODE')) {
         $reason = 'demo_mode';
         return false;
     }
@@ -59,7 +59,7 @@ function licenseIsValid($mysqli, array $settings, bool $skipDomainCheck = false,
 
     $payload = base64_decode($payloadB64, true);
     $signature = base64_decode($sigB64, true);
-    $publicKey = base64_decode(INVOXA_LICENSE_PUBLIC_KEY_B64, true);
+    $publicKey = base64_decode(ENXURE_LICENSE_PUBLIC_KEY_B64, true);
     if ($payload === false || $signature === false || $publicKey === false) {
         return false;
     }
@@ -100,8 +100,8 @@ function licenseIsValid($mysqli, array $settings, bool $skipDomainCheck = false,
         return true;
     }
 
-    $requestHost = invoxaNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
-    if ($requestHost !== '' && $requestHost === invoxaNormaliseDomain($licensedDomain)) {
+    $requestHost = enxureNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
+    if ($requestHost !== '' && $requestHost === enxureNormaliseDomain($licensedDomain)) {
         $reason = 'valid';
         return true;
     }
@@ -109,7 +109,7 @@ function licenseIsValid($mysqli, array $settings, bool $skipDomainCheck = false,
     return false;
 }
 
-function invoxaNormaliseDomain(string $domain): string
+function enxureNormaliseDomain(string $domain): string
 {
     $domain = strtolower(trim($domain));
     $domain = preg_replace('/:\d+$/', '', $domain);   // strip port

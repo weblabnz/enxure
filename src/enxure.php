@@ -8,7 +8,7 @@ try {
         getenv('DB_HOST') ?: 'db',
         getenv('DB_USER') ?: '',
         getenv('DB_PASSWORD') ?: '',
-        getenv('DB_NAME') ?: 'invoxa',
+        getenv('DB_NAME') ?: 'enxure',
         (int) (getenv('DB_PORT') ?: 3306)
     );
     $mysqli->set_charset('utf8mb4');
@@ -22,12 +22,12 @@ try {
 // ── Cron API Key ─────────────────────────────────────────────────────────────
 // Unset/empty means the cron path can never authenticate — fails closed, no shared default.
 define('CRON_SECRET', getenv('CRON_SECRET') ?: '');
-define('INSTANCE_LABEL', getenv('INVOXA_INSTANCE_LABEL') ?: '');
+define('INSTANCE_LABEL', getenv('ENXURE_INSTANCE_LABEL') ?: '');
 
 // ── Paths / vendored libs ────────────────────────────────────────────────────
-define('INVOICES_DIR', '/usr/share/nginx/html/invoxa-invoices/');
-define('INVOICES_URL', '/invoxa-invoices/');
-define('BACKUPS_DIR', '/usr/share/nginx/html/invoxa-backups/');
+define('INVOICES_DIR', '/usr/share/nginx/html/enxure-invoices/');
+define('INVOICES_URL', '/enxure-invoices/');
+define('BACKUPS_DIR', '/usr/share/nginx/html/enxure-backups/');
 // Receipts and attachments share the invoices webroot (see INVOICES_DIR),
 // each in its own subfolder keyed by invoice id.
 define('RECEIPTS_DIR', INVOICES_DIR . 'receipts/');
@@ -36,16 +36,16 @@ define('ATTACHMENTS_DIR', INVOICES_DIR . 'attachments/');
 define('ATTACHMENTS_URL', INVOICES_URL . 'attachments/');
 define('PHPMAILER_DIR', __DIR__ . '/lib/phpmailer/');
 define('PDF_AUTOLOAD', __DIR__ . '/lib/pdf_autoload.php');
-define('LOGO_FILENAME', 'invoxa_logo.jpg');
-define('CRONTAB_PATH', '/etc/invoxa-crontab/root');
+define('LOGO_FILENAME', 'enxure_logo.jpg');
+define('CRONTAB_PATH', '/etc/enxure-crontab/root');
 define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.12.2');
+define('APP_VERSION', '3.0.0');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
-// counter (see invoxaRegisterFailedLogin()).
+// counter (see enxureRegisterFailedLogin()).
 define('LOGIN_MAX_ATTEMPTS', 5);
 define('LOGIN_LOCKOUT_MINUTES', 15);
 define('PASSWORD_MIN_LENGTH', 8);
@@ -75,7 +75,7 @@ require_once __DIR__ . '/lib/settings.php';
 if (isset($_GET['doc']) && in_array($_GET['doc'], ['readme', 'install'], true)) {
     header('Content-Type: text/html; charset=utf-8');
     $__docFile = DOCS_DIR . ($_GET['doc'] === 'readme' ? 'README.md' : 'INSTALL.md');
-    echo is_file($__docFile) ? invoxaRenderMarkdown(file_get_contents($__docFile)) : '<p>Document not found.</p>';
+    echo is_file($__docFile) ? enxureRenderMarkdown(file_get_contents($__docFile)) : '<p>Document not found.</p>';
     exit;
 }
 
@@ -110,9 +110,9 @@ if (isset($_GET['portal'])) {
     if ($portalClient && !empty($portalClient['portal_token_expires_at']) && strtotime($portalClient['portal_token_expires_at']) < time()) {
         $portalClient = null; // expired — treated identically to "not found" below, no separate branch needed
     }
-    $businessName = $settings['business_name'] ?? 'Invoxa';
+    $businessName = $settings['business_name'] ?? 'enXure';
     $brandColor = $settings['brand_color'] ?? '#4a90e2';
-    $brandColorHover = invoxaShadeColor($brandColor, -0.15);
+    $brandColorHover = enxureShadeColor($brandColor, -0.15);
     $portalStyle ='*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:#0a0f1c;color:#f7f9fc;margin:0;padding:2rem 1.25rem;}.wrap{max-width:760px;margin:0 auto;}h1{font-size:1.4rem;margin:0 0 0.25rem;}h2{font-size:1.05rem;margin:2rem 0 0.75rem;}.sub{color:#90a0bb;font-size:0.9rem;margin:0 0 2rem;}table{width:100%;border-collapse:collapse;background:#131b2e;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);}th,td{padding:0.85rem 1rem;text-align:left;font-size:0.9rem;}th{background:rgba(255,255,255,0.04);color:#90a0bb;font-weight:600;text-transform:uppercase;font-size:0.75rem;letter-spacing:0.04em;}td{border-top:1px solid rgba(255,255,255,0.06);}.status{display:inline-block;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.78rem;font-weight:600;}.status-paid{background:rgba(34,197,94,0.15);color:#4ade80;}.status-overdue{background:rgba(239,68,68,0.15);color:#f87171;}.status-outstanding{background:rgba(234,179,8,0.15);color:#facc15;}.status-void{background:rgba(148,163,184,0.15);color:#94a3b8;}.status-quote{background:rgba(139,92,246,0.15);color:#a78bfa;}.empty{color:#90a0bb;text-align:center;padding:3rem 1rem;}.pay-btn,.accept-btn{display:inline-block;background:'.$brandColor.';color:#fff;text-decoration:none;padding:0.4rem 0.85rem;border-radius:6px;font-size:0.82rem;font-weight:600;white-space:nowrap;border:none;font-family:inherit;cursor:pointer;}.pay-btn:hover,.accept-btn:hover{background:'.$brandColorHover.';}.confirm-box{background:#131b2e;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:1.5rem;}.confirm-actions{display:flex;gap:0.75rem;margin-top:1.25rem;}.cancel-link{display:inline-flex;align-items:center;color:#90a0bb;text-decoration:none;font-size:0.9rem;padding:0.4rem 0.85rem;}.back-link{color:'.$brandColor.';}';
     if (!$portalClient) {
         http_response_code(404);
@@ -158,7 +158,7 @@ if (isset($_GET['portal'])) {
             echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>This quote has expired</h1><p class="sub">Contact ' . htmlspecialchars($businessName) . ' for a new one. <a href="?portal=' . htmlspecialchars($portalToken) . '" class="back-link">Back to your invoices</a></p></div></body></html>';
             exit;
         }
-        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Accept quote ' . htmlspecialchars($quoteRow['invoice_number']) . '?</h1><div class="confirm-box"><p style="margin:0; color:#90a0bb;">' . htmlspecialchars(invoxaResolveCurrency($quoteRow['currency'] ?? '', $settings)) . ' ' . number_format((float) $quoteRow['amount'], 2) . '. Accepting turns this into a real invoice — ' . htmlspecialchars($businessName) . ' will be notified right away.</p><form method="POST" class="confirm-actions"><input type="hidden" name="confirm_accept_quote" value="' . (int) $quoteId . '"><button type="submit" class="accept-btn">Accept Quote</button><a href="?portal=' . htmlspecialchars($portalToken) . '" class="cancel-link">Cancel</a></form></div></div></body></html>';
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Accept quote ' . htmlspecialchars($quoteRow['invoice_number']) . '?</h1><div class="confirm-box"><p style="margin:0; color:#90a0bb;">' . htmlspecialchars(enxureResolveCurrency($quoteRow['currency'] ?? '', $settings)) . ' ' . number_format((float) $quoteRow['amount'], 2) . '. Accepting turns this into a real invoice — ' . htmlspecialchars($businessName) . ' will be notified right away.</p><form method="POST" class="confirm-actions"><input type="hidden" name="confirm_accept_quote" value="' . (int) $quoteId . '"><button type="submit" class="accept-btn">Accept Quote</button><a href="?portal=' . htmlspecialchars($portalToken) . '" class="cancel-link">Cancel</a></form></div></div></body></html>';
         exit;
     }
     $invRes = $mysqli->prepare("SELECT invoice_number, invoice_date, due_date, amount, currency, paid_amount, status FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND status != 'draft' ORDER BY invoice_date DESC");
@@ -169,7 +169,7 @@ if (isset($_GET['portal'])) {
     $rowsHtml = '';
     $today = date('Y-m-d');
     while ($inv = $portalInvoices->fetch_assoc()) {
-        $rowCcy = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
+        $rowCcy = enxureResolveCurrency($inv['currency'] ?? '', $settings);
         $paidAmt = (float) ($inv['paid_amount'] ?? 0);
         $amt = (float) $inv['amount'];
         $unpaid = !in_array($inv['status'], ['paid', 'void'], true) && $paidAmt < $amt;
@@ -204,7 +204,7 @@ if (isset($_GET['portal'])) {
             ? '<span class="status status-overdue">Expired</span>'
             : '<a href="?portal=' . rawurlencode($portalToken) . '&accept_quote=' . (int) $q['id'] . '" class="accept-btn">Accept Quote</a>';
         $expiresCell = !empty($q['quote_expires_at']) ? htmlspecialchars($q['quote_expires_at']) : '—';
-        $quoteRowsHtml .= '<tr><td>' . htmlspecialchars($q['invoice_number']) . '</td><td>' . htmlspecialchars(substr($q['invoice_date'], 0, 10)) . '</td><td>' . htmlspecialchars(invoxaResolveCurrency($q['currency'] ?? '', $settings)) . ' ' . number_format((float) $q['amount'], 2) . '</td><td>' . $expiresCell . '</td><td>' . $actionCell . '</td></tr>';
+        $quoteRowsHtml .= '<tr><td>' . htmlspecialchars($q['invoice_number']) . '</td><td>' . htmlspecialchars(substr($q['invoice_date'], 0, 10)) . '</td><td>' . htmlspecialchars(enxureResolveCurrency($q['currency'] ?? '', $settings)) . ' ' . number_format((float) $q['amount'], 2) . '</td><td>' . $expiresCell . '</td><td>' . $actionCell . '</td></tr>';
     }
     $quotesSectionHtml = $quoteRowsHtml !== ''
         ? '<h2>Open Quotes</h2><table><thead><tr><th>Quote</th><th>Date</th><th>Amount</th><th>Valid Until</th><th></th></tr></thead><tbody>' . $quoteRowsHtml . '</tbody></table>'
@@ -214,7 +214,7 @@ if (isset($_GET['portal'])) {
     exit;
 }
 
-invoxaHandlePublicPaymentRoutes($mysqli, $settings, $licenseValid);
+enxureHandlePublicPaymentRoutes($mysqli, $settings, $licenseValid);
 
 require_once __DIR__ . '/lib/api_v1.php';
 
@@ -271,9 +271,9 @@ function generateInvoiceNumber($mysqli, $clientKey, $clientName, array $settings
 
 // (validDateOverride now lives in lib/invoice_helpers.php)
 
-function invoxaLicenseSignatureOk($mysqli, array $settings): bool
+function enxureLicenseSignatureOk($mysqli, array $settings): bool
 {
-    if (getenv('INVOXA_DEMO_MODE')) {
+    if (getenv('ENXURE_DEMO_MODE')) {
         return false;
     }
     $license = trim($settings['license_key'] ?? '');
@@ -282,7 +282,7 @@ function invoxaLicenseSignatureOk($mysqli, array $settings): bool
     }
     $payload = base64_decode($m[1], true);
     $signature = base64_decode($m[2], true);
-    $publicKey = base64_decode(INVOXA_LICENSE_PUBLIC_KEY_B64, true);
+    $publicKey = base64_decode(ENXURE_LICENSE_PUBLIC_KEY_B64, true);
     if ($payload === false || $signature === false || $publicKey === false) {
         return false;
     }
@@ -305,14 +305,14 @@ function invoxaLicenseSignatureOk($mysqli, array $settings): bool
     if ($isCron) {
         return true;
     }
-    $host = invoxaNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
-    return $host !== '' && $host === invoxaNormaliseDomain($fields[1]);
+    $host = enxureNormaliseDomain($_SERVER['HTTP_HOST'] ?? '');
+    return $host !== '' && $host === enxureNormaliseDomain($fields[1]);
 }
 
 function processInvoice($mysqli, $client, $amount, $description, $emailPassword, $lineItems = null, $dueDateOverride = null, $memo = null, $discountPct = 0.0, $taxRate = 0.0)
 {
     global $settings;
-    $__unlocked = invoxaLicenseSignatureOk($mysqli, $settings);
+    $__unlocked = enxureLicenseSignatureOk($mysqli, $settings);
     $showPoweredBy = !($__unlocked && ($settings['hide_powered_by'] ?? '0') === '1');
     $date = date("Y-m-d");
     $termsDays = (int) ($client['payment_terms_days'] ?? 21);
@@ -324,16 +324,16 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
 
     $brandColor = $settings['brand_color'] ?? '#4a90e2';
     $footerText = $settings['footer_text'] ?? '';
-    $currencyCode = invoxaResolveCurrency($client['currency'] ?? '', $settings);
-    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
+    $currencyCode = enxureResolveCurrency($client['currency'] ?? '', $settings);
+    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'enXure');
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
     $invoiceTemplate = $settings['invoice_template'] ?? 'detailed';
 
     // Pay Now only appears if a gateway is enabled AND a public URL is
-    // configured (see invoxaPublicBaseUrl() — cron-triggered invoices have
+    // configured (see enxurePublicBaseUrl() — cron-triggered invoices have
     // no request context to infer one from).
     $payUrl = null;
-    $publicBase = invoxaPublicBaseUrl($settings);
+    $publicBase = enxurePublicBaseUrl($settings);
     if ($__unlocked && $publicBase !== null && (($settings['stripe_enabled'] ?? '0') === '1' || ($settings['paypal_enabled'] ?? '0') === '1')) {
         $payUrl = $publicBase . '/?pay=' . rawurlencode($invNum);
     }
@@ -422,14 +422,14 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
     $actionType = $emailSent ? 'email_sent' : 'email_failed';
     $notes = $emailSent ? "Invoice generated and emailed to {$client['email']}" : "Send failed: " . $errorMsg;
     $iid = $stmt->insert_id;
-    invoxaLogAction($mysqli, $iid, $invNum, $actionType, $notes);
+    enxureLogAction($mysqli, $iid, $invNum, $actionType, $notes);
 
     if (!$emailSent) {
         notifyChannel($mysqli, $settings, 'notify_on_email_failed', "\xE2\x9C\x89\xEF\xB8\x8F Invoice email failed to send — {$invNum} ({$client['client_name']}): {$errorMsg}");
     }
 
     if ($memo !== null && trim($memo) !== '') {
-        invoxaLogAction($mysqli, $iid, $invNum, 'note_added', trim($memo));
+        enxureLogAction($mysqli, $iid, $invNum, 'note_added', trim($memo));
     }
 
     return ['success' => $emailSent, 'invNum' => $invNum, 'error' => $errorMsg];
@@ -458,7 +458,7 @@ function notifyChannel($mysqli, array $settings, string $eventToggleKey, string 
     }
     if (!$result['success']) {
         $notes = ucfirst($channel) . ' notification failed: ' . $result['error'];
-        invoxaLogAction($mysqli, null, '', 'notification_failed', $notes);
+        enxureLogAction($mysqli, null, '', 'notification_failed', $notes);
     }
 }
 
@@ -513,7 +513,7 @@ function convertQuoteToInvoice($mysqli, array $settings, int $quoteId, string $s
     $actionNotes = $source === 'client'
         ? "Quote {$row['invoice_number']} accepted by {$clientName} via the Client Portal, now invoice {$newNum}"
         : "Quote {$row['invoice_number']} converted to invoice {$newNum}";
-    invoxaLogAction($mysqli, $quoteId, $newNum, $actionType, $actionNotes);
+    enxureLogAction($mysqli, $quoteId, $newNum, $actionType, $actionNotes);
 
     if ($source === 'client') {
         notifyChannel($mysqli, $settings, 'notify_on_quote_accepted', "\xF0\x9F\x93\x9D Quote accepted — {$row['invoice_number']} ({$clientName}), now invoice {$newNum}");
@@ -522,14 +522,14 @@ function convertQuoteToInvoice($mysqli, array $settings, int $quoteId, string $s
     return ['success' => true, 'invoice_number' => $newNum];
 }
 
-// Logs an audit-log entry when a webhook references an invoice Invoxa
+// Logs an audit-log entry when a webhook references an invoice enXure
 // doesn't recognize (e.g. deleted after the checkout session was created).
 // The webhook handlers still return 200 either way, but this leaves a trail.
-function invoxaLogUnmatchedWebhook($mysqli, string $provider, string $eventType, string $reference): void
+function enxureLogUnmatchedWebhook($mysqli, string $provider, string $eventType, string $reference): void
 {
     global $settings;
-    $notes = ucfirst($provider) . " webhook ({$eventType}) referenced an invoice/reference Invoxa doesn't recognize: '{$reference}'. Payment not credited.";
-    invoxaLogAction($mysqli, null, '', 'webhook_unmatched', $notes);
+    $notes = ucfirst($provider) . " webhook ({$eventType}) referenced an invoice/reference enXure doesn't recognize: '{$reference}'. Payment not credited.";
+    enxureLogAction($mysqli, null, '', 'webhook_unmatched', $notes);
     notifyChannel($mysqli, $settings, 'notify_on_webhook_unmatched', "\xE2\x9A\xA0\xEF\xB8\x8F " . ucfirst($provider) . " payment webhook didn't match any invoice ('{$reference}') — payment not credited.");
 }
 
@@ -542,9 +542,9 @@ function resendInvoiceEmail($mysqli, array $inv, array $settings, string $emailP
     require_once PHPMAILER_DIR . 'PHPMailer.php';
     require_once PHPMAILER_DIR . 'SMTP.php';
     require_once PHPMAILER_DIR . 'Exception.php';
-    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
+    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'enXure');
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
-    $currencyCode = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
+    $currencyCode = enxureResolveCurrency($inv['currency'] ?? '', $settings);
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {
         $mail->isSMTP();
@@ -592,9 +592,9 @@ function sendReminderEmailForInvoice($mysqli, array $inv, array $settings, strin
     require_once PHPMAILER_DIR . 'SMTP.php';
     require_once PHPMAILER_DIR . 'Exception.php';
 
-    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'Invoxa');
+    $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'enXure');
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: '';
-    $currencyCode = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
+    $currencyCode = enxureResolveCurrency($inv['currency'] ?? '', $settings);
     $outstanding = (float) $inv['amount'] - (float) ($inv['paid_amount'] ?? 0);
     $daysOverdue = (int) floor((time() - strtotime($inv['due_date'])) / 86400);
     $vars = [
@@ -674,7 +674,7 @@ function sendOverdueReminders($mysqli, array $settings, string $emailPassword): 
         $notes = $result['sent']
             ? "Overdue reminder emailed to {$inv['recipient_email']} ({$result['days_overdue']} days overdue)"
             : "Overdue reminder failed: " . $result['error'];
-        invoxaLogAction($mysqli, $inv['id'], $inv['invoice_number'], $actionType, $notes);
+        enxureLogAction($mysqli, $inv['id'], $inv['invoice_number'], $actionType, $notes);
 
         // Fired regardless of whether the email itself sent — a broken SMTP
         // config shouldn't also silence the Telegram/Slack alert.
@@ -751,9 +751,9 @@ function applyLateFees($mysqli, array $settings, string $emailPassword): array
         $notes = $result['success']
             ? "Late fee invoice {$result['invNum']} generated for " . number_format($feeAmount, 2)
             : "Late fee invoice {$result['invNum']} generated for " . number_format($feeAmount, 2) . " but email failed: " . $result['error'];
-        invoxaLogAction($mysqli, $inv['id'], $inv['invoice_number'], 'late_fee_charged', $notes);
+        enxureLogAction($mysqli, $inv['id'], $inv['invoice_number'], 'late_fee_charged', $notes);
 
-        $currencyCode = invoxaResolveCurrency($client['currency'] ?? '', $settings);
+        $currencyCode = enxureResolveCurrency($client['currency'] ?? '', $settings);
         notifyChannel($mysqli, $settings, 'notify_on_late_fee', "\xE2\x9A\xA0\xEF\xB8\x8F Late fee charged — {$inv['invoice_number']} ({$client['client_name']}): {$currencyCode} " . number_format($feeAmount, 2));
 
         if ($result['success'])
@@ -782,7 +782,7 @@ function pruneAuditActions($mysqli, array $settings): int
     // Only logged when the feature is on, to avoid a "pruned 0" entry every
     // cron cycle. Inserted after the delete so it can't be swept up by this run.
     $notes = "Removed {$pruned} audit log entr" . ($pruned === 1 ? 'y' : 'ies') . " older than {$days} days";
-    invoxaLogAction($mysqli, null, '', 'audit_log_pruned', $notes);
+    enxureLogAction($mysqli, null, '', 'audit_log_pruned', $notes);
 
     return $pruned;
 }
@@ -795,7 +795,7 @@ function renderInvoiceRows(array $invoices): string
     ob_start();
     foreach ($invoices as $inv):
         $isOverdue = (!in_array($inv['status'], ['paid', 'void'], true) && strtotime($inv['due_date']) < time());
-        $rowCcy = invoxaResolveCurrency($inv['currency'] ?? '', $settings);
+        $rowCcy = enxureResolveCurrency($inv['currency'] ?? '', $settings);
         ?>
         <tr>
             <td><input type="checkbox" class="invoice-select-cb" value="<?= $inv['id'] ?>"
@@ -898,7 +898,7 @@ function renderInvoiceRows(array $invoices): string
     return ob_get_clean();
 }
 
-function invoxaHandleImportInvoicesCsv($mysqli, array $settings): void
+function enxureHandleImportInvoicesCsv($mysqli, array $settings): void
 {
 if (!isset($_FILES['invoices_file']) || $_FILES['invoices_file']['error'] !== UPLOAD_ERR_OK) {
     echo json_encode(['success' => false, 'error' => 'No file uploaded, or the upload failed.']);
@@ -913,11 +913,11 @@ if ($fh === false) {
     echo json_encode(['success' => false, 'error' => 'Failed to read the uploaded file.']);
     exit;
 }
-echo json_encode(array_merge(['success' => true], invoxaImportInvoicesCsvRows($mysqli, $fh, $settings)));
+echo json_encode(array_merge(['success' => true], enxureImportInvoicesCsvRows($mysqli, $fh, $settings)));
 exit;
 }
 
-function invoxaImportInvoicesCsvRows($mysqli, $fh, array $settings): array
+function enxureImportInvoicesCsvRows($mysqli, $fh, array $settings): array
 {
 $clientsByName = [];
 $cRes = $mysqli->query("SELECT client_key, client_name, email, currency, payment_terms_days FROM invoxa_clients");
@@ -968,13 +968,13 @@ while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
     $dueDateTs = strtotime(trim($row[4] ?? ''));
     $termsDays = (int) ($client['payment_terms_days'] ?? 21);
     $dueDate = $dueDateTs ? date('Y-m-d', $dueDateTs) : date('Y-m-d', strtotime("$invoiceDate +{$termsDays} days"));
-    $amount = invoxaParseAmount($row[5] ?? '0');
-    $currency = invoxaNormalizeCurrencyCode(trim($row[6] ?? '')) ?: ($client['currency'] ?? '');
+    $amount = enxureParseAmount($row[5] ?? '0');
+    $currency = enxureNormalizeCurrencyCode(trim($row[6] ?? '')) ?: ($client['currency'] ?? '');
     $status = strtolower(trim($row[7] ?? ''));
     if (!in_array($status, $validStatuses, true))
         $status = 'pending';
     $paidAmountRaw = trim($row[8] ?? '');
-    $paidAmount = $paidAmountRaw !== '' ? invoxaParseAmount($paidAmountRaw) : 0.0;
+    $paidAmount = $paidAmountRaw !== '' ? enxureParseAmount($paidAmountRaw) : 0.0;
     $paidAmountParam = $paidAmount > 0 ? $paidAmount : null;
     $paidAtTs = strtotime(trim($row[9] ?? ''));
     $paidAt = $paidAtTs ? date('Y-m-d H:i:s', $paidAtTs) : ($paidAmount > 0 ? $invoiceDate : null);
@@ -1009,7 +1009,7 @@ function renderQuoteRows($qRes): string
     ob_start();
     while ($q = $qRes->fetch_assoc()):
         $__quoteExpired = !empty($q['quote_expires_at']) && $q['quote_expires_at'] < date('Y-m-d');
-        $rowCcy = invoxaResolveCurrency($q['currency'] ?? '', $settings);
+        $rowCcy = enxureResolveCurrency($q['currency'] ?? '', $settings);
         ?>
         <tr>
             <td><input type="checkbox" class="quote-select-cb" value="<?= $q['id'] ?>" data-expired="<?= $__quoteExpired ? '1' : '0' ?>" onchange="updateQuoteBulkBar()"></td>
@@ -1082,7 +1082,7 @@ function renderExpenseRows(array $expenses): string
     return ob_get_clean();
 }
 
-function invoxaHandleImportExpensesCsv($mysqli): void
+function enxureHandleImportExpensesCsv($mysqli): void
 {
 if (!isset($_FILES['expenses_file']) || $_FILES['expenses_file']['error'] !== UPLOAD_ERR_OK) {
     echo json_encode(['success' => false, 'error' => 'No file uploaded, or the upload failed.']);
@@ -1097,11 +1097,11 @@ if ($fh === false) {
     echo json_encode(['success' => false, 'error' => 'Failed to read the uploaded file.']);
     exit;
 }
-echo json_encode(array_merge(['success' => true], invoxaImportExpensesCsvRows($mysqli, $fh)));
+echo json_encode(array_merge(['success' => true], enxureImportExpensesCsvRows($mysqli, $fh)));
 exit;
 }
 
-function invoxaImportExpensesCsvRows($mysqli, $fh): array
+function enxureImportExpensesCsvRows($mysqli, $fh): array
 {
 $categories = expenseCategories();
 $categoryByLabel = [];
@@ -1119,7 +1119,7 @@ while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
         continue;
     }
     $vendor = trim($row[1] ?? '');
-    $amount = invoxaParseAmount($row[3] ?? '0');
+    $amount = enxureParseAmount($row[3] ?? '0');
     if ($vendor === '' || $amount <= 0) {
         $skipped++;
         continue;
@@ -1225,7 +1225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     try {
         // Open-core: everything works without a license except seven paid
         // capabilities. Five are POST actions, gated here in one place; the
-        // other two (Reporting & Statistics, hiding "Powered by Invoxa") are
+        // other two (Reporting & Statistics, hiding "Powered by enXure") are
         // checked at render time — see renderStatsSection() and
         // save_business_identity below.
         // - Stripe/PayPal payment collection (configuring it, not the webhook).
@@ -1240,7 +1240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         //   or removing one — update_user/delete_user — stays free, same pattern
         //   as the others above).
         $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense', 'create_user'];
-        if (!invoxaLicenseSignatureOk($mysqli, $settings) && in_array($_POST['action'], $__licensePaidActions, true)) {
+        if (!enxureLicenseSignatureOk($mysqli, $settings) && in_array($_POST['action'], $__licensePaidActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This needs a license — add a key under Settings > License, or see Docs for what a license unlocks.']);
             exit;
         }
@@ -1257,7 +1257,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => false, 'error' => 'This requires an admin account — see Settings > Users.']);
             exit;
         }
-        if ($_POST['action'] === 'get_nav_counts') { invoxaHandleGetNavCounts($mysqli, $settings); }
+        if ($_POST['action'] === 'get_nav_counts') { enxureHandleGetNavCounts($mysqli, $settings); }
         if ($_POST['action'] === 'global_search') {
             // A handful of results per category, not a full paginated search — this
             // is a "jump to that one record" quick-search, not a replacement for each
@@ -1283,12 +1283,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true, 'invoices' => $invoices, 'clients' => $searchClients, 'expenses' => $searchExpenses]);
             exit;
         }
-        if ($_POST['action'] === 'save_license_key') { invoxaHandleSaveLicenseKey($mysqli, $settings); }
-        if ($_POST['action'] === 'save_client') { invoxaHandleSaveClient($mysqli); }
-        if ($_POST['action'] === 'delete_client') { invoxaHandleDeleteClient($mysqli); }
-        if ($_POST['action'] === 'update_client_flags') { invoxaHandleUpdateClientFlags($mysqli); }
-        if ($_POST['action'] === 'generate_portal_token') { invoxaHandleGeneratePortalToken($mysqli); }
-        if ($_POST['action'] === 'revoke_portal_token') { invoxaHandleRevokePortalToken($mysqli); }
+        if ($_POST['action'] === 'save_license_key') { enxureHandleSaveLicenseKey($mysqli, $settings); }
+        if ($_POST['action'] === 'save_client') { enxureHandleSaveClient($mysqli); }
+        if ($_POST['action'] === 'delete_client') { enxureHandleDeleteClient($mysqli); }
+        if ($_POST['action'] === 'update_client_flags') { enxureHandleUpdateClientFlags($mysqli); }
+        if ($_POST['action'] === 'generate_portal_token') { enxureHandleGeneratePortalToken($mysqli); }
+        if ($_POST['action'] === 'revoke_portal_token') { enxureHandleRevokePortalToken($mysqli); }
         if ($_POST['action'] === 'save_expense') {
             $id = (int) ($_POST['id'] ?? 0);
             $date = validDateOverride($_POST['expense_date'] ?? null) ?: date('Y-m-d');
@@ -1471,9 +1471,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true]);
             exit;
         }
-        if ($_POST['action'] === 'import_clients_csv') { invoxaHandleImportClientsCsv($mysqli); }
-        if ($_POST['action'] === 'import_invoices_csv') { invoxaHandleImportInvoicesCsv($mysqli, $settings); }
-        if ($_POST['action'] === 'import_expenses_csv') { invoxaHandleImportExpensesCsv($mysqli); }
+        if ($_POST['action'] === 'import_clients_csv') { enxureHandleImportClientsCsv($mysqli); }
+        if ($_POST['action'] === 'import_invoices_csv') { enxureHandleImportInvoicesCsv($mysqli, $settings); }
+        if ($_POST['action'] === 'import_expenses_csv') { enxureHandleImportExpensesCsv($mysqli); }
         if ($_POST['action'] === 'preview_adhoc') {
             $clientId = (int) $_POST['client_id'];
             $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id=$clientId")->fetch_assoc();
@@ -1492,12 +1492,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $invNum = generateInvoiceNumber($mysqli, $client['client_key'], $client['client_name'], $settings);
             $brandColor = $settings['brand_color'] ?? '#4a90e2';
             $footerText = $settings['footer_text'] ?? '';
-            $currencyCode = invoxaResolveCurrency($client['currency'] ?? '', $settings);
+            $currencyCode = enxureResolveCurrency($client['currency'] ?? '', $settings);
             $html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'), vatNumber: $settings['vat_number'] ?? '', recipientPhone: $client['phone'] ?? '', recipientAddress: $client['address'] ?? '', customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null, businessName: $settings['business_name'] ?? '');
             echo json_encode(['success' => true, 'html' => $html, 'invoice_number' => $invNum]);
             exit;
         }
-        if ($_POST['action'] === 'preview_adhoc_pdf') { invoxaHandlePreviewAdhocPdf($mysqli, $settings, $licenseValid); }
+        if ($_POST['action'] === 'preview_adhoc_pdf') { enxureHandlePreviewAdhocPdf($mysqli, $settings, $licenseValid); }
         if ($_POST['action'] === 'generate_adhoc') {
             $clientId = (int) $_POST['client_id'];
             $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id=$clientId")->fetch_assoc();
@@ -1541,7 +1541,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             global $settings;
             $brandColor = $settings['brand_color'] ?? '#4a90e2';
             $footerText = $settings['footer_text'] ?? '';
-            $currencyCode = invoxaResolveCurrency($client['currency'] ?? '', $settings);
+            $currencyCode = enxureResolveCurrency($client['currency'] ?? '', $settings);
             $htmlContent = generateInvoiceHTML(
                 $client['client_name'],
                 $date,
@@ -1582,7 +1582,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $memo = trim($_POST['memo'] ?? '');
             if ($memo !== '') {
                 $qid = $stmt->insert_id;
-                invoxaLogAction($mysqli, $qid, $quoteNum, 'note_added', $memo);
+                enxureLogAction($mysqli, $qid, $quoteNum, 'note_added', $memo);
             }
             echo json_encode(['success' => true, 'quoteNum' => $quoteNum]);
             exit;
@@ -1693,7 +1693,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 . ". Reminders sent {$remindersSent}, errors {$reminderErrors}."
                 . " Late fees charged {$lateFeesCharged}, errors {$lateFeeErrors}."
                 . " Recurring expenses logged {$recurExpSent}, skipped {$recurExpSkipped}, errors {$recurExpErrors}.";
-            invoxaLogAction($mysqli, null, '', 'recurring_run', $runNotes);
+            enxureLogAction($mysqli, null, '', 'recurring_run', $runNotes);
             $totalRunErrors = $errors + $reminderErrors + $lateFeeErrors + $recurExpErrors;
             if ($sent > 0) {
                 notifyChannel($mysqli, $settings, 'notify_on_recurring_run', "\xF0\x9F\x94\x81 Recurring billing run sent {$sent} invoice" . ($sent === 1 ? '' : 's') . " — {$runNotes}");
@@ -1704,9 +1704,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true, 'sent' => $sent, 'errors' => $errors, 'skipped' => $skipped, 'reminders_sent' => $remindersSent, 'reminder_errors' => $reminderErrors, 'late_fees_charged' => $lateFeesCharged, 'late_fee_errors' => $lateFeeErrors, 'audit_log_pruned' => $auditPruned, 'recurring_expenses_logged' => $recurExpSent, 'recurring_expenses_skipped' => $recurExpSkipped, 'recurring_expenses_errors' => $recurExpErrors]);
             exit;
         }
-        if ($_POST['action'] === 'mark_paid') { invoxaHandleMarkPaid($mysqli, $settings); }
-        if ($_POST['action'] === 'get_invoice_payments') { invoxaHandleGetInvoicePayments($mysqli); }
-        if ($_POST['action'] === 'mark_unpaid') { invoxaHandleMarkUnpaid($mysqli); }
+        if ($_POST['action'] === 'mark_paid') { enxureHandleMarkPaid($mysqli, $settings); }
+        if ($_POST['action'] === 'get_invoice_payments') { enxureHandleGetInvoicePayments($mysqli); }
+        if ($_POST['action'] === 'mark_unpaid') { enxureHandleMarkUnpaid($mysqli); }
         if ($_POST['action'] === 'void_invoice') {
             // Voiding (not deleting) keeps the record and audit trail intact while
             // excluding it from outstanding/overdue/revenue totals — see the
@@ -1726,7 +1726,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt->bind_param("i", $id);
             $stmt->execute();
             $notes = 'Voided' . ($reason !== '' ? ": $reason" : '');
-            invoxaLogAction($mysqli, $id, $invRow['invoice_number'], 'invoice_voided', $notes);
+            enxureLogAction($mysqli, $id, $invRow['invoice_number'], 'invoice_voided', $notes);
             notifyChannel($mysqli, $settings, 'notify_on_invoice_voided', "\xF0\x9F\x9A\xAB Invoice voided — {$invRow['invoice_number']}" . ($reason !== '' ? ": {$reason}" : ''));
             echo json_encode(['success' => true]);
             exit;
@@ -1737,7 +1737,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = 'sent' WHERE id = ? AND status = 'void'");
             $stmt->bind_param("i", $id);
             $stmt->execute();
-            invoxaLogAction($mysqli, $id, $invNum, 'invoice_unvoided', 'Restored from void');
+            enxureLogAction($mysqli, $id, $invNum, 'invoice_unvoided', 'Restored from void');
             echo json_encode(['success' => true]);
             exit;
         }
@@ -1751,7 +1751,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $result = resendInvoiceEmail($mysqli, $inv, $settings, $emailPassword);
             $actionType = $result['sent'] ? 'email_sent' : 'email_failed';
             $notes = $result['sent'] ? "Invoice resent to {$inv['recipient_email']}" : "Resend failed: " . $result['error'];
-            invoxaLogAction($mysqli, $id, $inv['invoice_number'], $actionType, $notes);
+            enxureLogAction($mysqli, $id, $inv['invoice_number'], $actionType, $notes);
             // A successful resend clears a previously-failed status — it's been
             // sent now, same as if it had succeeded the first time.
             if ($result['sent'] && $inv['status'] === 'failed') {
@@ -1781,7 +1781,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $notes = $result['sent']
                 ? "Reminder manually sent to {$inv['recipient_email']} ({$result['days_overdue']} days overdue)"
                 : "Manual reminder failed: " . $result['error'];
-            invoxaLogAction($mysqli, $id, $inv['invoice_number'], $actionType, $notes);
+            enxureLogAction($mysqli, $id, $inv['invoice_number'], $actionType, $notes);
             echo json_encode(['success' => $result['sent'], 'error' => $result['error']]);
             exit;
         }
@@ -1844,7 +1844,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $id = (int) $_POST['id'];
             $note = $_POST['note'];
             $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $id")->fetch_assoc()['invoice_number'] ?? '';
-            invoxaLogAction($mysqli, $id, $invNum, 'note_added', $note);
+            enxureLogAction($mysqli, $id, $invNum, 'note_added', $note);
             echo json_encode(['success' => true]);
             exit;
         }
@@ -1868,7 +1868,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $id")->fetch_assoc();
             if ($inv) {
                 if ($inv['file_path']) {
-                    $fullPath = "/usr/share/nginx/html/invoxa-invoices/" . preg_replace('#^invoices/#', '', $inv['file_path']);
+                    $fullPath = "/usr/share/nginx/html/enxure-invoices/" . preg_replace('#^invoices/#', '', $inv['file_path']);
                     if (file_exists($fullPath))
                         @unlink($fullPath);
                 }
@@ -1942,10 +1942,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true]);
             exit;
         }
-        if ($_POST['action'] === 'test_email') { invoxaHandleTestEmail($mysqli, $settings, $emailPassword); }
+        if ($_POST['action'] === 'test_email') { enxureHandleTestEmail($mysqli, $settings, $emailPassword); }
         if ($_POST['action'] === 'fx_convert_preview') {
-            $from = invoxaNormalizeCurrencyCode($_POST['from'] ?? '');
-            $to = invoxaNormalizeCurrencyCode($_POST['to'] ?? '');
+            $from = enxureNormalizeCurrencyCode($_POST['from'] ?? '');
+            $to = enxureNormalizeCurrencyCode($_POST['to'] ?? '');
             $amount = (float) ($_POST['amount'] ?? 1);
             if ($from === '' || $to === '') {
                 echo json_encode(['success' => false, 'error' => 'Enter both a source and target currency.']);
@@ -1955,7 +1955,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 echo json_encode(['success' => true, 'rate' => 1.0, 'converted' => $amount]);
                 exit;
             }
-            $rates = invoxaFxFetchRates($settings, $from, [$to]);
+            $rates = enxureFxFetchRates($settings, $from, [$to]);
             if ($rates === null || !isset($rates[$to])) {
                 echo json_encode(['success' => false, 'error' => 'Could not fetch a rate for that pair — check the currency codes and the provider settings above.']);
                 exit;
@@ -1963,45 +1963,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true, 'rate' => $rates[$to], 'converted' => $amount * $rates[$to]]);
             exit;
         }
-        if ($_POST['action'] === 'save_notification_settings') { invoxaHandleSaveNotificationSettings($mysqli); }
-        if ($_POST['action'] === 'test_notification') { invoxaHandleTestNotification($mysqli, $settings); }
-        if ($_POST['action'] === 'save_payment_settings') { invoxaHandleSavePaymentSettings($mysqli); }
-        if ($_POST['action'] === 'test_stripe_connection') { invoxaHandleTestStripeConnection(); }
-        if ($_POST['action'] === 'test_paypal_connection') { invoxaHandleTestPaypalConnection(); }
-        if ($_POST['action'] === 'create_api_token') { invoxaHandleCreateApiToken($mysqli, $settings); }
-        if ($_POST['action'] === 'renew_api_token') { invoxaHandleRenewApiToken($mysqli); }
-        if ($_POST['action'] === 'revoke_api_token') { invoxaHandleRevokeApiToken($mysqli, $settings); }
-        if ($_POST['action'] === 'delete_api_token') { invoxaHandleDeleteApiToken($mysqli); }
-        if ($_POST['action'] === 'update_profile') { invoxaHandleUpdateProfile($mysqli, $currentUserId); }
-        if ($_POST['action'] === 'save_stats_layout') { invoxaHandleSaveStatsLayout($mysqli, $currentUserId); }
-        if ($_POST['action'] === 'totp_setup_init') { invoxaHandleTotpSetupInit($mysqli, $currentUserId); }
-        if ($_POST['action'] === 'totp_setup_confirm') { invoxaHandleTotpSetupConfirm($mysqli, $currentUserId, $settings); }
-        if ($_POST['action'] === 'totp_regenerate_backup_codes') { invoxaHandleTotpRegenerateBackupCodes($mysqli, $currentUserId, $settings); }
-        if ($_POST['action'] === 'totp_disable') { invoxaHandleTotpDisable($mysqli, $currentUserId, $settings); }
-        if ($_POST['action'] === 'create_user') { invoxaHandleCreateUser($mysqli, $settings); }
-        if ($_POST['action'] === 'update_user') { invoxaHandleUpdateUser($mysqli, $settings); }
-        if ($_POST['action'] === 'delete_user') { invoxaHandleDeleteUser($mysqli, $currentUserId, $settings); }
-        if ($_POST['action'] === 'toggle_test_clients') { invoxaHandleToggleTestClients($mysqli); }
-        if ($_POST['action'] === 'toggle_show_test_only') { invoxaHandleToggleShowTestOnly($mysqli); }
-        if ($_POST['action'] === 'get_default_invoice_template') { invoxaHandleGetDefaultInvoiceTemplate(); }
-        if ($_POST['action'] === 'preview_invoice_template') { invoxaHandlePreviewInvoiceTemplate($settings, $licenseValid); }
-        if ($_POST['action'] === 'save_invoice_template') { invoxaHandleSaveInvoiceTemplate($mysqli); }
-        if ($_POST['action'] === 'save_business_identity') { invoxaHandleSaveBusinessIdentity($mysqli, $licenseValid); }
-        if ($_POST['action'] === 'save_invoice_defaults') { invoxaHandleSaveInvoiceDefaults($mysqli); }
-        if ($_POST['action'] === 'save_payment_details') { invoxaHandleSavePaymentDetails($mysqli); }
-        if ($_POST['action'] === 'save_email_templates') { invoxaHandleSaveEmailTemplates($mysqli); }
-        if ($_POST['action'] === 'save_invoice_numbering') { invoxaHandleSaveInvoiceNumbering($mysqli); }
-        if ($_POST['action'] === 'save_offsite_backup') { invoxaHandleSaveOffsiteBackup($mysqli); }
-        if ($_POST['action'] === 'backup_db') { invoxaHandleBackupDb($mysqli, $settings); }
+        if ($_POST['action'] === 'save_notification_settings') { enxureHandleSaveNotificationSettings($mysqli); }
+        if ($_POST['action'] === 'test_notification') { enxureHandleTestNotification($mysqli, $settings); }
+        if ($_POST['action'] === 'save_payment_settings') { enxureHandleSavePaymentSettings($mysqli); }
+        if ($_POST['action'] === 'test_stripe_connection') { enxureHandleTestStripeConnection(); }
+        if ($_POST['action'] === 'test_paypal_connection') { enxureHandleTestPaypalConnection(); }
+        if ($_POST['action'] === 'create_api_token') { enxureHandleCreateApiToken($mysqli, $settings); }
+        if ($_POST['action'] === 'renew_api_token') { enxureHandleRenewApiToken($mysqli); }
+        if ($_POST['action'] === 'revoke_api_token') { enxureHandleRevokeApiToken($mysqli, $settings); }
+        if ($_POST['action'] === 'delete_api_token') { enxureHandleDeleteApiToken($mysqli); }
+        if ($_POST['action'] === 'update_profile') { enxureHandleUpdateProfile($mysqli, $currentUserId); }
+        if ($_POST['action'] === 'save_stats_layout') { enxureHandleSaveStatsLayout($mysqli, $currentUserId); }
+        if ($_POST['action'] === 'totp_setup_init') { enxureHandleTotpSetupInit($mysqli, $currentUserId); }
+        if ($_POST['action'] === 'totp_setup_confirm') { enxureHandleTotpSetupConfirm($mysqli, $currentUserId, $settings); }
+        if ($_POST['action'] === 'totp_regenerate_backup_codes') { enxureHandleTotpRegenerateBackupCodes($mysqli, $currentUserId, $settings); }
+        if ($_POST['action'] === 'totp_disable') { enxureHandleTotpDisable($mysqli, $currentUserId, $settings); }
+        if ($_POST['action'] === 'create_user') { enxureHandleCreateUser($mysqli, $settings); }
+        if ($_POST['action'] === 'update_user') { enxureHandleUpdateUser($mysqli, $settings); }
+        if ($_POST['action'] === 'delete_user') { enxureHandleDeleteUser($mysqli, $currentUserId, $settings); }
+        if ($_POST['action'] === 'toggle_test_clients') { enxureHandleToggleTestClients($mysqli); }
+        if ($_POST['action'] === 'toggle_show_test_only') { enxureHandleToggleShowTestOnly($mysqli); }
+        if ($_POST['action'] === 'get_default_invoice_template') { enxureHandleGetDefaultInvoiceTemplate(); }
+        if ($_POST['action'] === 'preview_invoice_template') { enxureHandlePreviewInvoiceTemplate($settings, $licenseValid); }
+        if ($_POST['action'] === 'save_invoice_template') { enxureHandleSaveInvoiceTemplate($mysqli); }
+        if ($_POST['action'] === 'save_business_identity') { enxureHandleSaveBusinessIdentity($mysqli, $licenseValid); }
+        if ($_POST['action'] === 'save_invoice_defaults') { enxureHandleSaveInvoiceDefaults($mysqli); }
+        if ($_POST['action'] === 'save_payment_details') { enxureHandleSavePaymentDetails($mysqli); }
+        if ($_POST['action'] === 'save_email_templates') { enxureHandleSaveEmailTemplates($mysqli); }
+        if ($_POST['action'] === 'save_invoice_numbering') { enxureHandleSaveInvoiceNumbering($mysqli); }
+        if ($_POST['action'] === 'save_offsite_backup') { enxureHandleSaveOffsiteBackup($mysqli); }
+        if ($_POST['action'] === 'backup_db') { enxureHandleBackupDb($mysqli, $settings); }
         if ($_POST['action'] === 'run_auto_backup') {
             // Fired by its own cron entry (see cron/entrypoint.sh), independent of
             // run_recurring — backups aren't a licensed feature, so this can't ride
-            // the same trigger as billing (see invoxaRunAutoBackup()'s docblock).
+            // the same trigger as billing (see enxureRunAutoBackup()'s docblock).
             if (($settings['auto_backup_enabled'] ?? '0') !== '1') {
                 echo json_encode(['success' => true, 'skipped' => true]);
                 exit;
             }
-            $result = invoxaRunAutoBackup($mysqli, $settings);
+            $result = enxureRunAutoBackup($mysqli, $settings);
             echo json_encode($result);
             exit;
         }
@@ -2014,18 +2014,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true, 'enabled' => $enable]);
             exit;
         }
-        if ($_POST['action'] === 'get_db_stats') { invoxaHandleGetDbStats($mysqli); }
-        if ($_POST['action'] === 'list_backups') { invoxaHandleListBackups(); }
-        if ($_POST['action'] === 'import_backup') { invoxaHandleImportBackup(); }
-        if ($_POST['action'] === 'factory_reset') { invoxaHandleFactoryReset($mysqli, $currentUserId); }
-        if ($_POST['action'] === 'resend_verification_email') { invoxaHandleResendVerificationEmail($mysqli, $currentUserId); }
-        if ($_POST['action'] === 'seed_demo_data') { invoxaHandleSeedDemoData($mysqli, $settings); }
-        if ($_POST['action'] === 'clear_demo_data') { invoxaHandleClearDemoData($mysqli); }
-        if ($_POST['action'] === 'run_test_suite') { invoxaHandleRunTestSuite($mysqli, $settings); }
-        if ($_POST['action'] === 'preview_restore') { invoxaHandlePreviewRestore(); }
-        if ($_POST['action'] === 'restore_db_backup') { invoxaHandleRestoreDbBackup($mysqli); }
-        if ($_POST['action'] === 'get_crm_data') { invoxaHandleGetCrmData($mysqli); }
-        if ($_POST['action'] === 'save_crm_notes') { invoxaHandleSaveCrmNotes($mysqli); }
+        if ($_POST['action'] === 'get_db_stats') { enxureHandleGetDbStats($mysqli); }
+        if ($_POST['action'] === 'list_backups') { enxureHandleListBackups(); }
+        if ($_POST['action'] === 'import_backup') { enxureHandleImportBackup(); }
+        if ($_POST['action'] === 'factory_reset') { enxureHandleFactoryReset($mysqli, $currentUserId); }
+        if ($_POST['action'] === 'resend_verification_email') { enxureHandleResendVerificationEmail($mysqli, $currentUserId); }
+        if ($_POST['action'] === 'seed_demo_data') { enxureHandleSeedDemoData($mysqli, $settings); }
+        if ($_POST['action'] === 'clear_demo_data') { enxureHandleClearDemoData($mysqli); }
+        if ($_POST['action'] === 'run_test_suite') { enxureHandleRunTestSuite($mysqli, $settings); }
+        if ($_POST['action'] === 'preview_restore') { enxureHandlePreviewRestore(); }
+        if ($_POST['action'] === 'restore_db_backup') { enxureHandleRestoreDbBackup($mysqli); }
+        if ($_POST['action'] === 'get_crm_data') { enxureHandleGetCrmData($mysqli); }
+        if ($_POST['action'] === 'save_crm_notes') { enxureHandleSaveCrmNotes($mysqli); }
         if ($_POST['action'] === 'convert_quote') {
             $id = (int) ($_POST['id'] ?? 0);
             $result = convertQuoteToInvoice($mysqli, $settings, $id, 'admin');
@@ -2044,7 +2044,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             }
             // cron_key is filled in server-side from CRON_SECRET only — never accepted from the browser.
-            $cronLine = $newCron . ' curl -s -S -X POST -d "action=run_recurring&cron_key=' . CRON_SECRET . '" http://nginx/invoxa.php >> /var/log/invoxa-cron.log 2>&1';
+            $cronLine = $newCron . ' curl -s -S -X POST -d "action=run_recurring&cron_key=' . CRON_SECRET . '" http://nginx/enxure.php >> /var/log/enxure-cron.log 2>&1';
             $lines = file($cronFile, FILE_IGNORE_NEW_LINES);
             $found = false;
             foreach ($lines as &$line) {
@@ -2104,8 +2104,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true, 'enabled' => $enable]);
             exit;
         }
-        if ($_POST['action'] === 'save_audit_retention') { invoxaHandleSaveAuditRetention($mysqli); }
-        if ($_POST['action'] === 'save_backup_retention') { invoxaHandleSaveBackupRetention($mysqli); }
+        if ($_POST['action'] === 'save_audit_retention') { enxureHandleSaveAuditRetention($mysqli); }
+        if ($_POST['action'] === 'save_backup_retention') { enxureHandleSaveBackupRetention($mysqli); }
         if ($_POST['action'] === 'toggle_reminders') {
             $enable = ($_POST['enabled'] ?? '1') === '1';
             $val = $enable ? '1' : '0';
@@ -2144,33 +2144,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true]);
             exit;
         }
-        if ($_POST['action'] === 'sync_missing') { invoxaHandleSyncMissing($mysqli, $settings); }
-        if ($_POST['action'] === 'restore_missing') { invoxaHandleRestoreMissing($mysqli); }
-        if ($_POST['action'] === 'delete_missing_db') { invoxaHandleDeleteMissingDb($mysqli); }
-        if ($_POST['action'] === 'delete_untracked_file') { invoxaHandleDeleteUntrackedFile(); }
-        if ($_POST['action'] === 'delete_all_untracked_files') { invoxaHandleDeleteAllUntrackedFiles(); }
-        if ($_POST['action'] === 'delete_single_db_entry') { invoxaHandleDeleteSingleDbEntry($mysqli); }
-        if ($_POST['action'] === 'preview_tax_year') { invoxaHandlePreviewTaxYear($mysqli, $settings); }
-        if ($_POST['action'] === 'preview_tax_year_monthly') { invoxaHandlePreviewTaxYearMonthly($mysqli, $settings); }
-        if ($_POST['action'] === 'save_screenshot') { invoxaHandleSaveScreenshot(); }
+        if ($_POST['action'] === 'sync_missing') { enxureHandleSyncMissing($mysqli, $settings); }
+        if ($_POST['action'] === 'restore_missing') { enxureHandleRestoreMissing($mysqli); }
+        if ($_POST['action'] === 'delete_missing_db') { enxureHandleDeleteMissingDb($mysqli); }
+        if ($_POST['action'] === 'delete_untracked_file') { enxureHandleDeleteUntrackedFile(); }
+        if ($_POST['action'] === 'delete_all_untracked_files') { enxureHandleDeleteAllUntrackedFiles(); }
+        if ($_POST['action'] === 'delete_single_db_entry') { enxureHandleDeleteSingleDbEntry($mysqli); }
+        if ($_POST['action'] === 'preview_tax_year') { enxureHandlePreviewTaxYear($mysqli, $settings); }
+        if ($_POST['action'] === 'preview_tax_year_monthly') { enxureHandlePreviewTaxYearMonthly($mysqli, $settings); }
+        if ($_POST['action'] === 'save_screenshot') { enxureHandleSaveScreenshot(); }
     } catch (Exception $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         exit;
     }
 }
 
-if (isset($_GET['api'])) { invoxaHandleStatsApiRoutes($mysqli, $settings); }
+if (isset($_GET['api'])) { enxureHandleStatsApiRoutes($mysqli, $settings); }
 
-if (isset($_GET['export']) && $_GET['export'] === 'invoice_pdf') { invoxaHandleInvoicePdfExport($mysqli); }
+if (isset($_GET['export']) && $_GET['export'] === 'invoice_pdf') { enxureHandleInvoicePdfExport($mysqli); }
 
-if (isset($_GET['export'])) { invoxaHandleExportRoutes($mysqli, $settings); }
+if (isset($_GET['export'])) { enxureHandleExportRoutes($mysqli, $settings); }
 
 // ── Data Fetching ────────────────────────────────────────────────────────────
 // $settings was already loaded before the auth gate (see above), so it's
 // available here too — not reloaded.
 $hideTest = isset($settings['hide_test']) ? ($settings['hide_test'] === '1') : true;
 $showTestOnly = ($settings['show_test_only'] ?? '0') === '1';
-$testFilter = invoxaTestViewFilter($hideTest, $showTestOnly);
+$testFilter = enxureTestViewFilter($hideTest, $showTestOnly);
 
 $cronFile = CRONTAB_PATH;
 $currentCron = '15 7 3 * *';
@@ -2199,26 +2199,26 @@ $recurringBypassGuard = ($settings['recurring_bypass_guard'] ?? '0') === '1';
 $total_invoiced_by_ccy = [];
 $res = $mysqli->query("SELECT currency, SUM(amount) as s FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') $testFilter GROUP BY currency");
 while ($r = $res->fetch_assoc()) {
-    $ccy = invoxaResolveCurrency($r['currency'], $settings);
+    $ccy = enxureResolveCurrency($r['currency'], $settings);
     $total_invoiced_by_ccy[$ccy] = ($total_invoiced_by_ccy[$ccy] ?? 0) + (float) $r['s'];
 }
 $total_paid_by_ccy = [];
 $res = $mysqli->query("SELECT currency, SUM(paid_amount) as s FROM invoxa_invoices WHERE paid_amount > 0 $testFilter GROUP BY currency");
 while ($r = $res->fetch_assoc()) {
-    $ccy = invoxaResolveCurrency($r['currency'], $settings);
+    $ccy = enxureResolveCurrency($r['currency'], $settings);
     $total_paid_by_ccy[$ccy] = ($total_paid_by_ccy[$ccy] ?? 0) + (float) $r['s'];
 }
 $total_monthly_by_ccy = [];
 $res = $mysqli->query("SELECT currency, SUM(amount) as s FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') AND MONTH(invoice_date) = MONTH(CURRENT_DATE()) AND YEAR(invoice_date) = YEAR(CURRENT_DATE()) $testFilter GROUP BY currency");
 while ($r = $res->fetch_assoc()) {
-    $ccy = invoxaResolveCurrency($r['currency'], $settings);
+    $ccy = enxureResolveCurrency($r['currency'], $settings);
     $total_monthly_by_ccy[$ccy] = ($total_monthly_by_ccy[$ccy] ?? 0) + (float) $r['s'];
 }
 $total_invoiced = array_sum($total_invoiced_by_ccy);
 $total_paid = array_sum($total_paid_by_ccy);
 $total_monthly = array_sum($total_monthly_by_ccy);
 $unpaid_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE status IN ('sent', 'pending') $testFilter")->fetch_assoc()['c'] ?? 0;
-$client_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_clients WHERE is_active = 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly))->fetch_assoc()['c'] ?? 0;
+$client_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly))->fetch_assoc()['c'] ?? 0;
 $quote_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE is_quote = 1")->fetch_assoc()['c'] ?? 0;
 $invoice_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE is_quote = 0 $testFilter")->fetch_assoc()['c'] ?? 0;
 
@@ -2232,11 +2232,11 @@ $res = $mysqli->query("SELECT * FROM invoxa_invoices WHERE status = 'failed' $te
 while ($r = $res->fetch_assoc())
     $failedInvoices[] = $r;
 $invoices = [];
-$res = $mysqli->query("SELECT i.*, c.is_test, (SELECT COUNT(*) FROM invoxa_actions a WHERE a.invoice_number = i.invoice_number AND a.action_type = 'note_added') as note_count FROM invoxa_invoices i LEFT JOIN invoxa_clients c ON i.client_key = c.client_key " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'WHERE', 'c.is_test') . " ORDER BY i.invoice_date DESC");
+$res = $mysqli->query("SELECT i.*, c.is_test, (SELECT COUNT(*) FROM invoxa_actions a WHERE a.invoice_number = i.invoice_number AND a.action_type = 'note_added') as note_count FROM invoxa_invoices i LEFT JOIN invoxa_clients c ON i.client_key = c.client_key " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'WHERE', 'c.is_test') . " ORDER BY i.invoice_date DESC");
 while ($r = $res->fetch_assoc())
     $invoices[] = $r;
 $clients = [];
-$res = $mysqli->query("SELECT c.*, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM invoxa_clients c LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'WHERE', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
+$res = $mysqli->query("SELECT c.*, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM invoxa_clients c LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'WHERE', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
 while ($r = $res->fetch_assoc())
     $clients[] = $r;
 
@@ -2262,8 +2262,8 @@ $res = $mysqli->query("SELECT id, invoice_number, file_path, (html_content IS NO
 while ($r = $res->fetch_assoc()) {
     // Normalise: strip any absolute prefix so we always compare relative paths like invoices/folder/file.html
     $fp = $r['file_path'];
-    $fp = preg_replace('#^/usr/share/nginx/html/invoxa-invoices/#', 'invoices/', $fp);
-    $fp = preg_replace('#^invoxa-invoices/#', 'invoices/', $fp);
+    $fp = preg_replace('#^/usr/share/nginx/html/enxure-invoices/#', 'invoices/', $fp);
+    $fp = preg_replace('#^enxure-invoices/#', 'invoices/', $fp);
     $fp = ltrim($fp, '/');
     // Ensure it starts with invoices/ (not just folder/file.html)
     if (!str_starts_with($fp, 'invoices/') && substr_count($fp, '/') >= 1) {
@@ -2274,8 +2274,8 @@ while ($r = $res->fetch_assoc()) {
     $dbFileData[$fp] = $r;
 }
 $diskFiles = [];
-if (is_dir('/usr/share/nginx/html/invoxa-invoices')) {
-    foreach (glob("/usr/share/nginx/html/invoxa-invoices/*/*.html") as $file) {
+if (is_dir('/usr/share/nginx/html/enxure-invoices')) {
+    foreach (glob("/usr/share/nginx/html/enxure-invoices/*/*.html") as $file) {
         $diskFiles[] = "invoices/" . basename(dirname($file)) . "/" . basename($file);
     }
 }
@@ -2295,7 +2295,7 @@ foreach ($clients as $c) {
 $stats_outstanding_revenue = 0;
 $stats_mrr = 0;
 
-$stats_default_ccy = invoxaResolveCurrency('', $settings);
+$stats_default_ccy = enxureResolveCurrency('', $settings);
 $stats_default_ccy_esc = $mysqli->real_escape_string($stats_default_ccy);
 $stats_other_currencies = [];
 $res_other_ccy = $mysqli->query("SELECT DISTINCT currency FROM invoxa_invoices WHERE currency != '' AND currency != '$stats_default_ccy_esc'");
@@ -2310,7 +2310,7 @@ $stats_has_other_currency = !empty($stats_other_currencies);
 // A currency with no rate available (fetch failed, or the provider doesn't
 // carry it) is excluded from that blended total exactly like it always was
 // before this feature existed — never blended in unconverted.
-$stats_fx_rates = $stats_has_other_currency ? invoxaGetFxRates($mysqli, $settings, $stats_default_ccy, $stats_other_currencies) : [];
+$stats_fx_rates = $stats_has_other_currency ? enxureGetFxRates($mysqli, $settings, $stats_default_ccy, $stats_other_currencies) : [];
 $stats_fx_unconverted_currencies = $stats_has_other_currency
     ? array_values(array_diff($stats_other_currencies, array_keys($stats_fx_rates)))
     : [];
@@ -2319,8 +2319,8 @@ $res_rev_all = $mysqli->query("SELECT currency, SUM(amount - COALESCE(paid_amoun
 $rows_rev_all = [];
 while ($r = $res_rev_all->fetch_assoc())
     $rows_rev_all[] = $r;
-$stats_outstanding_revenue_by_ccy = invoxaGroupAmountsByCurrency($rows_rev_all, 's', $settings);
-$stats_outstanding_revenue = invoxaSumByCcyConverted($stats_outstanding_revenue_by_ccy, $stats_default_ccy, $stats_fx_rates);
+$stats_outstanding_revenue_by_ccy = enxureGroupAmountsByCurrency($rows_rev_all, 's', $settings);
+$stats_outstanding_revenue = enxureSumByCcyConverted($stats_outstanding_revenue_by_ccy, $stats_default_ccy, $stats_fx_rates);
 
 $res_overdue = $mysqli->query("SELECT COUNT(*) as cnt FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND due_date < CURDATE() AND is_quote = 0 $testFilter");
 $stats_overdue_count = $res_overdue->fetch_assoc()['cnt'] ?? 0;
@@ -2329,7 +2329,7 @@ $res_paid_all = $mysqli->query("SELECT currency, SUM(paid_amount) as paid, COUNT
 $rows_paid_all = [];
 while ($r = $res_paid_all->fetch_assoc())
     $rows_paid_all[] = $r;
-$paidGrouped = invoxaGroupRowsByCurrency($rows_paid_all, ['paid', 'cnt'], $settings);
+$paidGrouped = enxureGroupRowsByCurrency($rows_paid_all, ['paid', 'cnt'], $settings);
 $stats_all_time_revenue_by_ccy = [];
 $stats_avg_invoice_by_ccy = [];
 foreach ($paidGrouped as $ccy => $g) {
@@ -2354,20 +2354,20 @@ $res_ty_all = $mysqli->query("
 $rows_ty_all = [];
 while ($r = $res_ty_all->fetch_assoc())
     $rows_ty_all[] = $r;
-$tyGrouped = invoxaGroupRowsByCurrency($rows_ty_all, ['total_invoiced', 'total_paid', 'outstanding'], $settings);
+$tyGrouped = enxureGroupRowsByCurrency($rows_ty_all, ['total_invoiced', 'total_paid', 'outstanding'], $settings);
 $stats_ty_invoiced_by_ccy = array_map(fn($g) => $g['total_invoiced'], $tyGrouped);
 $stats_ty_paid_by_ccy = array_map(fn($g) => $g['total_paid'], $tyGrouped);
 $stats_ty_outstanding_by_ccy = array_map(fn($g) => $g['outstanding'], $tyGrouped);
-$stats_ty_invoiced = invoxaSumByCcyConverted($stats_ty_invoiced_by_ccy, $stats_default_ccy, $stats_fx_rates);
-$stats_ty_paid = invoxaSumByCcyConverted($stats_ty_paid_by_ccy, $stats_default_ccy, $stats_fx_rates);
-$stats_ty_outstanding = invoxaSumByCcyConverted($stats_ty_outstanding_by_ccy, $stats_default_ccy, $stats_fx_rates);
+$stats_ty_invoiced = enxureSumByCcyConverted($stats_ty_invoiced_by_ccy, $stats_default_ccy, $stats_fx_rates);
+$stats_ty_paid = enxureSumByCcyConverted($stats_ty_paid_by_ccy, $stats_default_ccy, $stats_fx_rates);
+$stats_ty_outstanding = enxureSumByCcyConverted($stats_ty_outstanding_by_ccy, $stats_default_ccy, $stats_fx_rates);
 
-$res_mrr_all = $mysqli->query("SELECT currency, SUM(monthly_rate) as s FROM invoxa_clients WHERE is_active = 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly) . " GROUP BY currency");
+$res_mrr_all = $mysqli->query("SELECT currency, SUM(monthly_rate) as s FROM invoxa_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly) . " GROUP BY currency");
 $rows_mrr_all = [];
 while ($r = $res_mrr_all->fetch_assoc())
     $rows_mrr_all[] = $r;
-$stats_mrr_by_ccy = invoxaGroupAmountsByCurrency($rows_mrr_all, 's', $settings);
-$stats_mrr = invoxaSumByCcyConverted($stats_mrr_by_ccy, $stats_default_ccy, $stats_fx_rates);
+$stats_mrr_by_ccy = enxureGroupAmountsByCurrency($rows_mrr_all, 's', $settings);
+$stats_mrr = enxureSumByCcyConverted($stats_mrr_by_ccy, $stats_default_ccy, $stats_fx_rates);
 
 $stats_12m_projected = ($stats_mrr * 12) + $stats_outstanding_revenue;
 
@@ -2380,12 +2380,12 @@ $res_top = $mysqli->query("
     SELECT c.client_name, i.currency, SUM(i.paid_amount) as total_revenue
     FROM invoxa_invoices i
     JOIN invoxa_clients c ON i.client_key = c.client_key
-    WHERE i.paid_amount > 0 AND i.is_quote = 0 " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
+    WHERE i.paid_amount > 0 AND i.is_quote = 0 " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
     GROUP BY c.client_name, i.currency
 ");
 if ($res_top) {
     while ($r = $res_top->fetch_assoc()) {
-        $ccy = invoxaResolveCurrency($r['currency'], $settings);
+        $ccy = enxureResolveCurrency($r['currency'], $settings);
         $name = $r['client_name'];
         if (!isset($topClientsAgg[$name])) {
             $topClientsAgg[$name] = ['client_name' => $name, 'by_ccy' => []];
@@ -2411,7 +2411,7 @@ $res_vel = $mysqli->query("
 $stats_avg_days = round($res_vel->fetch_assoc()['avg_days'] ?? 0, 1);
 
 // Client Health
-$res_health = $mysqli->query("SELECT SUM(is_active=1) as active, SUM(is_active=0) as inactive FROM invoxa_clients " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'WHERE'));
+$res_health = $mysqli->query("SELECT SUM(is_active=1) as active, SUM(is_active=0) as inactive FROM invoxa_clients " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'WHERE'));
 $row_health = $res_health->fetch_assoc();
 $stats_active_clients = $row_health['active'] ?? 0;
 $stats_inactive_clients = $row_health['inactive'] ?? 0;
@@ -2425,7 +2425,7 @@ $res_void = $mysqli->query("SELECT currency, COUNT(*) as c, SUM(amount) as total
 $rows_void = [];
 while ($r = $res_void->fetch_assoc())
     $rows_void[] = $r;
-$voidGrouped = invoxaGroupRowsByCurrency($rows_void, ['c', 'total'], $settings);
+$voidGrouped = enxureGroupRowsByCurrency($rows_void, ['c', 'total'], $settings);
 $stats_void_count = (int) array_sum(array_map(fn($g) => $g['c'], $voidGrouped));
 $stats_void_amount_by_ccy = array_map(fn($g) => $g['total'], $voidGrouped);
 
@@ -2435,7 +2435,7 @@ $res_pipeline = $mysqli->query("SELECT currency, COUNT(*) as c, SUM(amount) as t
 $rows_pipeline = [];
 while ($r = $res_pipeline->fetch_assoc())
     $rows_pipeline[] = $r;
-$pipelineGrouped = invoxaGroupRowsByCurrency($rows_pipeline, ['c', 'total'], $settings);
+$pipelineGrouped = enxureGroupRowsByCurrency($rows_pipeline, ['c', 'total'], $settings);
 $stats_quote_pipeline_count = (int) array_sum(array_map(fn($g) => $g['c'], $pipelineGrouped));
 $stats_quote_pipeline_value_by_ccy = array_map(fn($g) => $g['total'], $pipelineGrouped);
 
@@ -2462,24 +2462,24 @@ $agingBuckets = ['current', '1_30', '31_60', '61_90', '90_plus'];
 $agingCounts = array_fill_keys($agingBuckets, 0);
 $agingByCcy = array_fill_keys($agingBuckets, []);
 while ($r = $res_aging->fetch_assoc()) {
-    $ccy = invoxaResolveCurrency($r['currency'] ?? '', $settings);
+    $ccy = enxureResolveCurrency($r['currency'] ?? '', $settings);
     foreach ($agingBuckets as $b) {
         $agingCounts[$b] += (int) $r['c_' . $b];
         $agingByCcy[$b][$ccy] = ($agingByCcy[$b][$ccy] ?? 0) + (float) $r['a_' . $b];
     }
 }
 $stats_aging = [
-    ['label' => 'Current', 'count' => $agingCounts['current'], 'amount' => invoxaSumByCcyConverted($agingByCcy['current'], $stats_default_ccy, $stats_fx_rates), 'color' => '#10b981'],
-    ['label' => '1-30 Days', 'count' => $agingCounts['1_30'], 'amount' => invoxaSumByCcyConverted($agingByCcy['1_30'], $stats_default_ccy, $stats_fx_rates), 'color' => '#f59e0b'],
-    ['label' => '31-60 Days', 'count' => $agingCounts['31_60'], 'amount' => invoxaSumByCcyConverted($agingByCcy['31_60'], $stats_default_ccy, $stats_fx_rates), 'color' => '#f97316'],
-    ['label' => '61-90 Days', 'count' => $agingCounts['61_90'], 'amount' => invoxaSumByCcyConverted($agingByCcy['61_90'], $stats_default_ccy, $stats_fx_rates), 'color' => '#ef4444'],
-    ['label' => '90+ Days', 'count' => $agingCounts['90_plus'], 'amount' => invoxaSumByCcyConverted($agingByCcy['90_plus'], $stats_default_ccy, $stats_fx_rates), 'color' => '#b91c1c'],
+    ['label' => 'Current', 'count' => $agingCounts['current'], 'amount' => enxureSumByCcyConverted($agingByCcy['current'], $stats_default_ccy, $stats_fx_rates), 'color' => '#10b981'],
+    ['label' => '1-30 Days', 'count' => $agingCounts['1_30'], 'amount' => enxureSumByCcyConverted($agingByCcy['1_30'], $stats_default_ccy, $stats_fx_rates), 'color' => '#f59e0b'],
+    ['label' => '31-60 Days', 'count' => $agingCounts['31_60'], 'amount' => enxureSumByCcyConverted($agingByCcy['31_60'], $stats_default_ccy, $stats_fx_rates), 'color' => '#f97316'],
+    ['label' => '61-90 Days', 'count' => $agingCounts['61_90'], 'amount' => enxureSumByCcyConverted($agingByCcy['61_90'], $stats_default_ccy, $stats_fx_rates), 'color' => '#ef4444'],
+    ['label' => '90+ Days', 'count' => $agingCounts['90_plus'], 'amount' => enxureSumByCcyConverted($agingByCcy['90_plus'], $stats_default_ccy, $stats_fx_rates), 'color' => '#b91c1c'],
 ];
 
 // Client Growth & Mix
-$stats_new_clients_month = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_clients WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') " . invoxaTestViewClientFilter($hideTest, $showTestOnly))->fetch_assoc()['c'] ?? 0;
+$stats_new_clients_month = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_clients WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') " . enxureTestViewClientFilter($hideTest, $showTestOnly))->fetch_assoc()['c'] ?? 0;
 $stats_billing_freq = [];
-$res_freq = $mysqli->query("SELECT billing_frequency, COUNT(*) as c FROM invoxa_clients WHERE is_active = 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly) . " GROUP BY billing_frequency");
+$res_freq = $mysqli->query("SELECT billing_frequency, COUNT(*) as c FROM invoxa_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly) . " GROUP BY billing_frequency");
 while ($r = $res_freq->fetch_assoc())
     $stats_billing_freq[$r['billing_frequency']] = (int) $r['c'];
 
@@ -2490,7 +2490,7 @@ $res_attn = $mysqli->query("
     SELECT c.client_name, MAX(i.invoice_date) as last_invoice
     FROM invoxa_clients c
     LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.is_quote = 0
-    WHERE c.is_active = 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
+    WHERE c.is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
     GROUP BY c.id
     HAVING last_invoice IS NULL OR last_invoice < DATE_SUB(NOW(), INTERVAL 60 DAY)
     ORDER BY last_invoice IS NOT NULL, last_invoice ASC
@@ -2533,7 +2533,7 @@ $tyMonthlyByCcy = [];
 $tyMonthlyUnpaid = [];
 if ($res_ty_monthly_all) {
     while ($r = $res_ty_monthly_all->fetch_assoc()) {
-        $ccy = invoxaResolveCurrency($r['currency'], $settings);
+        $ccy = enxureResolveCurrency($r['currency'], $settings);
         $m = $r['month'];
         if (!isset($tyMonthlyByCcy[$m])) {
             $tyMonthlyByCcy[$m] = ['invoiced' => [], 'paid' => [], 'outstanding' => []];
@@ -2550,9 +2550,9 @@ foreach ($tyMonths as $m) {
     $d = $tyMonthlyByCcy[$m];
     $stats_ty_monthly[] = [
         'month' => $m,
-        'total_invoiced' => invoxaSumByCcyConverted($d['invoiced'], $stats_default_ccy, $stats_fx_rates),
-        'total_paid' => invoxaSumByCcyConverted($d['paid'], $stats_default_ccy, $stats_fx_rates),
-        'outstanding' => invoxaSumByCcyConverted($d['outstanding'], $stats_default_ccy, $stats_fx_rates),
+        'total_invoiced' => enxureSumByCcyConverted($d['invoiced'], $stats_default_ccy, $stats_fx_rates),
+        'total_paid' => enxureSumByCcyConverted($d['paid'], $stats_default_ccy, $stats_fx_rates),
+        'outstanding' => enxureSumByCcyConverted($d['outstanding'], $stats_default_ccy, $stats_fx_rates),
         'unpaid_count' => (int) ($tyMonthlyUnpaid[$m] ?? 0),
         'by_ccy' => $d,
     ];
@@ -2583,7 +2583,7 @@ $res_active = $mysqli->query("
     SELECT c.client_name, COUNT(i.id) as invoice_count
     FROM invoxa_invoices i
     JOIN invoxa_clients c ON i.client_key = c.client_key
-    WHERE i.is_quote = 0 AND i.status != 'void' " . invoxaTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
+    WHERE i.is_quote = 0 AND i.status != 'void' " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
     GROUP BY c.client_name
     ORDER BY invoice_count DESC
     LIMIT 5
@@ -2600,7 +2600,7 @@ $res_status = $mysqli->query("SELECT status, currency, COUNT(*) as c, SUM(amount
 $statusCounts = [];
 if ($res_status) {
     while ($r = $res_status->fetch_assoc()) {
-        $ccy = invoxaResolveCurrency($r['currency'] ?? '', $settings);
+        $ccy = enxureResolveCurrency($r['currency'] ?? '', $settings);
         if (!isset($statusCounts[$r['status']])) {
             $statusCounts[$r['status']] = ['c' => 0, 'by_ccy' => []];
         }
@@ -2610,7 +2610,7 @@ if ($res_status) {
 }
 foreach ($statusLabels as $sKey => $sLabel) {
     if (!empty($statusCounts[$sKey])) {
-        $stats_invoice_status[] = ['status' => $sKey, 'label' => $sLabel, 'count' => $statusCounts[$sKey]['c'], 'amount' => invoxaSumByCcyConverted($statusCounts[$sKey]['by_ccy'], $stats_default_ccy, $stats_fx_rates), 'color' => $statusColors[$sKey]];
+        $stats_invoice_status[] = ['status' => $sKey, 'label' => $sLabel, 'count' => $statusCounts[$sKey]['c'], 'amount' => enxureSumByCcyConverted($statusCounts[$sKey]['by_ccy'], $stats_default_ccy, $stats_fx_rates), 'color' => $statusColors[$sKey]];
     }
 }
 
@@ -2626,7 +2626,7 @@ $res_trend = $mysqli->query("
 $trendByMonth = [];
 if ($res_trend) {
     while ($r = $res_trend->fetch_assoc()) {
-        $ccy = invoxaResolveCurrency($r['currency'] ?? '', $settings);
+        $ccy = enxureResolveCurrency($r['currency'] ?? '', $settings);
         $m = $r['month'];
         if (!isset($trendByMonth[$m])) {
             $trendByMonth[$m] = ['invoiced' => [], 'paid' => []];
@@ -2640,8 +2640,8 @@ for ($m = 11; $m >= 0; $m--) {
     $row = $trendByMonth[$monthKey] ?? ['invoiced' => [], 'paid' => []];
     $stats_revenue_trend[] = [
         'month' => $monthKey,
-        'total_invoiced' => invoxaSumByCcyConverted($row['invoiced'], $stats_default_ccy, $stats_fx_rates),
-        'total_paid' => invoxaSumByCcyConverted($row['paid'], $stats_default_ccy, $stats_fx_rates),
+        'total_invoiced' => enxureSumByCcyConverted($row['invoiced'], $stats_default_ccy, $stats_fx_rates),
+        'total_paid' => enxureSumByCcyConverted($row['paid'], $stats_default_ccy, $stats_fx_rates),
     ];
 }
 
@@ -2684,7 +2684,7 @@ if ($tablesRes) {
 }
 
 // Backup Health
-$backup_dir = '/usr/share/nginx/html/invoxa-backups/';
+$backup_dir = '/usr/share/nginx/html/enxure-backups/';
 $backup_count = 0;
 $latest_backup = 'Never';
 if (is_dir($backup_dir)) {
@@ -2699,8 +2699,8 @@ if (is_dir($backup_dir)) {
 }
 
 $stats_db_size_bytes = (int) ($mysqli->query("SELECT SUM(data_length + index_length) as s FROM information_schema.TABLES WHERE table_schema = DATABASE()")->fetch_assoc()['s'] ?? 0);
-$stats_invoices_dir_size_bytes = invoxaDirSize(INVOICES_DIR);
-$stats_backups_dir_size_bytes = invoxaDirSize($backup_dir);
+$stats_invoices_dir_size_bytes = enxureDirSize(INVOICES_DIR);
+$stats_backups_dir_size_bytes = enxureDirSize($backup_dir);
 
 $stats_webhook_unmatched_total = (int) ($mysqli->query("SELECT COUNT(*) as c FROM invoxa_actions WHERE action_type = 'webhook_unmatched'")->fetch_assoc()['c'] ?? 0);
 $stats_webhook_unmatched_30d = (int) ($mysqli->query("SELECT COUNT(*) as c FROM invoxa_actions WHERE action_type = 'webhook_unmatched' AND performed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetch_assoc()['c'] ?? 0);
@@ -2709,7 +2709,7 @@ $stats_php_version = PHP_VERSION;
 $stats_mysql_version = $mysqli->server_info;
 
 // Offsite push status — written by the offsite cron/rclone script after each
-// push attempt, not by invoxa.php. Missing file just means it hasn't run yet.
+// push attempt, not by enxure.php. Missing file just means it hasn't run yet.
 $offsite_status = null;
 $offsiteStatusFile = $backup_dir . '.offsite_status.json';
 if (is_file($offsiteStatusFile)) {

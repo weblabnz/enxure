@@ -1,15 +1,15 @@
-# Invoxa — Paid License Terms
+# enXure — Paid License Terms
 
 **Licensor:** The Web Lab (gitlab.com/weblabnz), New Zealand ("we", "us")
-**Contact:** contact-project+weblabnz-invoxa-inv@incoming.gitlab.com
+**Contact:** contact-project+weblabnz-enxure-inv@incoming.gitlab.com
 
-Invoxa's core software is free and open source, licensed to everyone under the GNU
+enXure's core software is free and open source, licensed to everyone under the GNU
 Affero General Public License v3.0 — see `LICENSE`, also readable in-app under Docs >
 Reference. **This Agreement is separate from that license and covers only the paid
-license key**, which unlocks seven specific features not required to run Invoxa itself:
+license key**, which unlocks seven specific features not required to run enXure itself:
 Stripe/PayPal payment collection, recurring billing automation, the Client Portal, the
 external API, adding teammates beyond your own account (Settings > Users), Reporting &
-Statistics, and removing the "Powered by Invoxa" credit line from invoices and emails.
+Statistics, and removing the "Powered by enXure" credit line from invoices and emails.
 By activating a license key in Settings > License, you
 ("Licensee") agree to these terms. This Agreement applies to any buyer, wherever
 they're located — New Zealand or overseas.

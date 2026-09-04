@@ -2,15 +2,15 @@
 // Pure invoice/email helper functions — no $mysqli, no session, no globals.
 // Functions that touch the database or PHPMailer state (processInvoice,
 // generateInvoiceNumber, notifyChannel, sendOverdueReminders, etc.) live in
-// invoxa.php instead.
+// enxure.php instead.
 
 // Curated color choices offered in Settings > Branding (and reused for the
 // app's own Accent Color picker in Preferences) so a new install can pick a
 // coherent look in one click instead of hand-tuning a hex value.
-function invoxaBrandPresets(): array
+function enxureBrandPresets(): array
 {
     return [
-        'Invoxa Blue' => '#4a90e2',
+        'enXure Blue' => '#4a90e2',
         'Slate' => '#475569',
         'Emerald' => '#10b981',
         'Violet' => '#8b5cf6',
@@ -24,7 +24,7 @@ function invoxaBrandPresets(): array
 // Darkens ($percent < 0) or lightens ($percent > 0, 0..1 range either way) a
 // hex color, e.g. for a button's hover state derived from the one brand color
 // setting stores.
-function invoxaShadeColor(string $hex, float $percent): string
+function enxureShadeColor(string $hex, float $percent): string
 {
     $hex = ltrim($hex, '#');
     if (strlen($hex) === 3) {
@@ -46,7 +46,7 @@ function invoxaShadeColor(string $hex, float $percent): string
 // are often built by the cron container, whose internal hostname ("nginx")
 // isn't reachable by a browser. Returns null when neither is available, so
 // callers can omit the Pay Now button instead of emitting a dead link.
-function invoxaPublicBaseUrl(array $settings): ?string
+function enxurePublicBaseUrl(array $settings): ?string
 {
     $configured = trim($settings['public_url'] ?? '');
     if ($configured !== '') {
@@ -63,7 +63,7 @@ function invoxaPublicBaseUrl(array $settings): ?string
 // Standalone message page shared by the Pay Now / payment return routes for
 // non-happy-path cases (invoice not found, already paid, gateway error,
 // cancelled). $message may contain pre-escaped HTML, not raw user input.
-function invoxaSimplePage(string $title, string $heading, string $message): string
+function enxureSimplePage(string $title, string $heading, string $message): string
 {
     return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . htmlspecialchars($title) . '</title><meta name="robots" content="noindex, nofollow"><style>*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:#0a0f1c;color:#f7f9fc;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem 1.25rem;}.box{max-width:440px;text-align:center;}h1{font-size:1.3rem;margin:0 0 0.75rem;}p{color:#90a0bb;font-size:0.92rem;line-height:1.5;}a{color:#4f7cff;}</style></head><body><div class="box"><h1>' . htmlspecialchars($heading) . '</h1><p>' . $message . '</p></div></body></html>';
 }
@@ -89,7 +89,7 @@ function invoiceWatermarkFingerprint(array $settings): string
     return substr(hash('sha256', $key), 0, 10);
 }
 
-function invoxaResolveCurrency(?string $recordCurrency, array $settings): string
+function enxureResolveCurrency(?string $recordCurrency, array $settings): string
 {
     $recordCurrency = trim((string) $recordCurrency);
     if ($recordCurrency !== '') {
@@ -98,22 +98,22 @@ function invoxaResolveCurrency(?string $recordCurrency, array $settings): string
     return strtoupper($settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD'));
 }
 
-function invoxaNormalizeCurrencyCode(string $raw): string
+function enxureNormalizeCurrencyCode(string $raw): string
 {
     return substr(strtoupper(preg_replace('/[^A-Za-z]/', '', $raw)), 0, 3);
 }
 
-function invoxaGroupAmountsByCurrency(array $rows, string $amountKey, array $settings): array
+function enxureGroupAmountsByCurrency(array $rows, string $amountKey, array $settings): array
 {
     $out = [];
     foreach ($rows as $row) {
-        $ccy = invoxaResolveCurrency($row['currency'] ?? '', $settings);
+        $ccy = enxureResolveCurrency($row['currency'] ?? '', $settings);
         $out[$ccy] = ($out[$ccy] ?? 0) + (float) ($row[$amountKey] ?? 0);
     }
     return $out;
 }
 
-function invoxaFormatMoneyByCurrency(array $byCcy): string
+function enxureFormatMoneyByCurrency(array $byCcy): string
 {
     if (empty($byCcy)) {
         return '$0.00';
@@ -125,16 +125,16 @@ function invoxaFormatMoneyByCurrency(array $byCcy): string
     return implode(' + ', $parts);
 }
 
-// Like invoxaGroupAmountsByCurrency() but merges several summed columns from
+// Like enxureGroupAmountsByCurrency() but merges several summed columns from
 // an already currency-grouped SQL result (SELECT currency, SUM(...) AS foo,
 // SUM(...) AS bar ... GROUP BY currency) into one array per resolved
 // currency, so e.g. a raw '' row and an explicit 'USD' row both fold into
 // the same 'USD' bucket instead of staying split.
-function invoxaGroupRowsByCurrency(array $rows, array $sumKeys, array $settings): array
+function enxureGroupRowsByCurrency(array $rows, array $sumKeys, array $settings): array
 {
     $out = [];
     foreach ($rows as $row) {
-        $ccy = invoxaResolveCurrency($row['currency'] ?? '', $settings);
+        $ccy = enxureResolveCurrency($row['currency'] ?? '', $settings);
         if (!isset($out[$ccy])) {
             $out[$ccy] = array_fill_keys($sumKeys, 0.0);
         }
@@ -148,19 +148,19 @@ function invoxaGroupRowsByCurrency(array $rows, array $sumKeys, array $settings)
 // For the CSV/IIF export preview banners, which show a single number: stay a
 // plain float in the common single-currency case (unchanged look), fall back
 // to the "CCY $x + CCY $y" grouped string only once a second currency shows up.
-function invoxaStatDisplay(array $byCcy)
+function enxureStatDisplay(array $byCcy)
 {
     if (count($byCcy) <= 1) {
         return round(array_sum($byCcy), 2);
     }
-    return invoxaFormatMoneyByCurrency($byCcy);
+    return enxureFormatMoneyByCurrency($byCcy);
 }
 
 // The one place a string that might carry a thousands-separator comma (a
 // number_format()'d amount fed back in, a pasted "$1,200.00", an Excel-
 // exported CSV cell) gets turned into a float — (float)/floatval() alone
 // stop at the first non-digit, silently truncating "1,200.00" to 1.0.
-function invoxaParseAmount($raw): float
+function enxureParseAmount($raw): float
 {
     return (float) str_replace(',', '', trim((string) $raw));
 }
@@ -222,7 +222,7 @@ function expenseCategories(): array
 // $template selects the layout CSS only; every other element (line items,
 // summary rows, footer, watermark) is shared between templates. 'compact' is
 // a terser layout for invoices with many line items; 'detailed' is the
-// default; 'custom' renders $customTemplate through invoxaRenderTemplate()
+// default; 'custom' renders $customTemplate through enxureRenderTemplate()
 // instead of the built-in markup below.
 function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amount, $accountName, $accountNumber, $senderEmail, $lineItems = [], $brandColor = '#4a90e2', $footerText = '', $currencyCode = 'USD', $licenseFingerprint = '', $discountPct = 0.0, $taxRate = 0.0, $template = 'detailed', ?string $payUrl = null, bool $showPoweredBy = true, string $vatNumber = '', string $recipientPhone = '', string $recipientAddress = '', ?string $customTemplate = null, string $businessName = '', string $documentType = 'Invoice', ?string $quoteExpiresAt = null)
 {
@@ -230,10 +230,10 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     $watermarkSpan = $licenseFingerprint !== '' ? "<span style=\"font-size:1px;color:#f9f9f8;user-select:none;\">{$licenseFingerprint}</span>" : '';
 
     if ($template === 'custom' && $customTemplate !== null && trim($customTemplate) !== '') {
-        $subtotal = array_sum(array_map('invoxaParseAmount', array_column($lineItems, 'amount')));
+        $subtotal = array_sum(array_map('enxureParseAmount', array_column($lineItems, 'amount')));
         $discountAmt = $subtotal * $discountPct / 100;
         $taxAmt = ($subtotal - $discountAmt) * $taxRate / 100;
-        return $watermarkComment . invoxaRenderTemplate($customTemplate, [
+        return $watermarkComment . enxureRenderTemplate($customTemplate, [
             'business_name' => $businessName,
             'document_type' => $documentType,
             'vat_number' => $vatNumber,
@@ -275,7 +275,7 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     // invoice just shows line items and a Total row.
     $summaryRowsHtml = "";
     if ($discountPct > 0 || $taxRate > 0) {
-        $subtotal = array_sum(array_map('invoxaParseAmount', array_column($lineItems, 'amount')));
+        $subtotal = array_sum(array_map('enxureParseAmount', array_column($lineItems, 'amount')));
         $discountAmt = $subtotal * $discountPct / 100;
         $taxAmt = ($subtotal - $discountAmt) * $taxRate / 100;
         $summaryRowsHtml .= "<tr class=\"summary-row\"><td colspan=\"2\">Subtotal</td><td>{$currencyCode} \$" . number_format($subtotal, 2) . "</td></tr>";
@@ -312,7 +312,7 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     $quoteExpiryHtml = ($documentType === 'Quote' && $quoteExpiresAt) ? "<p><strong>Valid Until:</strong> " . htmlspecialchars($quoteExpiresAt) . "</p>" : '';
 
     // $payUrl is null when no gateway is enabled, or no Public URL is
-    // configured to build one from (see invoxaPublicBaseUrl()) — omitted
+    // configured to build one from (see enxurePublicBaseUrl()) — omitted
     // rather than rendering a broken link.
     $payButtonHtml = $payUrl !== null
         ? "<p style=\"margin-top:16px;\"><a href=\"" . htmlspecialchars($payUrl) . "\" style=\"display:inline-block;background:{$brandColor};color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-weight:600;\">Pay Now</a></p>"
@@ -321,7 +321,7 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     // Hidden only for a licensed install with the Settings > Branding toggle
     // on; shown otherwise.
     $poweredByHtml = $showPoweredBy
-        ? "<p style=\"margin-top:24px;font-size:11px;color:#999;\">Powered by Invoxa — free, open source invoicing.</p>"
+        ? "<p style=\"margin-top:24px;font-size:11px;color:#999;\">Powered by enXure — free, open source invoicing.</p>"
         : '';
 
     $style = $template === 'compact'
@@ -337,7 +337,7 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
 HTML;
 }
 
-function invoxaSampleInvoiceHtml(string $template, string $customHtml, array $settings, bool $licenseValid): string
+function enxureSampleInvoiceHtml(string $template, string $customHtml, array $settings, bool $licenseValid): string
 {
     $lineItems = [
         ['code' => 'WEB01', 'desc' => 'Website design & development', 'amount' => '950.00'],
@@ -371,7 +371,7 @@ function invoxaSampleInvoiceHtml(string $template, string $customHtml, array $se
     );
 }
 
-function invoxaTemplateGetVar(array $vars, string $path)
+function enxureTemplateGetVar(array $vars, string $path)
 {
     $cur = $vars;
     foreach (explode('.', trim($path)) as $part) {
@@ -384,7 +384,7 @@ function invoxaTemplateGetVar(array $vars, string $path)
     return $cur;
 }
 
-function invoxaTemplateTruthy($val): bool
+function enxureTemplateTruthy($val): bool
 {
     if (is_array($val))
         return count($val) > 0;
@@ -395,7 +395,7 @@ function invoxaTemplateTruthy($val): bool
     return (bool) $val;
 }
 
-function invoxaTokenizeTemplate(string $tpl): array
+function enxureTokenizeTemplate(string $tpl): array
 {
     $tokens = [];
     $pos = 0;
@@ -419,7 +419,7 @@ function invoxaTokenizeTemplate(string $tpl): array
     return $tokens;
 }
 
-function invoxaParseTemplateBlock(array $tokens, int $i, array $stopTags): array
+function enxureParseTemplateBlock(array $tokens, int $i, array $stopTags): array
 {
     $nodes = [];
     $n = count($tokens);
@@ -440,17 +440,17 @@ function invoxaParseTemplateBlock(array $tokens, int $i, array $stopTags): array
             return [$nodes, $i];
         }
         if (preg_match('/^if\s+(.+)$/s', $tag, $m)) {
-            [$ifBody, $i] = invoxaParseTemplateBlock($tokens, $i + 1, ['else', 'endif']);
+            [$ifBody, $i] = enxureParseTemplateBlock($tokens, $i + 1, ['else', 'endif']);
             $elseBody = [];
             if ($i < $n && trim($tokens[$i]['value']) === 'else') {
-                [$elseBody, $i] = invoxaParseTemplateBlock($tokens, $i + 1, ['endif']);
+                [$elseBody, $i] = enxureParseTemplateBlock($tokens, $i + 1, ['endif']);
             }
             $i++;
             $nodes[] = ['type' => 'if', 'cond' => trim($m[1]), 'if' => $ifBody, 'else' => $elseBody];
             continue;
         }
         if (preg_match('/^for\s+(\w+)\s+in\s+(.+)$/s', $tag, $m)) {
-            [$body, $i] = invoxaParseTemplateBlock($tokens, $i + 1, ['endfor']);
+            [$body, $i] = enxureParseTemplateBlock($tokens, $i + 1, ['endfor']);
             $i++;
             $nodes[] = ['type' => 'for', 'item' => $m[1], 'list' => trim($m[2]), 'body' => $body];
             continue;
@@ -460,7 +460,7 @@ function invoxaParseTemplateBlock(array $tokens, int $i, array $stopTags): array
     return [$nodes, $i];
 }
 
-function invoxaRenderTemplateAst(array $nodes, array $vars): string
+function enxureRenderTemplateAst(array $nodes, array $vars): string
 {
     $out = '';
     foreach ($nodes as $node) {
@@ -473,7 +473,7 @@ function invoxaRenderTemplateAst(array $nodes, array $vars): string
                 $expr = trim($m[1]);
                 $raw = true;
             }
-            $val = invoxaTemplateGetVar($vars, $expr);
+            $val = enxureTemplateGetVar($vars, $expr);
             $str = is_array($val) ? '' : (string) $val;
             $out .= $raw ? $str : htmlspecialchars($str);
         } elseif ($node['type'] === 'if') {
@@ -483,18 +483,18 @@ function invoxaRenderTemplateAst(array $nodes, array $vars): string
                 $negate = true;
                 $cond = trim($m[1]);
             }
-            $truthy = invoxaTemplateTruthy(invoxaTemplateGetVar($vars, $cond));
+            $truthy = enxureTemplateTruthy(enxureTemplateGetVar($vars, $cond));
             if ($negate) {
                 $truthy = !$truthy;
             }
-            $out .= invoxaRenderTemplateAst($truthy ? $node['if'] : $node['else'], $vars);
+            $out .= enxureRenderTemplateAst($truthy ? $node['if'] : $node['else'], $vars);
         } elseif ($node['type'] === 'for') {
-            $list = invoxaTemplateGetVar($vars, $node['list']);
+            $list = enxureTemplateGetVar($vars, $node['list']);
             if (is_array($list)) {
                 foreach ($list as $item) {
                     $loopVars = $vars;
                     $loopVars[$node['item']] = $item;
-                    $out .= invoxaRenderTemplateAst($node['body'], $loopVars);
+                    $out .= enxureRenderTemplateAst($node['body'], $loopVars);
                 }
             }
         }
@@ -502,11 +502,11 @@ function invoxaRenderTemplateAst(array $nodes, array $vars): string
     return $out;
 }
 
-function invoxaRenderTemplate(string $tpl, array $vars): string
+function enxureRenderTemplate(string $tpl, array $vars): string
 {
-    $tokens = invoxaTokenizeTemplate($tpl);
-    $parsed = invoxaParseTemplateBlock($tokens, 0, []);
-    return invoxaRenderTemplateAst($parsed[0], $vars);
+    $tokens = enxureTokenizeTemplate($tpl);
+    $parsed = enxureParseTemplateBlock($tokens, 0, []);
+    return enxureRenderTemplateAst($parsed[0], $vars);
 }
 
 function defaultCustomInvoiceTemplate(): string
@@ -551,7 +551,7 @@ th { background: {{ brand_color }}; color: #fff; }
 <p>{{ footer_text }}</p>
 <h3>For Any Inquiries</h3>
 <p>Email: {{ sender_email }}</p>
-{% if show_powered_by %}<p style="margin-top:24px;font-size:11px;color:#999;">Powered by Invoxa — free, open source invoicing.</p>{% endif %}
+{% if show_powered_by %}<p style="margin-top:24px;font-size:11px;color:#999;">Powered by enXure — free, open source invoicing.</p>{% endif %}
 </body>
 </html>
 TPL;
@@ -972,19 +972,19 @@ function parseReceiptOcrText(string $text): array
     $confident = false;
     foreach ($lines as $line) {
         if (preg_match('/\btotal\b/i', $line) && preg_match('/(\d[\d,]*\.\d{2})/', $line, $m)) {
-            $amount = invoxaParseAmount($m[1]);
+            $amount = enxureParseAmount($m[1]);
             $confident = true;
             break;
         }
     }
     if ($amount === null && preg_match_all('/(\d[\d,]*\.\d{2})/', $text, $m) && !empty($m[1])) {
-        $amount = max(array_map('invoxaParseAmount', $m[1]));
+        $amount = max(array_map('enxureParseAmount', $m[1]));
     }
 
     return ['vendor' => $vendor, 'amount' => $amount, 'confident' => $confident];
 }
 
-function invoxaDirSize(string $dir): int
+function enxureDirSize(string $dir): int
 {
     if (!is_dir($dir)) {
         return 0;
@@ -997,7 +997,7 @@ function invoxaDirSize(string $dir): int
     return $size;
 }
 
-function invoxaFormatBytes(int $bytes): string
+function enxureFormatBytes(int $bytes): string
 {
     if ($bytes < 1024) {
         return $bytes . ' B';

@@ -11,12 +11,12 @@ docker-compose.db-expose.yml
 
 # Generated invoices/quotes and database backups: real client data, never
 # committed.
-invoxa-invoices/*
-!invoxa-invoices/.gitkeep
-invoxa-backups/*
-!invoxa-backups/.gitkeep
+enxure-invoices/*
+!enxure-invoices/.gitkeep
+enxure-backups/*
+!enxure-backups/.gitkeep
 
 # Local test-instance scaffolding (docker-compose.test.yml) — not part of the
 # shipped product, no reason for any of it to be tracked.
-invoxa-invoices-test/
-invoxa-backups-test/
+enxure-invoices-test/
+enxure-backups-test/

@@ -59,11 +59,11 @@
                                     <div
                                         style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; background: var(--surface-hover); padding: 1rem; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 1.5rem;">
                                         <?php foreach ($all_tables_info as $tName => $tRows): ?>
-                                            <?php $isInvoxa = (strpos($tName, 'invoxa_') === 0); ?>
-                                            <label class="backup-table-item <?= $isInvoxa ? 'invoxa-table' : 'other-table' ?>"
-                                                style="<?= !$isInvoxa ? 'display:none;' : 'display:flex;' ?> align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+                                            <?php $isenXure = (strpos($tName, 'enxure_') === 0); ?>
+                                            <label class="backup-table-item <?= $isenXure ? 'enxure-table' : 'other-table' ?>"
+                                                style="<?= !$isenXure ? 'display:none;' : 'display:flex;' ?> align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
                                                 <input type="checkbox" class="backup-table-checkbox"
-                                                    value="<?= htmlspecialchars($tName) ?>" <?= $isInvoxa ? 'checked' : '' ?>>
+                                                    value="<?= htmlspecialchars($tName) ?>" <?= $isenXure ? 'checked' : '' ?>>
                                                 <?= htmlspecialchars($tName) ?> <span
                                                     style="color: var(--text-secondary); font-size: 0.75rem;">(<?= number_format($tRows) ?>)</span>
                                             </label>
@@ -87,11 +87,11 @@
                                         <strong>Create Backup</strong> button once a day, on its own cron schedule
                                         (fixed at 02:30 server time, independent of Recurring Billing's schedule
                                         above) — no license required. Manual and automatic backups share the same
-                                        <code>invoxa-backups/</code> folder and the same retention count below.</p>
+                                        <code>enxure-backups/</code> folder and the same retention count below.</p>
                                     <h4 style="margin-top:0; margin-bottom:0.5rem;">Local Backup Retention</h4>
                                     <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0; margin-bottom:1rem;">
                                         After each new backup — manual or automatic — delete older ones beyond this
-                                        count from <code>invoxa-backups/</code>. <strong>0 = keep every backup
+                                        count from <code>enxure-backups/</code>. <strong>0 = keep every backup
                                             forever</strong> (today's default).</p>
                                     <div style="display:flex; align-items:center; gap:0.75rem;">
                                         <input type="number" id="localBackupRetentionCount" class="form-control" min="0"
@@ -106,8 +106,8 @@
                                     <h4 style="margin-top:0; margin-bottom:10px;">Restore Database</h4>
                                     <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0; margin-bottom:1rem;">
                                         Restore only works from backups in the list below — either created here, or a backup file
-                                        exported (via Create Backup) from another Invoxa install, e.g. when migrating to a new
-                                        server. Arbitrary SQL isn't accepted, only Invoxa's own backup file format.</p>
+                                        exported (via Create Backup) from another enXure install, e.g. when migrating to a new
+                                        server. Arbitrary SQL isn't accepted, only enXure's own backup file format.</p>
                                     <div style="display:flex; gap:0.75rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
                                         <select id="restoreBackupSelect" class="form-control" style="max-width:360px;"></select>
                                         <button class="btn" onclick="loadBackupList()" title="Refresh list"><i
@@ -181,7 +181,7 @@
 Never calls real Stripe/PayPal APIs or sends real notifications.
 The Email Delivery group sends through real SMTP too, but requires Mailpit — it only runs when SMTP_HOST=mailpit, reporting Skipped everywhere else, including in production.
 See INSTALL.md's Testing email safely section to set that up.">?</span>
-                                    <?php $__testDefs = invoxaTestDefinitions($mysqli, $settings); ?>
+                                    <?php $__testDefs = enxureTestDefinitions($mysqli, $settings); ?>
                                     <span style="font-size:0.75rem; font-weight:400; color:var(--text-secondary);">(<?= count($__testDefs) ?> tests available)</span>
                                 </h3>
                             </div>
@@ -354,7 +354,7 @@ See INSTALL.md's Testing email safely section to set that up.">(requires Mailpit
                                     <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">Destination
                                         Path</label>
                                     <input type="text" id="offsiteRemotePath" class="form-control"
-                                        placeholder="e.g. invoxa-backups/"
+                                        placeholder="e.g. enxure-backups/"
                                         value="<?= htmlspecialchars($settings['offsite_remote_path'] ?? '') ?>">
                                 </div>
                                 <div class="form-group">

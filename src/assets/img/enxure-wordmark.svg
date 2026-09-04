@@ -11,9 +11,9 @@
        coordinates instead of guessing at font metrics. -->
   <text x="0" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif"
     font-weight="800" font-size="38" letter-spacing="-1.6" textLength="178" lengthAdjust="spacingAndGlyphs"
-    fill="url(#wmGrad)">Invoxa</text>
+    fill="url(#wmGrad)">en<tspan fill="#7dd3fc">X</tspan>ure</text>
   <!-- Faceted accent ribbon underneath, echoing the crossed-blade motif of
-       invoxa-mark.svg (same double-taper silhouette, flattened into a single
+       enxure-mark.svg (same double-taper silhouette, flattened into a single
        strip) so the wordmark and icon read as one designed identity rather
        than an icon plus unrelated text next to it. -->
   <polygon points="0,47 62,44.5 96,52 130,44.5 178,47 178,50.5 130,53 96,46.5 62,53 0,50.5" fill="url(#wmGrad)"

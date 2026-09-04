@@ -1,5 +1,16 @@
 # Changelog
 
+All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
+
+## [3.0.0] - 2026-09-04
+
+### Changed
+- Renamed the product from Invoxa to enXure, following a trademark conflict with an unrelated, established invoicing company already operating under the Invoxa name. Every user-facing surface is updated: page titles, the PWA manifest, EULA, README/INSTALL/CODEBASE docs, the wordmark, and the "Powered by enXure" credit line on invoices and emails. The icon/mark graphic itself is unchanged. Internal implementation details with no user-facing exposure — database table names (`invoxa_users`, `invoxa_invoices`, etc.) — are intentionally left as-is, since renaming them carried real data-migration risk for no visible benefit.
+- Database renamed from `invoxa` to `enxure` via `RENAME TABLE` (a same-server metadata operation — no data copied or at risk); the underlying MySQL user was renamed to match.
+- Docker container, network, and volume names, and the bind-mounted `invoxa-invoices`/`invoxa-backups` directories, all renamed to their `enxure-*` equivalents. Historical invoice/quote HTML files keep their original "Powered by Invoxa" branding as an accurate record of what was actually issued at the time; only their shared logo-image path reference was updated, since that pointed at a resource that moved.
+- The seller-only licensing tooling (`docker-enxure-licensing`) and its signing key files were renamed to match; the key material itself is byte-for-byte unchanged, so previously-issued license keys remain valid.
+
+
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
 ## [2.12.2] - 2026-09-04

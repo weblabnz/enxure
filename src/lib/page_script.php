@@ -14,7 +14,7 @@
             const DASH_WIDTH_LABEL = { '2': '1/3', '3': '1/2', '4': '2/3', '6': 'Full' };
             const justLoggedIn = new URLSearchParams(window.location.search).has('login');
             const justSignedUp = new URLSearchParams(window.location.search).has('welcome');
-            const defaultLandingTab = localStorage.getItem('invoxa_default_tab') || 'dashboard';
+            const defaultLandingTab = localStorage.getItem('enxure_default_tab') || 'dashboard';
             const storedTab = justLoggedIn ? defaultLandingTab : (localStorage.getItem('activeTab') || 'dashboard');
             if (justLoggedIn) {
                 localStorage.setItem('activeTab', defaultLandingTab);
@@ -24,7 +24,7 @@
                 } else {
                     const flash = document.getElementById('welcomeFlash');
                     const flashBackdrop = document.getElementById('welcomeFlashBackdrop');
-                    if (flash && localStorage.getItem('invoxa_show_welcome') !== '0') {
+                    if (flash && localStorage.getItem('enxure_show_welcome') !== '0') {
                         const dismiss = () => { flash.classList.remove('show'); flashBackdrop?.classList.remove('show'); };
                         requestAnimationFrame(() => requestAnimationFrame(() => {
                             flash.classList.add('show');
@@ -278,11 +278,11 @@
                 });
                 localStorage.setItem('docsSubTab', target);
             }
-            // A README.md/INSTALL.md cross-link (rendered by invoxaMarkdownInline())
+            // A README.md/INSTALL.md cross-link (rendered by enxureMarkdownInline())
             // calls this instead of a plain href, since neither file has a real
             // server route — this jumps to the right Docs tab page and, given an
             // anchor, scrolls to the matching heading within it.
-            function invoxaGoToDoc(target, anchor) {
+            function enxureGoToDoc(target, anchor) {
                 navDocs(target);
                 if (anchor) {
                     setTimeout(() => {
@@ -987,7 +987,7 @@
                 expenses: 'No expenses logged yet.',
             };
             function getTblOpts(which) {
-                const preferredPageSize = parseInt(localStorage.getItem('invoxa_table_page_size'), 10) || 12;
+                const preferredPageSize = parseInt(localStorage.getItem('enxure_table_page_size'), 10) || 12;
                 return { searchable: true, fixedHeight: false, destroyable: true, perPage: preferredPageSize, perPageSelect: [12, 30, 50, ['All', 99999]], labels: { noRows: tblEmptyMessages[which] || 'No entries found', searchLabel: '' } };
             }
             const dataTables = {};
@@ -1687,8 +1687,8 @@
             // table's search box, stored per-browser in localStorage like other display
             // preferences (theme, default tab, page size). Not persisted server-side.
             const FILTER_VIEW_TABLES = {
-                invoices: { viewSelectId: 'invoicesViewSelect', statusSelectId: 'invoiceStatusFilter', storageKey: 'invoxa_views_invoices' },
-                clients: { viewSelectId: 'clientsViewSelect', statusSelectId: null, storageKey: 'invoxa_views_clients' },
+                invoices: { viewSelectId: 'invoicesViewSelect', statusSelectId: 'invoiceStatusFilter', storageKey: 'enxure_views_invoices' },
+                clients: { viewSelectId: 'clientsViewSelect', statusSelectId: null, storageKey: 'enxure_views_clients' },
             };
             function getFilterViews(table) {
                 try { return JSON.parse(localStorage.getItem(FILTER_VIEW_TABLES[table].storageKey) || '[]'); } catch (e) { return []; }
@@ -1748,10 +1748,10 @@
             }
             Object.keys(FILTER_VIEW_TABLES).forEach(populateFilterViewSelect);
             // file_path is stored in the DB as "invoices/<folder>/<file>.html", but the
-            // actual served URL (see INVOICES_URL in invoxa.php) is under /invoxa-invoices/
+            // actual served URL (see INVOICES_URL in enxure.php) is under /enxure-invoices/
             // — mirror that mapping here rather than using file_path as a URL directly.
             function invoiceFileUrl(filePath) {
-                return '/invoxa-invoices/' + filePath.replace(/^invoices\//, '');
+                return '/enxure-invoices/' + filePath.replace(/^invoices\//, '');
             }
             let _currentViewFilePath = null;
             let _currentViewInvoiceId = null;
@@ -1792,7 +1792,7 @@
                 } else if (inv.html_content) {
                     // Fallback: write html_content, replacing the email cid: logo reference with the real URL
                     let html = inv.html_content;
-                    html = html.replace(/src=["']cid:logo_cid["']/g, 'src="/invoxa-invoices/invoxa_logo.jpg"');
+                    html = html.replace(/src=["']cid:logo_cid["']/g, 'src="/enxure-invoices/enxure_logo.jpg"');
                     const doc = iframe.contentWindow.document;
                     doc.open(); doc.write(html); doc.close();
                 } else {
@@ -2246,26 +2246,26 @@
                 }
             }
             function applyResolvedTheme() {
-                document.documentElement.setAttribute('data-theme', invoxaResolveTheme());
+                document.documentElement.setAttribute('data-theme', enxureResolveTheme());
                 if (chartAllData) renderChart();
             }
             function setThemeMode(mode) {
-                localStorage.setItem('invoxa_theme', mode);
+                localStorage.setItem('enxure_theme', mode);
                 applyResolvedTheme();
                 markActiveSegment('themeModeGroup', mode);
             }
             if (window.matchMedia) {
                 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-                    if ((localStorage.getItem('invoxa_theme') || 'system') === 'system') applyResolvedTheme();
+                    if ((localStorage.getItem('enxure_theme') || 'system') === 'system') applyResolvedTheme();
                 });
             }
             function setDensityMode(mode) {
-                localStorage.setItem('invoxa_density', mode);
+                localStorage.setItem('enxure_density', mode);
                 document.documentElement.setAttribute('data-density', mode);
                 markActiveSegment('densityModeGroup', mode);
             }
             function setCornerStyle(mode) {
-                localStorage.setItem('invoxa_corners', mode);
+                localStorage.setItem('enxure_corners', mode);
                 document.documentElement.setAttribute('data-corners', mode);
                 markActiveSegment('cornerStyleGroup', mode);
             }
@@ -2275,31 +2275,31 @@
                 });
             }
             function injectCustomCss(css) {
-                let styleEl = document.getElementById('invoxaCustomCssStyle');
+                let styleEl = document.getElementById('enxureCustomCssStyle');
                 if (!styleEl) {
                     styleEl = document.createElement('style');
-                    styleEl.id = 'invoxaCustomCssStyle';
+                    styleEl.id = 'enxureCustomCssStyle';
                     document.head.appendChild(styleEl);
                 }
                 styleEl.textContent = css;
             }
             function applyCustomCss() {
                 const css = document.getElementById('customCssInput').value;
-                localStorage.setItem('invoxa_custom_css', css);
+                localStorage.setItem('enxure_custom_css', css);
                 injectCustomCss(css);
                 showToast('Custom CSS applied');
             }
             function clearCustomCss() {
                 document.getElementById('customCssInput').value = '';
-                localStorage.removeItem('invoxa_custom_css');
+                localStorage.removeItem('enxure_custom_css');
                 injectCustomCss('');
                 showToast('Custom CSS cleared');
             }
 
-            markActiveSegment('themeModeGroup', localStorage.getItem('invoxa_theme') || 'system');
-            markActiveSegment('densityModeGroup', localStorage.getItem('invoxa_density') || 'comfortable');
-            markActiveSegment('cornerStyleGroup', localStorage.getItem('invoxa_corners') || 'rounded');
-            markActiveAccentSwatch(localStorage.getItem('invoxa_accent'));
+            markActiveSegment('themeModeGroup', localStorage.getItem('enxure_theme') || 'system');
+            markActiveSegment('densityModeGroup', localStorage.getItem('enxure_density') || 'comfortable');
+            markActiveSegment('cornerStyleGroup', localStorage.getItem('enxure_corners') || 'rounded');
+            markActiveAccentSwatch(localStorage.getItem('enxure_accent'));
             const _brandColorInput = document.getElementById('brandColor');
             if (_brandColorInput) updateBrandPreview(_brandColorInput.value);
 
@@ -2338,9 +2338,9 @@
                 document.documentElement.style.setProperty('--accent', hex);
                 document.documentElement.style.setProperty('--accent-hover', hover);
                 document.documentElement.style.setProperty('--accent-soft', soft);
-                localStorage.setItem('invoxa_accent', hex);
-                localStorage.setItem('invoxa_accent_hover', hover);
-                localStorage.setItem('invoxa_accent_soft', soft);
+                localStorage.setItem('enxure_accent', hex);
+                localStorage.setItem('enxure_accent_hover', hover);
+                localStorage.setItem('enxure_accent_soft', soft);
                 markActiveAccentSwatch(hex);
                 if (chartAllData) renderChart();
             }
@@ -2348,9 +2348,9 @@
                 document.documentElement.style.removeProperty('--accent');
                 document.documentElement.style.removeProperty('--accent-hover');
                 document.documentElement.style.removeProperty('--accent-soft');
-                localStorage.removeItem('invoxa_accent');
-                localStorage.removeItem('invoxa_accent_hover');
-                localStorage.removeItem('invoxa_accent_soft');
+                localStorage.removeItem('enxure_accent');
+                localStorage.removeItem('enxure_accent_hover');
+                localStorage.removeItem('enxure_accent_soft');
                 markActiveAccentSwatch(null);
                 if (chartAllData) renderChart();
             }
@@ -2781,7 +2781,7 @@
                         msg += ` ${json.no_content} had no stored content to rebuild from — likely historical records imported without an original invoice file. Their database records (client, amount, dates, paid status) are still intact for reporting; delete them below only if you don't need that history.`;
                     }
                     if (json.errors > 0) {
-                        msg += ` ${json.errors} failed to write to disk — check file permissions on invoxa-invoices/.`;
+                        msg += ` ${json.errors} failed to write to disk — check file permissions on enxure-invoices/.`;
                     }
                     const hasIssue = json.no_content > 0 || json.errors > 0;
                     showToast(msg, json.restored === 0 && hasIssue);
@@ -3046,7 +3046,7 @@
                 const res = await fetch('', { method: 'POST', body: formData });
                 const json = await res.json();
                 if (json.success) {
-                    showToast('Business identity saved! This only affects invoices sent to your clients — the Invoxa app itself keeps its own identity.');
+                    showToast('Business identity saved! This only affects invoices sent to your clients — the enXure app itself keeps its own identity.');
                 } else { showToast(json.error || 'Failed to save', true); }
                 btn.innerHTML = '<i class="fa-solid fa-save"></i> Save Business Identity'; btn.disabled = false;
             }
@@ -3107,7 +3107,7 @@
             }
 
             // ── PDF Download ───────────────────────────────────────────────
-            // Server-side render (dompdf, see ?export=invoice_pdf in invoxa.php) —
+            // Server-side render (dompdf, see ?export=invoice_pdf in enxure.php) —
             // a plain navigation rather than fetch/blob so the browser handles the
             // Content-Disposition download itself.
             async function downloadInvoicePdf() {

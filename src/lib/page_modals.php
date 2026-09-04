@@ -446,13 +446,13 @@
              lost against whatever tab happens to be underneath. -->
         <div id="welcomeFlashBackdrop" class="welcome-flash-backdrop"></div>
         <div id="welcomeFlash" class="welcome-flash">
-            <img src="assets/img/invoxa-mark.svg" alt="">
+            <img src="assets/img/enxure-mark.svg" alt="">
             <div>
                 <div class="welcome-flash-eyebrow">
-                    <span class="brand-wordmark">INVOXA</span>
+                    <span class="brand-wordmark">ENXURE</span>
                 </div>
-                <div class="welcome-flash-title">Welcome back, <?= htmlspecialchars($_SESSION['invoxa_username'] ?? 'there') ?></div>
-                <div class="welcome-flash-sub"><?= htmlspecialchars($settings['business_name'] ?? 'Invoxa') ?> ·
+                <div class="welcome-flash-title">Welcome back, <?= htmlspecialchars($_SESSION['enxure_username'] ?? 'there') ?></div>
+                <div class="welcome-flash-sub"><?= htmlspecialchars($settings['business_name'] ?? 'enXure') ?> ·
                     signed in <?= htmlspecialchars(date('D, M j \a\t g:ia')) ?></div>
             </div>
         </div>
@@ -461,11 +461,11 @@
         <div id="onboardingModal" class="modal-overlay">
             <div class="modal" style="max-width:440px; text-align:center;">
                 <div class="modal-body" style="padding-top:2.5rem;">
-                    <img src="assets/img/invoxa-mark.svg" width="48" height="48" alt=""
+                    <img src="assets/img/enxure-mark.svg" width="48" height="48" alt=""
                         style="border-radius:12px; box-shadow:0 6px 18px -4px rgba(79,124,255,0.55); margin-bottom:1rem;">
-                    <div style="margin-bottom:0.75rem;"><img src="assets/img/invoxa-wordmark.svg" height="26" alt="Invoxa"
+                    <div style="margin-bottom:0.75rem;"><img src="assets/img/enxure-wordmark.svg" height="26" alt="enXure"
                             style="width:auto;"></div>
-                    <h2 style="margin:0 0 0.5rem; font-size:1.3rem;">Welcome to Invoxa</h2>
+                    <h2 style="margin:0 0 0.5rem; font-size:1.3rem;">Welcome to enXure</h2>
                     <p style="color:var(--text-secondary); font-size:0.9rem; margin:0 0 1.5rem;">Your account is set up.
                         Load a set of sample clients and invoices to explore the app right away, or start from a clean
                         slate — you'll find this again under Data Management &gt; Demo Data.</p>

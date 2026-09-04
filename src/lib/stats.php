@@ -2,7 +2,7 @@
 // Dashboard/Stats-tab rendering and the $mysqli-touching stats AJAX/GET
 // endpoints (nav badge counts, DB table row counts, tax-year previews, the
 // chart/stats JSON API). renderStatsSection() still pulls its ~50 $stats_*
-// inputs via `global` from Data Fetching in invoxa.php — unchanged by this move.
+// inputs via `global` from Data Fetching in enxure.php — unchanged by this move.
 
 // Max flash-card tidbits visible on the Dashboard at once (see $tidbits in
 // renderDashboardStats() and the Customize menu's cap in page_script.php) —
@@ -25,7 +25,7 @@ function renderDashboardStats($mysqli, int $currentUserId, array $settings, arra
     foreach ($total_paid_by_ccy as $ccy => $amount) {
         $outstanding_by_ccy[$ccy] = ($outstanding_by_ccy[$ccy] ?? 0) - $amount;
     }
-    $allLayouts = invoxaGetStatsLayouts($mysqli, $currentUserId);
+    $allLayouts = enxureGetStatsLayouts($mysqli, $currentUserId);
     $dashboardLayouts = ['dashboard-tidbits' => $allLayouts['dashboard-tidbits'] ?? [], 'dashboard-charts' => $allLayouts['dashboard-charts'] ?? []];
     ob_start();
     ?>
@@ -43,7 +43,7 @@ function renderDashboardStats($mysqli, int $currentUserId, array $settings, arra
     <?php if (count($overdueInvoices) > 0): ?>
         <div class="alert-strip"><i class="fa-solid fa-circle-exclamation"></i>
             <div><strong><?= count($overdueInvoices) ?> Overdue Invoices!</strong> You have
-                <?= invoxaFormatMoneyByCurrency(invoxaGroupAmountsByCurrency($overdueInvoices, 'amount', $settings)) ?> in outstanding overdue
+                <?= enxureFormatMoneyByCurrency(enxureGroupAmountsByCurrency($overdueInvoices, 'amount', $settings)) ?> in outstanding overdue
                 payments.</div><button class="btn small"
                 style="margin-left: auto; border-color: var(--danger); color: var(--danger);"
                 onclick="nav('invoices'); document.getElementById('invoiceStatusFilter').value = 'overdue'; filterInvoicesByStatus('overdue');">View
@@ -63,14 +63,14 @@ function renderDashboardStats($mysqli, int $currentUserId, array $settings, arra
     // customized anything.
     $outstanding_total = array_sum($outstanding_by_ccy);
     $tidbits = [
-        ['id' => 'dash-total-invoiced', 'label' => 'Total Invoiced (All Time)', 'icon' => 'fa-sack-dollar', 'iconClass' => '', 'valueStyle' => '', 'value' => invoxaFormatMoneyByCurrency($total_invoiced_by_ccy), 'hidden' => false],
+        ['id' => 'dash-total-invoiced', 'label' => 'Total Invoiced (All Time)', 'icon' => 'fa-sack-dollar', 'iconClass' => '', 'valueStyle' => '', 'value' => enxureFormatMoneyByCurrency($total_invoiced_by_ccy), 'hidden' => false],
         // Invoiced-this-month, not paid-this-month — same "neutral volume" bucket
         // as Total Invoiced above, not the "money received" green used for
         // Total Paid, since nothing here confirms it's actually been collected.
-        ['id' => 'dash-this-month', 'label' => 'This Month', 'icon' => 'fa-calendar-check', 'iconClass' => '', 'valueStyle' => '', 'value' => invoxaFormatMoneyByCurrency($total_monthly_by_ccy), 'hidden' => false],
-        ['id' => 'dash-total-outstanding', 'label' => 'Total Outstanding', 'icon' => 'fa-hourglass-half', 'iconClass' => $outstanding_total > 0 ? 'warning' : 'success', 'valueStyle' => 'color: var(--' . ($outstanding_total > 0 ? 'warning' : 'success') . ')', 'value' => invoxaFormatMoneyByCurrency($outstanding_by_ccy), 'hidden' => false],
+        ['id' => 'dash-this-month', 'label' => 'This Month', 'icon' => 'fa-calendar-check', 'iconClass' => '', 'valueStyle' => '', 'value' => enxureFormatMoneyByCurrency($total_monthly_by_ccy), 'hidden' => false],
+        ['id' => 'dash-total-outstanding', 'label' => 'Total Outstanding', 'icon' => 'fa-hourglass-half', 'iconClass' => $outstanding_total > 0 ? 'warning' : 'success', 'valueStyle' => 'color: var(--' . ($outstanding_total > 0 ? 'warning' : 'success') . ')', 'value' => enxureFormatMoneyByCurrency($outstanding_by_ccy), 'hidden' => false],
         ['id' => 'dash-active-clients', 'label' => 'Active Clients', 'icon' => 'fa-users', 'iconClass' => 'success', 'valueStyle' => 'color: var(--success)', 'value' => (string) $client_count, 'hidden' => false],
-        ['id' => 'dash-total-paid', 'label' => 'Total Paid (All Time)', 'icon' => 'fa-circle-check', 'iconClass' => 'success', 'valueStyle' => 'color: var(--success)', 'value' => invoxaFormatMoneyByCurrency($total_paid_by_ccy), 'hidden' => true],
+        ['id' => 'dash-total-paid', 'label' => 'Total Paid (All Time)', 'icon' => 'fa-circle-check', 'iconClass' => 'success', 'valueStyle' => 'color: var(--success)', 'value' => enxureFormatMoneyByCurrency($total_paid_by_ccy), 'hidden' => true],
         ['id' => 'dash-overdue-count', 'label' => 'Overdue Invoices', 'icon' => 'fa-circle-exclamation', 'iconClass' => 'danger', 'valueStyle' => 'color: var(--danger)', 'value' => (string) count($overdueInvoices), 'hidden' => true],
         ['id' => 'dash-failed-emails', 'label' => 'Failed Emails', 'icon' => 'fa-triangle-exclamation', 'iconClass' => 'danger', 'valueStyle' => 'color: var(--danger)', 'value' => (string) count($failedInvoices), 'hidden' => true],
     ];
@@ -141,7 +141,7 @@ const STATS_PANES = ['dashboard-tidbits', 'dashboard-charts', 'revenue', 'foreca
 // intentionally not validated against pane-specific semantics here, just
 // clamped to a sane range, since this layer only persists opaque per-card
 // layout data and never needs to interpret it.
-function invoxaGetStatsLayouts($mysqli, int $userId): array
+function enxureGetStatsLayouts($mysqli, int $userId): array
 {
     $layouts = array_fill_keys(STATS_PANES, []);
     if ($userId <= 0) {
@@ -160,7 +160,7 @@ function invoxaGetStatsLayouts($mysqli, int $userId): array
     return $layouts;
 }
 
-function invoxaHandleSaveStatsLayout($mysqli, int $currentUserId): void
+function enxureHandleSaveStatsLayout($mysqli, int $currentUserId): void
 {
     if ($currentUserId <= 0) {
         throw new Exception('Not logged in');
@@ -213,7 +213,7 @@ function renderStatsSection(): string
     $stats_backups_dir_size_bytes, $stats_webhook_unmatched_total, $stats_webhook_unmatched_30d,
     $stats_php_version, $stats_mysql_version, $stats_default_ccy, $stats_has_other_currency,
     $stats_fx_unconverted_currencies;
-    $statsLayouts = invoxaGetStatsLayouts($mysqli, $currentUserId);
+    $statsLayouts = enxureGetStatsLayouts($mysqli, $currentUserId);
     ob_start();
     ?>
     <h2 class="page-title">Data Statistics &amp; Forecasting</h2>
@@ -290,12 +290,12 @@ function renderStatsSection(): string
                             <div class="stats-grid" style="margin-bottom: 0;">
                                 <div class="stat-card" style="border-top: 3px solid var(--success);">
                                     <div class="label">All-Time Revenue</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_all_time_revenue_by_ccy) ?></div>
+                                    <div class="value"><?= enxureFormatMoneyByCurrency($stats_all_time_revenue_by_ccy) ?></div>
                                 </div>
                                 <div class="stat-card"
                                     style="border-top: 3px solid <?= $stats_outstanding_revenue > 0 ? 'var(--warning)' : 'var(--success)' ?>;">
                                     <div class="label">Outstanding Receivables</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_outstanding_revenue_by_ccy) ?> <span
+                                    <div class="value"><?= enxureFormatMoneyByCurrency($stats_outstanding_revenue_by_ccy) ?> <span
                                             style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_overdue_count ?>
                                             overdue)</span></div>
                                 </div>
@@ -303,11 +303,11 @@ function renderStatsSection(): string
                                     <div class="label">Monthly Recurring (<span class="has-tooltip"
                                             data-tip="Monthly Recurring Revenue — total fixed monthly fees from active clients">MRR</span>)
                                     </div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_mrr_by_ccy) ?></div>
+                                    <div class="value"><?= enxureFormatMoneyByCurrency($stats_mrr_by_ccy) ?></div>
                                 </div>
                                 <div class="stat-card" style="border-top: 3px solid var(--accent);">
                                     <div class="label">Average Invoice Value</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_avg_invoice_by_ccy) ?></div>
+                                    <div class="value"><?= enxureFormatMoneyByCurrency($stats_avg_invoice_by_ccy) ?></div>
                                 </div>
                             </div>
                         </div>
@@ -335,13 +335,13 @@ function renderStatsSection(): string
                             <div class="stats-grid" style="margin-bottom: 0;">
                                 <div class="stat-card" style="border-top: 3px solid #8b5cf6;">
                                     <div class="label">Open Quote Pipeline</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_quote_pipeline_value_by_ccy) ?> <span
+                                    <div class="value"><?= enxureFormatMoneyByCurrency($stats_quote_pipeline_value_by_ccy) ?> <span
                                             style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_quote_pipeline_count ?>
                                             open)</span></div>
                                 </div>
                                 <div class="stat-card" style="border-top: 3px solid var(--text-secondary);">
                                     <div class="label">Voided (All-Time)</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_void_amount_by_ccy) ?> <span
+                                    <div class="value"><?= enxureFormatMoneyByCurrency($stats_void_amount_by_ccy) ?> <span
                                             style="font-size: 1rem; color: var(--text-secondary); font-weight: normal;">(<?= $stats_void_count ?>
                                             invoice<?= $stats_void_count === 1 ? '' : 's' ?>)</span></div>
                                 </div>
@@ -358,16 +358,16 @@ function renderStatsSection(): string
                             <div class="stats-grid" style="margin-bottom: 0;">
                                 <div class="stat-card" style="border-top: 3px solid var(--accent);">
                                     <div class="label">Total Invoiced</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_invoiced_by_ccy) ?></div>
+                                    <div class="value"><?= enxureFormatMoneyByCurrency($stats_ty_invoiced_by_ccy) ?></div>
                                 </div>
                                 <div class="stat-card" style="border-top: 3px solid var(--success);">
                                     <div class="label">Total Paid</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_paid_by_ccy) ?></div>
+                                    <div class="value"><?= enxureFormatMoneyByCurrency($stats_ty_paid_by_ccy) ?></div>
                                 </div>
                                 <div class="stat-card"
                                     style="border-top: 3px solid <?= $stats_ty_outstanding > 0 ? 'var(--warning)' : 'var(--success)' ?>;">
                                     <div class="label">Outstanding</div>
-                                    <div class="value"><?= invoxaFormatMoneyByCurrency($stats_ty_outstanding_by_ccy) ?></div>
+                                    <div class="value"><?= enxureFormatMoneyByCurrency($stats_ty_outstanding_by_ccy) ?></div>
                                 </div>
                             </div>
                         </div>
@@ -587,7 +587,7 @@ function renderStatsSection(): string
                                                 <?= htmlspecialchars($tc['client_name']) ?>
                                             </td>
                                             <td style="padding: 1rem; text-align: right; font-weight: 600; color: var(--success);">
-                                                <?= invoxaFormatMoneyByCurrency($tc['by_ccy']) ?>
+                                                <?= enxureFormatMoneyByCurrency($tc['by_ccy']) ?>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -757,9 +757,9 @@ function renderStatsSection(): string
                                     <?php foreach ($stats_ty_monthly as $tym): ?>
                                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                                             <td style="padding: 1rem;"><?= htmlspecialchars($tym['month']) ?></td>
-                                            <td style="padding: 1rem; text-align: right;"><?= invoxaFormatMoneyByCurrency($tym['by_ccy']['invoiced']) ?></td>
-                                            <td style="padding: 1rem; text-align: right; color:var(--success);"><?= invoxaFormatMoneyByCurrency($tym['by_ccy']['paid']) ?></td>
-                                            <td style="padding: 1rem; text-align: right; color:var(--warning);"><?= invoxaFormatMoneyByCurrency($tym['by_ccy']['outstanding']) ?></td>
+                                            <td style="padding: 1rem; text-align: right;"><?= enxureFormatMoneyByCurrency($tym['by_ccy']['invoiced']) ?></td>
+                                            <td style="padding: 1rem; text-align: right; color:var(--success);"><?= enxureFormatMoneyByCurrency($tym['by_ccy']['paid']) ?></td>
+                                            <td style="padding: 1rem; text-align: right; color:var(--warning);"><?= enxureFormatMoneyByCurrency($tym['by_ccy']['outstanding']) ?></td>
                                             <td style="padding: 1rem; text-align: right;"><?= (int) $tym['unpaid_count'] ?></td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -939,7 +939,7 @@ function renderStatsSection(): string
                         </div>
                         <div class="card-body">
                             <div style="height:150px; position:relative; margin-bottom:0.75rem;"><canvas id="storageFootprintChart"></canvas></div>
-                            <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Total: <?= htmlspecialchars(invoxaFormatBytes($stats_db_size_bytes + $stats_invoices_dir_size_bytes + $stats_backups_dir_size_bytes)) ?></p>
+                            <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Total: <?= htmlspecialchars(enxureFormatBytes($stats_db_size_bytes + $stats_invoices_dir_size_bytes + $stats_backups_dir_size_bytes)) ?></p>
                         </div>
                         <script>
                             window.__storageFootprintData = {
@@ -947,9 +947,9 @@ function renderStatsSection(): string
                                 invoices: <?= (int) $stats_invoices_dir_size_bytes ?>,
                                 backups: <?= (int) $stats_backups_dir_size_bytes ?>,
                                 labels: {
-                                    db: <?= json_encode('Database (' . invoxaFormatBytes($stats_db_size_bytes) . ')') ?>,
-                                    invoices: <?= json_encode('Invoices (' . invoxaFormatBytes($stats_invoices_dir_size_bytes) . ')') ?>,
-                                    backups: <?= json_encode('Backups (' . invoxaFormatBytes($stats_backups_dir_size_bytes) . ')') ?>
+                                    db: <?= json_encode('Database (' . enxureFormatBytes($stats_db_size_bytes) . ')') ?>,
+                                    invoices: <?= json_encode('Invoices (' . enxureFormatBytes($stats_invoices_dir_size_bytes) . ')') ?>,
+                                    backups: <?= json_encode('Backups (' . enxureFormatBytes($stats_backups_dir_size_bytes) . ')') ?>
                                 }
                             };
                         </script>
@@ -1016,9 +1016,9 @@ function renderStatsSection(): string
                                 style="max-height: 480px; overflow-y: auto; background: var(--surface-hover); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border);">
                                 <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;">
                                     <?php foreach ($all_tables_info as $tName => $tRows): ?>
-                                        <?php $isInvoxa = (strpos($tName, 'invoxa_') === 0); ?>
-                                        <li class="stat-table-item <?= $isInvoxa ? 'invoxa-table' : 'other-table' ?>"
-                                            style="<?= !$isInvoxa ? 'display:none;' : 'display:flex;' ?> justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid var(--border);">
+                                        <?php $isenXure = (strpos($tName, 'enxure_') === 0); ?>
+                                        <li class="stat-table-item <?= $isenXure ? 'enxure-table' : 'other-table' ?>"
+                                            style="<?= !$isenXure ? 'display:none;' : 'display:flex;' ?> justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid var(--border);">
                                             <span style="color: var(--text-primary);"><?= htmlspecialchars($tName) ?></span>
                                             <span style="color: var(--success); font-weight: 600;"><?= number_format($tRows) ?></span>
                                         </li>
@@ -1053,15 +1053,15 @@ function getTaxYearStart(int $startMonth, ?DateTime $now = null): DateTime
     return $taxYearStart;
 }
 
-function invoxaHandleGetNavCounts($mysqli, array $settings): void
+function enxureHandleGetNavCounts($mysqli, array $settings): void
 {
 // Lets the sidebar poll for fresh badge counts (e.g. invoices the cron
 // container generates in the background) without a full page reload.
 $hideTestNav = isset($settings['hide_test']) ? ($settings['hide_test'] === '1') : true;
 $showTestOnlyNav = ($settings['show_test_only'] ?? '0') === '1';
-$testFilterNav = invoxaTestViewFilter($hideTestNav, $showTestOnlyNav);
+$testFilterNav = enxureTestViewFilter($hideTestNav, $showTestOnlyNav);
 $navUnpaid = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE status IN ('sent', 'pending') $testFilterNav")->fetch_assoc()['c'] ?? 0;
-$navClients = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_clients WHERE is_active = 1 " . invoxaTestViewClientFilter($hideTestNav, $showTestOnlyNav))->fetch_assoc()['c'] ?? 0;
+$navClients = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTestNav, $showTestOnlyNav))->fetch_assoc()['c'] ?? 0;
 $navQuotes = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE is_quote = 1")->fetch_assoc()['c'] ?? 0;
 $navInvoices = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE is_quote = 0 $testFilterNav")->fetch_assoc()['c'] ?? 0;
 $navExpenses = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_expenses")->fetch_assoc()['c'] ?? 0;
@@ -1076,7 +1076,7 @@ echo json_encode([
 exit;
 }
 
-function invoxaHandleGetDbStats($mysqli): void
+function enxureHandleGetDbStats($mysqli): void
 {
 error_reporting(0);
 ob_start();
@@ -1097,7 +1097,7 @@ try {
 exit;
 }
 
-function invoxaHandlePreviewTaxYear($mysqli, array $settings): void
+function enxureHandlePreviewTaxYear($mysqli, array $settings): void
 {
 $now = new DateTime();
 $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1), $now);
@@ -1107,15 +1107,15 @@ $hideTestRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE 
 $hideTest2 = ($hideTestRes2 && $hideTestRes2->num_rows > 0) ? ($hideTestRes2->fetch_assoc()['setting_value'] === '1') : true;
 $showTestOnlyRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
 $showTestOnly2 = ($showTestOnlyRes2 && $showTestOnlyRes2->num_rows > 0) ? ($showTestOnlyRes2->fetch_assoc()['setting_value'] === '1') : false;
-$tf2 = invoxaTestViewFilter($hideTest2, $showTestOnly2);
-$defaultCcy2 = invoxaResolveCurrency('', $settings);
+$tf2 = enxureTestViewFilter($hideTest2, $showTestOnly2);
+$defaultCcy2 = enxureResolveCurrency('', $settings);
 $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $tf2 ORDER BY invoice_date ASC");
 $rows = [];
 $invoicedByCcy = [];
 $paidByCcy = [];
 $defaultPaid = 0.0;
 while ($r = $res->fetch_assoc()) {
-    $ccy = invoxaResolveCurrency($r['currency'], $settings);
+    $ccy = enxureResolveCurrency($r['currency'], $settings);
     $r['currency'] = $ccy;
     $rows[] = $r;
     $invoicedByCcy[$ccy] = ($invoicedByCcy[$ccy] ?? 0) + (float) $r['amount'];
@@ -1133,11 +1133,11 @@ foreach ($invoicedByCcy as $ccy => $inv) {
 // Kept in the default currency only, since expenses have no currency field
 // to convert other-currency revenue against.
 $totalExpenses = (float) ($mysqli->query("SELECT SUM(amount) as s FROM invoxa_expenses WHERE expense_date >= '$startStr'")->fetch_assoc()['s'] ?? 0);
-echo json_encode(['success' => true, 'rows' => $rows, 'label' => $taxYearLabel, 'start' => $startStr, 'total_invoiced' => invoxaStatDisplay($invoicedByCcy), 'total_paid' => invoxaStatDisplay($paidByCcy), 'outstanding' => invoxaStatDisplay($outstandingByCcy), 'total_expenses' => $totalExpenses, 'net_income' => $defaultPaid - $totalExpenses]);
+echo json_encode(['success' => true, 'rows' => $rows, 'label' => $taxYearLabel, 'start' => $startStr, 'total_invoiced' => enxureStatDisplay($invoicedByCcy), 'total_paid' => enxureStatDisplay($paidByCcy), 'outstanding' => enxureStatDisplay($outstandingByCcy), 'total_expenses' => $totalExpenses, 'net_income' => $defaultPaid - $totalExpenses]);
 exit;
 }
 
-function invoxaHandlePreviewTaxYearMonthly($mysqli, array $settings): void
+function enxureHandlePreviewTaxYearMonthly($mysqli, array $settings): void
 {
 $now = new DateTime();
 $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1), $now);
@@ -1147,8 +1147,8 @@ $hideTestRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE 
 $hideTest2 = ($hideTestRes2 && $hideTestRes2->num_rows > 0) ? ($hideTestRes2->fetch_assoc()['setting_value'] === '1') : true;
 $showTestOnlyRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
 $showTestOnly2 = ($showTestOnlyRes2 && $showTestOnlyRes2->num_rows > 0) ? ($showTestOnlyRes2->fetch_assoc()['setting_value'] === '1') : false;
-$tf2 = invoxaTestViewFilter($hideTest2, $showTestOnly2);
-$defaultCcy3 = invoxaResolveCurrency('', $settings);
+$tf2 = enxureTestViewFilter($hideTest2, $showTestOnly2);
+$defaultCcy3 = enxureResolveCurrency('', $settings);
 // One row per month per currency — no exclusion, so an other-currency month
 // still shows up instead of being dropped from the summary.
 $res = $mysqli->query("
@@ -1164,7 +1164,7 @@ $res = $mysqli->query("
 ");
 $byMonthCcy = [];
 while ($r = $res->fetch_assoc()) {
-    $ccy = invoxaResolveCurrency($r['currency'], $settings);
+    $ccy = enxureResolveCurrency($r['currency'], $settings);
     $key = $r['month'] . '|' . $ccy;
     if (!isset($byMonthCcy[$key])) {
         $byMonthCcy[$key] = ['month' => $r['month'], 'currency' => $ccy, 'total_invoiced' => 0.0, 'total_paid' => 0.0, 'outstanding' => 0.0, 'unpaid_count' => 0];
@@ -1221,11 +1221,11 @@ $outstandingByCcy = [];
 foreach ($invoicedByCcy as $ccy => $inv) {
     $outstandingByCcy[$ccy] = $inv - ($paidByCcy[$ccy] ?? 0);
 }
-echo json_encode(['success' => true, 'rows' => $rows, 'label' => $taxYearLabel, 'start' => $startStr, 'total_invoiced' => invoxaStatDisplay($invoicedByCcy), 'total_paid' => invoxaStatDisplay($paidByCcy), 'outstanding' => invoxaStatDisplay($outstandingByCcy), 'total_expenses' => $totalExpenses, 'net_income' => $defaultPaidTotal - $totalExpenses]);
+echo json_encode(['success' => true, 'rows' => $rows, 'label' => $taxYearLabel, 'start' => $startStr, 'total_invoiced' => enxureStatDisplay($invoicedByCcy), 'total_paid' => enxureStatDisplay($paidByCcy), 'outstanding' => enxureStatDisplay($outstandingByCcy), 'total_expenses' => $totalExpenses, 'net_income' => $defaultPaidTotal - $totalExpenses]);
 exit;
 }
 
-function invoxaHandleStatsApiRoutes($mysqli, array $settings): void
+function enxureHandleStatsApiRoutes($mysqli, array $settings): void
 {
     if ($_GET['api'] === 'chart') {
         header('Content-Type: application/json');
@@ -1235,13 +1235,13 @@ function invoxaHandleStatsApiRoutes($mysqli, array $settings): void
         $hideTestChart = ($hideTestRes && $hideTestRes->num_rows > 0) ? ($hideTestRes->fetch_assoc()['setting_value'] === '1') : true;
         $showTestOnlyResChart = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
         $showTestOnlyChart = ($showTestOnlyResChart && $showTestOnlyResChart->num_rows > 0) ? ($showTestOnlyResChart->fetch_assoc()['setting_value'] === '1') : false;
-        $chartClientFilter = invoxaTestViewClientFilter($hideTestChart, $showTestOnlyChart, 'WHERE');
-        $chartInvoiceFilter = invoxaTestViewFilter($hideTestChart, $showTestOnlyChart);
+        $chartClientFilter = enxureTestViewClientFilter($hideTestChart, $showTestOnlyChart, 'WHERE');
+        $chartInvoiceFilter = enxureTestViewFilter($hideTestChart, $showTestOnlyChart);
         $clientsRes = $mysqli->query("SELECT client_key, client_name FROM invoxa_clients $chartClientFilter ORDER BY client_name ASC");
         $chartClients = [];
         while ($cr = $clientsRes->fetch_assoc())
             $chartClients[$cr['client_key']] = $cr['client_name'];
-        $chartDefaultCcyEsc = $mysqli->real_escape_string(invoxaResolveCurrency('', $settings));
+        $chartDefaultCcyEsc = $mysqli->real_escape_string(enxureResolveCurrency('', $settings));
         $q = "SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month, client_key, SUM(amount) as total FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') AND (currency = '' OR currency = '$chartDefaultCcyEsc') $chartInvoiceFilter GROUP BY month, client_key ORDER BY month ASC";
         $byMonth = [];
         $res = $mysqli->query($q);
@@ -1279,7 +1279,7 @@ function invoxaHandleStatsApiRoutes($mysqli, array $settings): void
         $hideTestStats = ($hideTestRes && $hideTestRes->num_rows > 0) ? ($hideTestRes->fetch_assoc()['setting_value'] === '1') : true;
         $showTestOnlyResStats = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
         $showTestOnlyStats = ($showTestOnlyResStats && $showTestOnlyResStats->num_rows > 0) ? ($showTestOnlyResStats->fetch_assoc()['setting_value'] === '1') : false;
-        $statsInvoiceFilter = invoxaTestViewFilter($hideTestStats, $showTestOnlyStats);
+        $statsInvoiceFilter = enxureTestViewFilter($hideTestStats, $showTestOnlyStats);
 
         // Same definition of "unpaid" the dashboard stat card uses.
         $unpaidRow = $mysqli->query("SELECT COUNT(*) as c, SUM(amount - COALESCE(paid_amount, 0)) as amt FROM invoxa_invoices WHERE status IN ('sent', 'pending') $statsInvoiceFilter")->fetch_assoc();
