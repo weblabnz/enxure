@@ -773,6 +773,23 @@ function invoxaTestDefinitions($mysqli, array $settings): array
         invoxaAssertTrue(str_contains($rendered, 'USD $150.00'), 'rendered string names the USD total');
         invoxaAssertTrue(str_contains($rendered, 'EUR $30.00'), 'rendered string names the EUR total');
     });
+    $run('Core Logic', 'invoxaSumByCcyConverted', 'blends every currency with a rate, excludes any without one', 'The Statistics/Forecasting/AR Aging blended total: the default currency is summed as-is, a currency with a rate is divided by it (rate = units of that currency per 1 unit of default), and a currency with no rate at all is left out entirely rather than added in unconverted — the same fallback the page had before FX conversion existed, now scoped to just the currencies a fetch failed for.', function () {
+        $byCcy = ['NZD' => 1000.0, 'USD' => 587.21, 'GBP' => 50.0];
+        $rates = ['USD' => 0.58721]; // no rate for GBP
+        $total = invoxaSumByCcyConverted($byCcy, 'NZD', $rates);
+        invoxaAssertEquals(round(1000.0 + (587.21 / 0.58721), 6), round($total, 6), 'NZD as-is plus converted USD, GBP excluded (no rate)');
+        invoxaAssertEquals(0.0, invoxaSumByCcyConverted([], 'NZD', $rates), 'empty input totals zero');
+        invoxaAssertEquals(250.0, invoxaSumByCcyConverted(['NZD' => 250.0], 'NZD', []), 'default currency alone never needs a rate at all');
+    });
+    $run('Core Logic', 'invoxaFxRequestUrl', 'Frankfurter by default, a custom template when configured', 'With no fx_provider setting (or "frankfurter"), the built-in Frankfurter URL is used with {base}/{symbols} substituted; with fx_provider=custom, the admin-supplied fx_custom_url template is used instead, same substitution.', function () {
+        $frankfurterUrl = invoxaFxRequestUrl([], 'NZD', ['USD', 'EUR']);
+        invoxaAssertTrue(str_starts_with($frankfurterUrl, 'https://api.frankfurter.dev/'), 'defaults to the Frankfurter API');
+        invoxaAssertTrue(str_contains($frankfurterUrl, 'base=NZD'), 'base currency substituted');
+        invoxaAssertTrue(str_contains($frankfurterUrl, 'symbols=USD%2CEUR'), 'symbols substituted and comma-joined');
+
+        $customUrl = invoxaFxRequestUrl(['fx_provider' => 'custom', 'fx_custom_url' => 'https://example.invalid/rates?from={base}&to={symbols}'], 'GBP', ['JPY']);
+        invoxaAssertEquals('https://example.invalid/rates?from=GBP&to=JPY', $customUrl);
+    });
 
     // ── Clients & Invoices ── the "add a client" / "add an invoice" paths,
     // exercised against disposable fixtures rather than the real AJAX actions.

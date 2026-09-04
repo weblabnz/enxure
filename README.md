@@ -103,4 +103,4 @@ Development happens on [GitLab](https://gitlab.com/weblabnz/invoxa) — merge re
 
 ## Migrating or locked out?
 
-See [INSTALL.md](INSTALL.md#migrating-to-a-new-server) for moving Invoxa to a new server, or [INSTALL.md](INSTALL.md#recovering-access-forgot-adminusernamepassword) if you've forgotten the admin login.
+See [INSTALL.md](INSTALL.md#migrating-to-a-new-server) for moving Invoxa to a new server, or its [Recovering access](INSTALL.md#recovering-access-forgot-admin-usernamepassword) section if you've forgotten the admin login.

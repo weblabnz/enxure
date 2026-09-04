@@ -199,6 +199,31 @@
                     input.select();
                 }
             });
+            // Single-key shortcuts — only outside a text field/modal, and only for a
+            // plain keypress (no modifier), so Ctrl/Cmd+K and normal typing/browser
+            // shortcuts are never intercepted.
+            const KEYBOARD_SHORTCUT_TABS = { '1': 'dashboard', '2': 'invoices', '3': 'billing', '4': 'quotes', '5': 'expenses', '6': 'clients', '7': 'stats', '8': 'audit', '9': 'backup', '0': 'settings' };
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey || e.metaKey || e.altKey) return;
+                if (e.target.matches('input, textarea, select, [contenteditable="true"]')) return;
+                if (document.querySelector('.modal-overlay.active')) return;
+                const tab = KEYBOARD_SHORTCUT_TABS[e.key];
+                if (tab && document.querySelector(`.nav-item[data-target="${tab}"]`)) {
+                    e.preventDefault();
+                    nav(tab, true);
+                } else if (e.key === 'n') {
+                    e.preventDefault();
+                    nav('billing', true);
+                    resetAdhocMode();
+                } else if (e.key === 'e') {
+                    e.preventDefault();
+                    openExpenseModal();
+                } else if (e.key === '?') {
+                    e.preventDefault();
+                    openShortcutsModal();
+                }
+            });
+            function openShortcutsModal() { document.getElementById('shortcutsModal').classList.add('active'); }
 
             function nav(section, fromClick = false) {
                 if (!document.getElementById('sec-' + section)) section = 'dashboard';
@@ -252,6 +277,20 @@
                     if (details) details.open = true;
                 });
                 localStorage.setItem('docsSubTab', target);
+            }
+            // A README.md/INSTALL.md cross-link (rendered by invoxaMarkdownInline())
+            // calls this instead of a plain href, since neither file has a real
+            // server route — this jumps to the right Docs tab page and, given an
+            // anchor, scrolls to the matching heading within it.
+            function invoxaGoToDoc(target, anchor) {
+                navDocs(target);
+                if (anchor) {
+                    setTimeout(() => {
+                        const pane = document.getElementById('docs-pane-' + target);
+                        const el = pane && pane.querySelector('#' + CSS.escape(anchor));
+                        if (el) el.scrollIntoView({ block: 'start' });
+                    }, 50);
+                }
             }
             const storedDocsTab = localStorage.getItem('docsSubTab');
             if (storedDocsTab && document.getElementById('docs-pane-' + storedDocsTab)) navDocs(storedDocsTab);
@@ -3020,6 +3059,29 @@
                 const json = await res.json();
                 if (json.success) { showToast('Invoice defaults saved!'); } else { showToast(json.error || 'Failed to save', true); }
                 btn.innerHTML = '<i class="fa-solid fa-save"></i> Save Invoice Defaults'; btn.disabled = false;
+            }
+            async function checkFxRate() {
+                const from = document.getElementById('fxCheckFrom').value.trim().toUpperCase();
+                const to = document.getElementById('fxCheckTo').value.trim().toUpperCase();
+                const amount = parseFloat(document.getElementById('fxCheckAmount').value) || 1;
+                const resultEl = document.getElementById('fxCheckResult');
+                if (!from || !to) { resultEl.textContent = 'Enter both a source and target currency.'; return; }
+                const btn = document.getElementById('fxCheckBtn');
+                btn.disabled = true;
+                resultEl.textContent = 'Checking…';
+                try {
+                    const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'fx_convert_preview', from, to, amount }) });
+                    const json = await res.json();
+                    if (json.success) {
+                        resultEl.textContent = `${amount} ${from} = ${json.converted.toFixed(2)} ${to} (1 ${from} = ${json.rate.toFixed(4)} ${to})`;
+                    } else {
+                        resultEl.textContent = json.error || 'Failed to fetch a rate.';
+                    }
+                } catch (e) {
+                    resultEl.textContent = 'Failed to fetch a rate (network error).';
+                } finally {
+                    btn.disabled = false;
+                }
             }
             async function savePaymentDetails() {
                 const btn = document.getElementById('savePaymentDetailsBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; btn.disabled = true;

@@ -2,6 +2,22 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.12.0] - 2026-09-04
+
+### Added
+- Keyboard shortcuts: `N` jumps to Ad Hoc Invoice (reset to New Invoice mode), `E` opens Add Expense, `1`–`9`/`0` jump to a sidebar tab, and `?` opens a shortcuts overlay listing them all — all ignored while typing in a field or with a modal open. Documented under Docs > Features > Keyboard Shortcuts.
+- Live exchange-rate conversion for Statistics, Forecasting, and AR Aging: these now blend every currency into one converted total using a daily-cached exchange rate, instead of excluding other-currency invoices the way they always had to before. Defaults to Frankfurter (free, no API key); a custom provider URL and API key can be configured instead. A currency with no rate available falls back to being excluded, exactly like before this feature existed, so a provider outage never blends in a wrong number.
+- Settings > Finance: a new settings tab (Currency Code, Tax Year Starts, and the exchange-rate provider config moved out of Branding, where they never really belonged) plus a "Check a Rate" tool to look up a live rate between any two currencies on demand.
+- 3-letter currency code fields (Settings > Finance, Add/Edit Client) now offer USD/EUR/GBP/AUD/NZD/CAD as datalist suggestions while still accepting any code typed in.
+- Data Management > Test Suite gained two Core Logic checks for the new FX math (`invoxaSumByCcyConverted`, `invoxaFxRequestUrl`) — pure-function, no network call, so they run everywhere including production.
+
+### Fixed
+- README.md's `<details>`/`<summary>` collapsible section rendered as literal `&lt;details&gt;` text in the in-app doc viewer instead of an actual disclosure widget — the renderer only allow-listed `<br>`, nothing else.
+- Links to INSTALL.md from within README.md (and vice versa) didn't go anywhere inside the app — the doc viewer renders their content dynamically rather than serving the raw files, so a plain `href="INSTALL.md#anchor"` 404s. They now route through the app's own doc navigation and jump to the right heading.
+- A same-page anchor link (e.g. `[Licensing](#licensing)`) opened a blank new tab instead of jumping to the heading — `target="_blank"` was applied to every link, not just external ones.
+- Rendered headings in README.md/INSTALL.md now carry a GitHub-style `id` slug, so `#anchor` links actually have something to land on; this also caught (and fixed) one pre-existing anchor in README.md that didn't match its heading's real slug.
+- README.md's "Migrating or locked out?" line linked to INSTALL.md twice in one sentence for two different sections; reworded to name the file once.
+
 ## [2.11.48] - 2026-09-04
 
 ### Added

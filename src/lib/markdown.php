@@ -26,13 +26,43 @@ function invoxaMarkdownInline(string $text): string
     }, $text);
     $text = preg_replace_callback('/\[([^\]]+)\]\(([^)]+)\)/', function ($m) {
         $url = $m[2];
-        $safe = preg_match('#^(https?:)?//#i', $url) || strpos($url, '#') === 0 || preg_match('/^[a-zA-Z0-9_.\-]+\.md(#.*)?$/', $url);
+        // A link to README.md/INSTALL.md (optionally #anchor) doesn't correspond
+        // to a real server route inside the app — the doc viewer (the login
+        // page's modal, or the authenticated Docs tab) renders their content
+        // dynamically rather than serving the raw files, so a plain href to it
+        // 404s / does nothing. Route it through the app's own doc navigation
+        // instead, staying inside whichever doc viewer the reader is already in.
+        if (preg_match('/^(README|INSTALL)\.md(?:#([a-zA-Z0-9-]+))?$/i', $url, $dm)) {
+            $target = strtolower($dm[1]) === 'install' ? 'install' : 'readme';
+            $anchor = $dm[2] ?? '';
+            return '<a href="javascript:void(0)" onclick="invoxaGoToDoc(\'' . $target . '\', ' . ($anchor !== '' ? "'{$anchor}'" : 'null') . '); return false;">' . $m[1] . '</a>';
+        }
+        // A same-document anchor (e.g. "#licensing", linking to a heading
+        // elsewhere in this same file) needs to jump in place, not open a new
+        // tab to a blank page — target="_blank" is only meaningful for an
+        // actual external URL.
+        if (strpos($url, '#') === 0) {
+            return '<a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . $m[1] . '</a>';
+        }
+        $safe = preg_match('#^(https?:)?//#i', $url);
         if (!$safe) {
             return htmlspecialchars($m[1], ENT_QUOTES, 'UTF-8');
         }
         return '<a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener">' . $m[1] . '</a>';
     }, $text);
     return $text;
+}
+
+// GitHub-style heading slug (lowercase, spaces/underscores to hyphens, strip
+// punctuation) — matches the anchors README.md/INSTALL.md's own cross-links
+// already use (e.g. "## Migrating to a new server" -> "migrating-to-a-new-server"),
+// so a rendered heading's id lines up with an incoming #anchor link.
+function invoxaSlugify(string $text): string
+{
+    $slug = strtolower($text);
+    $slug = preg_replace('/[^a-z0-9\s-]/', '', $slug);
+    $slug = preg_replace('/[\s_]+/', '-', trim($slug));
+    return trim($slug, '-');
 }
 
 function invoxaRenderMarkdown(string $md): string
@@ -70,7 +100,20 @@ function invoxaRenderMarkdown(string $md): string
         if (preg_match('/^(#{1,4})\s+(.*)$/', $line, $m)) {
             $closeLists();
             $level = strlen($m[1]);
-            $html[] = "<h{$level}>" . invoxaMarkdownInline(trim($m[2])) . "</h{$level}>";
+            $title = trim($m[2]);
+            $html[] = "<h{$level} id=\"" . invoxaSlugify($title) . "\">" . invoxaMarkdownInline($title) . "</h{$level}>";
+            $i++;
+            continue;
+        }
+
+        // Raw passthrough for <details>/<summary>/</details> — the one
+        // block-level HTML tag README.md's GitHub-flavored "collapsible
+        // section" convention needs, which this renderer otherwise has no
+        // way to express (everything else gets htmlspecialchars'd as plain
+        // text, same as <br> below getting a narrow allowlist of its own).
+        if (preg_match('#^<(details|/details)>$#i', trim($line)) || preg_match('#^<summary>.*</summary>$#i', trim($line))) {
+            $closeLists();
+            $html[] = trim($line);
             $i++;
             continue;
         }

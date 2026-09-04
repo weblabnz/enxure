@@ -21,6 +21,7 @@
                         'feat-reporting' => 'Reporting',
                         'feat-data' => 'Data Management',
                         'feat-notifications' => 'Notifications',
+                        'feat-shortcuts' => 'Keyboard Shortcuts',
                     ],
                     'Reference' => ['roadmap' => 'Roadmap', 'changelog' => 'Changelog', 'license' => 'License (AGPL-3.0)', 'source' => 'Source Code'],
                 ];
@@ -80,8 +81,6 @@
                                 $__roadmapEffortLabels = ['quick' => 'Quick win', 'medium' => 'Medium lift', 'large' => 'Larger effort'];
                                 $__roadmapItems = [
                                     ['effort' => 'medium', 'title' => 'CSRF tokens', 'desc' => 'No explicit CSRF protection exists yet on state-changing actions; today\'s browsers\' default same-site cookie behavior mitigates the classic attack, but proper tokens are the correct long-term fix (see Security Review in CODEBASE.md).'],
-                                    ['effort' => 'quick', 'title' => 'Keyboard shortcuts', 'desc' => 'Beyond the existing Ctrl/Cmd+K search, single-key shortcuts for the actions used most (new invoice, new expense, jump to a tab) with a <code>?</code> overlay listing them, for anyone who\'d rather stay on the keyboard than reach for the sidebar.'],
-                                    ['effort' => 'medium', 'title' => 'Live exchange-rate conversion for Statistics, Forecasting, and AR Aging', 'desc' => 'These three still total in the instance default currency only (see Clients &amp; Portal and Reporting docs), excluding other-currency invoices rather than converting them, since a single chart axis or forecast can\'t blend currencies without a rate. Pulling in a daily FX rate would let them show one true blended total instead.'],
                                     ['effort' => 'large', 'title' => 'Passkey / WebAuthn login', 'desc' => '2FA is TOTP-only today. Adding passkeys as an alternative second factor (or a full passwordless login option) would cover people who\'d rather use a hardware key or their device\'s built-in biometrics than an authenticator app.'],
                                     ['effort' => 'large', 'title' => 'Two-way Xero / QuickBooks Online sync', 'desc' => 'Today\'s Accounting Journal and QuickBooks (IIF) exports are one-way CSV/file dumps. A real API-based sync that pushes invoices and payments and pulls back reconciliation status would remove the manual export/import step entirely — the largest single item here.'],
                                 ];
@@ -346,13 +345,13 @@
                                     <strong>Email Address</strong>; <strong>Rate</strong> (per billing period) and
                                     <strong>Currency</strong> — a 3-letter code (USD, EUR, GBP, etc.) for that
                                     client's invoices and quotes; leave it blank to use the instance default
-                                    (Settings &gt; General). Each invoice/quote snapshots the client's currency at
+                                    (Settings &gt; Finance). Each invoice/quote snapshots the client's currency at
                                     the moment it's created, so changing a client's currency later never rewrites
-                                    their past invoices. There's no automatic exchange-rate conversion — amounts in
-                                    a different currency are grouped separately rather than added together,
-                                    including in Statistics and the accounting exports; only Statistics' charts,
-                                    Forecasting, and AR Aging still total in the instance default currency, since a
-                                    single chart axis or forecast can't meaningfully mix currencies;
+                                    their past invoices. Amounts in a different currency are grouped separately
+                                    rather than added together everywhere except Statistics' charts, Forecasting,
+                                    and AR Aging, which blend every currency into one converted total using a
+                                    daily-cached exchange rate (Settings &gt; Finance) — a single chart axis or
+                                    forecast can't otherwise mix currencies at all;
                                     <strong>Billing Frequency</strong>
                                     (weekly/monthly/quarterly/annually); <strong>Payment Terms (days)</strong>,
                                     which drives the default due date on that client's invoices when one isn't set
@@ -500,7 +499,7 @@
                                     "how's the business doing right now" without drilling into Statistics.</p>
                                 <h2>Statistics</h2>
                                 <p><strong>Requires a license.</strong> The Dashboard above stays free either way.</p>
-                                <p>If any client is set to a currency other than the instance default (Settings &gt; General), Statistics' totals, tables, and the Tax &amp; Compliance exports below show every currency, grouped rather than blended (e.g. "USD $500.00 + EUR $200.00") — same as the Dashboard's headline totals and the Invoices/Clients/Quotes tabs. The exceptions are Statistics' charts, the Forecasting tab, and AR Aging, which still total in the instance default currency only, since a single chart axis or forecast can't meaningfully mix currencies without an exchange rate (see Clients &amp; Client Portal).</p>
+                                <p>If any client is set to a currency other than the instance default (Settings &gt; Finance), Statistics' totals, tables, and the Tax &amp; Compliance exports below show every currency, grouped rather than blended (e.g. "USD $500.00 + EUR $200.00") — same as the Dashboard's headline totals and the Invoices/Clients/Quotes tabs. The exceptions are Statistics' charts, the Forecasting tab, and AR Aging, which blend every currency into one converted total instead, using a daily-cached exchange rate (provider configurable under Settings &gt; Finance) — a single chart axis or forecast can't otherwise mix currencies at all (see Clients &amp; Client Portal).</p>
                                 <p>Statistics is split into six focused tabs rather than one long scrolling page:
                                     <strong>Revenue</strong>, <strong>Forecasting</strong>, <strong>Clients</strong>,
                                     <strong>Tax &amp; Compliance</strong>, <strong>Activity</strong>, and
@@ -642,6 +641,31 @@
                                     trigger as Payment Reminders, regardless of whether the reminder email itself
                                     successfully sends). A <strong>Send Test Message</strong> button confirms the
                                     configured channel actually works before you rely on it.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="subnav-pane" id="docs-pane-feat-shortcuts">
+                        <div class="card">
+                            <div class="card-body doc-content">
+                                <h1>Keyboard Shortcuts</h1>
+                                <p>Press <kbd>?</kbd> anywhere in the app to open the shortcuts overlay. All of these
+                                    are ignored while typing in a text field or with a modal open, so they never get
+                                    in the way of normal typing.</p>
+                                <h2>Actions</h2>
+                                <ul>
+                                    <li><kbd>Ctrl</kbd> <kbd>K</kbd> (or <kbd>Cmd</kbd> <kbd>K</kbd> on macOS) —
+                                        focus Search.</li>
+                                    <li><kbd>N</kbd> — jump to Ad Hoc Invoice, reset to New Invoice mode.</li>
+                                    <li><kbd>E</kbd> — open Add Expense.</li>
+                                    <li><kbd>?</kbd> — show the shortcuts overlay.</li>
+                                </ul>
+                                <h2>Jump to a tab</h2>
+                                <p><kbd>1</kbd> Dashboard, <kbd>2</kbd> Invoices, <kbd>3</kbd> Ad Hoc Invoice,
+                                    <kbd>4</kbd> Quotes, <kbd>5</kbd> Expenses, <kbd>6</kbd> Clients, <kbd>7</kbd>
+                                    Statistics, <kbd>8</kbd> Audit Log, <kbd>9</kbd> Data Management, <kbd>0</kbd>
+                                    Settings — a number key does nothing if that tab isn't in your sidebar (e.g.
+                                    Statistics without a license, Data Management as a non-admin).</p>
                             </div>
                         </div>
                     </div>

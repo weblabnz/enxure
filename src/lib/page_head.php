@@ -179,11 +179,7 @@
             border-color: var(--accent);
         }
 
-        .global-search-wrap kbd {
-            position: absolute;
-            right: 0.5rem;
-            top: 50%;
-            transform: translateY(-50%);
+        kbd {
             font-size: 0.65rem;
             font-family: inherit;
             color: var(--text-secondary);
@@ -191,6 +187,13 @@
             border: 1px solid var(--border);
             border-radius: 4px;
             padding: 0.1rem 0.35rem;
+        }
+
+        .global-search-wrap kbd {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
             pointer-events: none;
         }
 

@@ -18,6 +18,8 @@
                     <?php if ($isAdmin): ?>
                     <button type="button" class="subnav-item" data-settings-target="branding"
                         onclick="navSettings('branding')"><i class="fa-solid fa-paint-roller"></i> Branding</button>
+                    <button type="button" class="subnav-item" data-settings-target="finance"
+                        onclick="navSettings('finance')"><i class="fa-solid fa-coins"></i> Finance</button>
                     <button type="button" class="subnav-item" data-settings-target="email"
                         onclick="navSettings('email')"><i class="fa-solid fa-envelope"></i> Email
                         <?php $__mailSink = getenv('SMTP_HOST') === 'mailpit'; $__smtpConfigured = trim((string) getenv('SMTP_HOST')) !== ''; ?>
@@ -1155,42 +1157,6 @@
 
                         <div class="card">
                             <div class="card-header">
-                                <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-coins"
-                                        style="color:var(--accent); margin-right:0.5rem;"></i>Invoice Defaults</h3>
-                            </div>
-                            <div class="card-body">
-                                <form id="invoiceDefaultsForm" onsubmit="event.preventDefault(); saveInvoiceDefaults();">
-                                    <div class="pref-item">
-                                        <label class="form-label" for="currency">Currency Code</label>
-                                        <input type="text" id="currency" name="currency" class="form-control" maxlength="3"
-                                            style="text-transform:uppercase; max-width:100px;"
-                                            value="<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>" placeholder="USD">
-                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">3-letter
-                                            code shown on invoices (e.g. USD, NZD, GBP, EUR).</p>
-                                    </div>
-                                    <div class="pref-item">
-                                        <label class="form-label" for="taxYearStartMonth">Tax Year Starts</label>
-                                        <select id="taxYearStartMonth" name="tax_year_start_month" class="form-control">
-                                            <?php
-                                            $__months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                                            $__tysm = (int) ($settings['tax_year_start_month'] ?? 1);
-                                            foreach ($__months as $__i => $__m):
-                                                ?>
-                                                <option value="<?= $__i + 1 ?>" <?= $__tysm === $__i + 1 ? 'selected' : '' ?>>
-                                                    <?= $__m ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Used by
-                                            the Tax Year report. Choose January for a calendar-year default.</p>
-                                    </div>
-                                    <button type="submit" style="margin-top:1rem;" class="btn primary" id="saveInvoiceDefaultsBtn"><i
-                                            class="fa-solid fa-save"></i> Save Invoice Defaults</button>
-                                </form>
-                            </div>
-                        </div>
-
-                        <div class="card">
-                            <div class="card-header">
                                 <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-building-columns"
                                         style="color:var(--accent); margin-right:0.5rem;"></i>Default Payment Details</h3>
                             </div>
@@ -1248,6 +1214,104 @@
                                     <button type="submit" style="margin-top:1rem;" class="btn primary" id="saveInvoiceNumberingBtn"><i
                                             class="fa-solid fa-save"></i> Save Numbering Format</button>
                                 </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Finance -->
+                    <div class="subnav-pane" id="settings-pane-finance">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-coins"
+                                        style="color:var(--accent); margin-right:0.5rem;"></i>Invoice Defaults</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="invoiceDefaultsForm" onsubmit="event.preventDefault(); saveInvoiceDefaults();">
+                                    <div class="pref-item">
+                                        <label class="form-label" for="currency">Currency Code</label>
+                                        <input type="text" id="currency" name="currency" class="form-control" maxlength="3" autocomplete="off" list="commonCurrencyCodes"
+                                            style="text-transform:uppercase; max-width:100px;"
+                                            value="<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>" placeholder="USD">
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">3-letter
+                                            code shown on invoices (e.g. USD, NZD, GBP, EUR).</p>
+                                    </div>
+                                    <div class="pref-item">
+                                        <label class="form-label" for="fxProvider">Exchange Rate Provider</label>
+                                        <select id="fxProvider" name="fx_provider" class="form-control" style="max-width:260px;"
+                                            onchange="document.getElementById('fxCustomFields').style.display = this.value === 'custom' ? '' : 'none';">
+                                            <?php $__fxProvider = $settings['fx_provider'] ?? 'frankfurter'; ?>
+                                            <option value="frankfurter" <?= $__fxProvider === 'frankfurter' ? 'selected' : '' ?>>Frankfurter (free, no key)</option>
+                                            <option value="custom" <?= $__fxProvider === 'custom' ? 'selected' : '' ?>>Custom API</option>
+                                        </select>
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Used by
+                                            Statistics, Forecasting, and AR Aging to blend other-currency invoices into one
+                                            converted total. Rates are cached and refreshed at most once a day.</p>
+                                        <div id="fxCustomFields" style="margin-top:0.75rem; <?= $__fxProvider === 'custom' ? '' : 'display:none;' ?>">
+                                            <label class="form-label" for="fxCustomUrl">Custom API URL</label>
+                                            <input type="text" id="fxCustomUrl" name="fx_custom_url" class="form-control" autocomplete="off"
+                                                placeholder="https://.../latest?base={base}&symbols={symbols}"
+                                                value="<?= htmlspecialchars($settings['fx_custom_url'] ?? '') ?>">
+                                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
+                                                <code>{base}</code> and <code>{symbols}</code> are substituted automatically.
+                                                Must return JSON shaped like Frankfurter's: <code>{"rates": {"EUR": 0.92, ...}}</code>.
+                                            </p>
+                                            <label class="form-label" for="fxCustomApiKey" style="margin-top:0.6rem;">API Key
+                                                (optional)</label>
+                                            <input type="password" id="fxCustomApiKey" name="fx_custom_api_key" class="form-control"
+                                                placeholder="Sent as an Authorization: Bearer header"
+                                                value="<?= htmlspecialchars($settings['fx_custom_api_key'] ?? '') ?>">
+                                        </div>
+                                    </div>
+                                    <div class="pref-item">
+                                        <label class="form-label" for="taxYearStartMonth">Tax Year Starts</label>
+                                        <select id="taxYearStartMonth" name="tax_year_start_month" class="form-control">
+                                            <?php
+                                            $__months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                                            $__tysm = (int) ($settings['tax_year_start_month'] ?? 1);
+                                            foreach ($__months as $__i => $__m):
+                                                ?>
+                                                <option value="<?= $__i + 1 ?>" <?= $__tysm === $__i + 1 ? 'selected' : '' ?>>
+                                                    <?= $__m ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Used by
+                                            the Tax Year report. Choose January for a calendar-year default.</p>
+                                    </div>
+                                    <button type="submit" style="margin-top:1rem;" class="btn primary" id="saveInvoiceDefaultsBtn"><i
+                                            class="fa-solid fa-save"></i> Save Invoice Defaults</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-right-left"
+                                        style="color:var(--accent); margin-right:0.5rem;"></i>Check a Rate</h3>
+                            </div>
+                            <div class="card-body">
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Look up a
+                                    live rate from the provider configured above — useful to confirm it's reachable and
+                                    returning what you expect before relying on it in Statistics.</p>
+                                <div style="display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap;">
+                                    <div class="form-group" style="margin:0; max-width:110px;">
+                                        <label class="form-label">Amount</label>
+                                        <input type="number" id="fxCheckAmount" class="form-control" value="1" min="0" step="any" autocomplete="off">
+                                    </div>
+                                    <div class="form-group" style="margin:0; max-width:90px;">
+                                        <label class="form-label">From</label>
+                                        <input type="text" id="fxCheckFrom" class="form-control" maxlength="3" autocomplete="off" list="commonCurrencyCodes"
+                                            style="text-transform:uppercase;" placeholder="USD"
+                                            value="<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>">
+                                    </div>
+                                    <div class="form-group" style="margin:0; max-width:90px;">
+                                        <label class="form-label">To</label>
+                                        <input type="text" id="fxCheckTo" class="form-control" maxlength="3" autocomplete="off" list="commonCurrencyCodes"
+                                            style="text-transform:uppercase;" placeholder="EUR">
+                                    </div>
+                                    <button type="button" class="btn" onclick="checkFxRate()" id="fxCheckBtn"><i
+                                            class="fa-solid fa-magnifying-glass-dollar"></i> Check Rate</button>
+                                </div>
+                                <p id="fxCheckResult" style="margin-top:1rem; font-size:0.9rem;"></p>
                             </div>
                         </div>
                     </div>

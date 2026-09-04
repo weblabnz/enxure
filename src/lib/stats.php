@@ -211,7 +211,8 @@ function renderStatsSection(): string
     $most_active_clients, $stats_invoice_status, $stats_revenue_trend, $stats_expense_ty_total, $stats_net_income_ty,
     $stats_expense_categories, $stats_expense_monthly, $stats_db_size_bytes, $stats_invoices_dir_size_bytes,
     $stats_backups_dir_size_bytes, $stats_webhook_unmatched_total, $stats_webhook_unmatched_30d,
-    $stats_php_version, $stats_mysql_version, $stats_default_ccy, $stats_has_other_currency;
+    $stats_php_version, $stats_mysql_version, $stats_default_ccy, $stats_has_other_currency,
+    $stats_fx_unconverted_currencies;
     $statsLayouts = invoxaGetStatsLayouts($mysqli, $currentUserId);
     ob_start();
     ?>
@@ -219,13 +220,23 @@ function renderStatsSection(): string
     <?php // A data attribute (not a <script> tag) because refreshStatsSection() swaps
     // this markup in via innerHTML, which never executes embedded <script> tags. ?>
     <div id="statsLayoutData" data-layouts="<?= htmlspecialchars(json_encode($statsLayouts), ENT_QUOTES) ?>" style="display:none"></div>
-    <?php if ($stats_has_other_currency): ?>
+    <?php if ($stats_has_other_currency && empty($stats_fx_unconverted_currencies)): ?>
+        <div class="card" style="border-left:3px solid var(--accent); margin: 0 1.5rem 1.75rem;">
+            <div class="card-body" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
+                <i class="fa-solid fa-right-left" style="color:var(--accent); font-size:1.1rem;"></i>
+                <div><strong>Charts, Forecasting &amp; AR Aging blend every currency into <?= htmlspecialchars($stats_default_ccy) ?>, converted at a cached daily rate.</strong>
+                    <span style="color:var(--text-secondary); font-size:0.85rem; display:block; margin-top:0.15rem;">
+                        Set the rate provider under Settings &gt; Finance. Every other total, table, and export on this page still shows each currency separately too.</span>
+                </div>
+            </div>
+        </div>
+    <?php elseif ($stats_has_other_currency): ?>
         <div class="card" style="border-left:3px solid var(--warning); margin: 0 1.5rem 1.75rem;">
             <div class="card-body" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
-                <i class="fa-solid fa-circle-info" style="color:var(--warning); font-size:1.1rem;"></i>
-                <div><strong>Charts, Forecasting &amp; AR Aging total in <?= htmlspecialchars($stats_default_ccy) ?> only.</strong>
+                <i class="fa-solid fa-triangle-exclamation" style="color:var(--warning); font-size:1.1rem;"></i>
+                <div><strong>Charts, Forecasting &amp; AR Aging exclude <?= htmlspecialchars(implode(', ', $stats_fx_unconverted_currencies)) ?> — no exchange rate available.</strong>
                     <span style="color:var(--text-secondary); font-size:0.85rem; display:block; margin-top:0.15rem;">
-                        Every other total, table, and export on this page groups in every currency instead.</span>
+                        Check the provider under Settings &gt; Finance; other currencies here are still converted normally. Every other total, table, and export on this page groups in every currency instead.</span>
                 </div>
             </div>
         </div>
@@ -417,26 +428,26 @@ function renderStatsSection(): string
                             <li
                                 style="display:flex; justify-content:space-between; border-bottom:1px solid color-mix(in srgb, var(--success) 30%, transparent); padding-bottom:0.6rem; background:color-mix(in srgb, var(--success) 8%, transparent); border-radius:6px; padding:0.5rem 0.6rem; margin-bottom:0.25rem;">
                                 <span style="color:var(--success); font-weight:600;">Expected Yearly Value:</span>
-                                <strong style="color:var(--success);">$<?= number_format($stats_12m_projected, 2) ?></strong>
+                                <strong style="color:var(--success);"><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($stats_12m_projected, 2) ?></strong>
                             </li>
                             <li
                                 style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.6rem;">
                                 <span style="color:var(--text-secondary);">Recurring (<span class="has-tooltip"
                                         data-tip="Monthly Recurring Revenue × 12 months">MRR</span> × 12):</span>
-                                <strong style="color:var(--success);">$<?= number_format($stats_mrr * 12, 2) ?></strong>
+                                <strong style="color:var(--success);"><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($stats_mrr * 12, 2) ?></strong>
                             </li>
                             <li
                                 style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.6rem;">
                                 <span style="color:var(--text-secondary);">Outstanding Invoices:</span>
                                 <strong
-                                    style="color:var(--warning);">$<?= number_format($stats_outstanding_revenue, 2) ?></strong>
+                                    style="color:var(--warning);"><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($stats_outstanding_revenue, 2) ?></strong>
                             </li>
                             <li
                                 style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.6rem;">
                                 <span style="color:var(--text-secondary);"><span class="has-tooltip"
                                         data-tip="MRR alone — what you'd expect month-to-month once the current outstanding balance is collected, not a smoothed average of the one-off backlog">Recurring
                                         Monthly Avg</span>:</span>
-                                <strong style="color:var(--success);">$<?= number_format($stats_mrr, 2) ?></strong>
+                                <strong style="color:var(--success);"><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($stats_mrr, 2) ?></strong>
                             </li>
                             <li style="display:flex; justify-content:space-between;">
                                 <span style="color:var(--text-secondary);"><span class="has-tooltip"
@@ -469,7 +480,7 @@ function renderStatsSection(): string
                                     <div style="display:flex; justify-content:space-between; margin-bottom:0.3rem; font-size:0.85rem;">
                                         <span style="color:var(--text-secondary);"><?= htmlspecialchars($bucket['label']) ?>
                                             <span style="color:var(--text-secondary);">(<?= $bucket['count'] ?>)</span></span>
-                                        <strong>$<?= number_format($bucket['amount'], 2) ?></strong>
+                                        <strong><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($bucket['amount'], 2) ?></strong>
                                     </div>
                                     <div style="background:var(--surface-hover); border-radius:4px; height:8px; overflow:hidden;">
                                         <div style="background:<?= $bucket['color'] ?>; height:100%; width:<?= round($bucket['amount'] / $stats_aging_max * 100, 1) ?>%;">
@@ -637,16 +648,16 @@ function renderStatsSection(): string
                             <div class="stats-grid" style="margin-bottom: 0;">
                                 <div class="stat-card" style="border-top: 3px solid var(--success);">
                                     <div class="label">Revenue Received</div>
-                                    <div class="value">$<?= number_format($stats_ty_paid, 2) ?></div>
+                                    <div class="value"><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($stats_ty_paid, 2) ?></div>
                                 </div>
                                 <div class="stat-card" style="border-top: 3px solid var(--danger);">
                                     <div class="label">Expenses</div>
-                                    <div class="value">$<?= number_format($stats_expense_ty_total, 2) ?></div>
+                                    <div class="value"><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($stats_expense_ty_total, 2) ?></div>
                                 </div>
                                 <div class="stat-card"
                                     style="border-top: 3px solid <?= $stats_net_income_ty >= 0 ? 'var(--success)' : 'var(--danger)' ?>;">
                                     <div class="label">Net Income</div>
-                                    <div class="value">$<?= number_format($stats_net_income_ty, 2) ?></div>
+                                    <div class="value"><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($stats_net_income_ty, 2) ?></div>
                                 </div>
                             </div>
                         </div>

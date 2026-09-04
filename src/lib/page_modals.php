@@ -1,3 +1,14 @@
+        <!-- Suggestions for any 3-letter currency code field (list="commonCurrencyCodes") —
+             still free text, this only offers common codes in the dropdown. -->
+        <datalist id="commonCurrencyCodes">
+            <option value="USD">
+            <option value="EUR">
+            <option value="GBP">
+            <option value="AUD">
+            <option value="NZD">
+            <option value="CAD">
+        </datalist>
+
         <!-- Modals -->
         <div id="clientModal" class="modal-overlay">
             <div class="modal large">
@@ -26,7 +37,7 @@
                         <div class="form-group"><label class="form-label">Rate (per billing period)</label><input type="number"
                                 id="clientRate" class="form-control" step="0.01"></div>
                         <div class="form-group"><label class="form-label">Currency</label><input type="text"
-                                id="clientCurrency" class="form-control" maxlength="3"
+                                id="clientCurrency" class="form-control" maxlength="3" list="commonCurrencyCodes" autocomplete="off"
                                 style="text-transform:uppercase; max-width:100px;"
                                 placeholder="<?= htmlspecialchars($settings['currency'] ?? 'USD') ?>">
                             <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">3-letter
@@ -473,6 +484,36 @@
                     <button class="btn primary"
                         onclick="closeModal('onboardingModal'); nav('backup', true); navBackup('demo');"><i
                             class="fa-solid fa-wand-magic-sparkles"></i> Load Demo Data</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="shortcutsModal" class="modal-overlay">
+            <div class="modal" style="max-width:420px;">
+                <div class="modal-header">
+                    <h2>Keyboard Shortcuts</h2><button class="btn"
+                        style="background:transparent; border:none; color:var(--text-primary);" onclick="closeModal('shortcutsModal')"><i
+                            class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="modal-body">
+                    <p style="color:var(--text-secondary); font-size:0.85rem; margin:0 0 1rem;">Ignored while typing in a field or with a modal open, so they never get in the way.</p>
+                    <table style="width:100%; font-size:0.9rem; border-collapse:collapse;">
+                        <tr><td style="padding:0.35rem 0;"><kbd>Ctrl</kbd> <kbd>K</kbd></td><td style="padding:0.35rem 0;">Search</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>N</kbd></td><td style="padding:0.35rem 0;">New Invoice</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>E</kbd></td><td style="padding:0.35rem 0;">New Expense</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>?</kbd></td><td style="padding:0.35rem 0;">Show this help</td></tr>
+                        <tr><td colspan="2" style="padding:0.75rem 0 0.35rem; color:var(--text-secondary); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.03em;">Jump to a tab</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>1</kbd></td><td style="padding:0.35rem 0;">Dashboard</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>2</kbd></td><td style="padding:0.35rem 0;">Invoices</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>3</kbd></td><td style="padding:0.35rem 0;">Ad Hoc Invoice</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>4</kbd></td><td style="padding:0.35rem 0;">Quotes</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>5</kbd></td><td style="padding:0.35rem 0;">Expenses</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>6</kbd></td><td style="padding:0.35rem 0;">Clients</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>7</kbd></td><td style="padding:0.35rem 0;">Statistics</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>8</kbd></td><td style="padding:0.35rem 0;">Audit Log</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>9</kbd></td><td style="padding:0.35rem 0;">Data Management</td></tr>
+                        <tr><td style="padding:0.35rem 0;"><kbd>0</kbd></td><td style="padding:0.35rem 0;">Settings</td></tr>
+                    </table>
                 </div>
             </div>
         </div>

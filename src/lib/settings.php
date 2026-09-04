@@ -501,11 +501,17 @@ function invoxaHandleSaveInvoiceDefaults($mysqli): void
     $taxYearStartMonth = (int) ($_POST['tax_year_start_month'] ?? 1);
     if ($taxYearStartMonth < 1 || $taxYearStartMonth > 12)
         $taxYearStartMonth = 1;
+    $fxProvider = ($_POST['fx_provider'] ?? '') === 'custom' ? 'custom' : 'frankfurter';
+    $fxCustomUrl = trim($_POST['fx_custom_url'] ?? '');
+    $fxCustomApiKey = trim($_POST['fx_custom_api_key'] ?? '');
 
     $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'currency' => $currency,
         'tax_year_start_month' => (string) $taxYearStartMonth,
+        'fx_provider' => $fxProvider,
+        'fx_custom_url' => $fxCustomUrl,
+        'fx_custom_api_key' => $fxCustomApiKey,
     ] as $key => $value) {
         $upsert->bind_param("ss", $key, $value);
         $upsert->execute();

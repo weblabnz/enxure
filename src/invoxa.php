@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '2.11.48');
+define('APP_VERSION', '2.12.0');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see invoxaRegisterFailedLogin()).
@@ -60,6 +60,7 @@ define('DEFAULT_REMINDER_BODY', "Hi {client_name},\n\nThis is a reminder that in
 
 require_once __DIR__ . '/lib/markdown.php';
 require_once __DIR__ . '/lib/invoice_helpers.php';
+require_once __DIR__ . '/lib/fx.php';
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/clients.php';
 require_once __DIR__ . '/lib/stats.php';
@@ -1251,7 +1252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // not on this list). $isCron requests bypass this the same way they
         // bypass the $isAuth gate above — a cron-triggered run has no user at
         // all, and CRON_SECRET is its own, separate authorization.
-        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_all_untracked_files', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'get_db_stats', 'import_backup', 'import_clients_csv', 'import_expenses_csv', 'import_invoices_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
+        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_all_untracked_files', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'fx_convert_preview', 'get_db_stats', 'import_backup', 'import_clients_csv', 'import_expenses_csv', 'import_invoices_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
         if (!$isCron && !$isAdmin && in_array($_POST['action'], $__adminOnlyActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This requires an admin account — see Settings > Users.']);
             exit;
@@ -1942,6 +1943,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         if ($_POST['action'] === 'test_email') { invoxaHandleTestEmail($mysqli, $settings, $emailPassword); }
+        if ($_POST['action'] === 'fx_convert_preview') {
+            $from = invoxaNormalizeCurrencyCode($_POST['from'] ?? '');
+            $to = invoxaNormalizeCurrencyCode($_POST['to'] ?? '');
+            $amount = (float) ($_POST['amount'] ?? 1);
+            if ($from === '' || $to === '') {
+                echo json_encode(['success' => false, 'error' => 'Enter both a source and target currency.']);
+                exit;
+            }
+            if ($from === $to) {
+                echo json_encode(['success' => true, 'rate' => 1.0, 'converted' => $amount]);
+                exit;
+            }
+            $rates = invoxaFxFetchRates($settings, $from, [$to]);
+            if ($rates === null || !isset($rates[$to])) {
+                echo json_encode(['success' => false, 'error' => 'Could not fetch a rate for that pair — check the currency codes and the provider settings above.']);
+                exit;
+            }
+            echo json_encode(['success' => true, 'rate' => $rates[$to], 'converted' => $amount * $rates[$to]]);
+            exit;
+        }
         if ($_POST['action'] === 'save_notification_settings') { invoxaHandleSaveNotificationSettings($mysqli); }
         if ($_POST['action'] === 'test_notification') { invoxaHandleTestNotification($mysqli, $settings); }
         if ($_POST['action'] === 'save_payment_settings') { invoxaHandleSavePaymentSettings($mysqli); }
@@ -2276,17 +2297,30 @@ $stats_mrr = 0;
 
 $stats_default_ccy = invoxaResolveCurrency('', $settings);
 $stats_default_ccy_esc = $mysqli->real_escape_string($stats_default_ccy);
-$ccyFilterInv = "AND (currency = '' OR currency = '$stats_default_ccy_esc')";
-$ccyFilterClient = "AND (currency = '' OR currency = '$stats_default_ccy_esc')";
-$stats_has_other_currency = ($mysqli->query("SELECT 1 FROM invoxa_invoices WHERE currency != '' AND currency != '$stats_default_ccy_esc' LIMIT 1")->num_rows ?? 0) > 0;
+$stats_other_currencies = [];
+$res_other_ccy = $mysqli->query("SELECT DISTINCT currency FROM invoxa_invoices WHERE currency != '' AND currency != '$stats_default_ccy_esc'");
+while ($r = $res_other_ccy->fetch_assoc()) {
+    $stats_other_currencies[] = $r['currency'];
+}
+$stats_has_other_currency = !empty($stats_other_currencies);
+// A daily-cached FX rate per other-currency-in-use — see lib/fx.php. Every
+// "_by_ccy" breakdown below already exists regardless of this; what changes
+// is whether the single blended total each feeds (Forecasting, Tax Year,
+// AR Aging, ...) sums every currency (converted) or just the default one.
+// A currency with no rate available (fetch failed, or the provider doesn't
+// carry it) is excluded from that blended total exactly like it always was
+// before this feature existed — never blended in unconverted.
+$stats_fx_rates = $stats_has_other_currency ? invoxaGetFxRates($mysqli, $settings, $stats_default_ccy, $stats_other_currencies) : [];
+$stats_fx_unconverted_currencies = $stats_has_other_currency
+    ? array_values(array_diff($stats_other_currencies, array_keys($stats_fx_rates)))
+    : [];
 
-$res_rev = $mysqli->query("SELECT SUM(amount - COALESCE(paid_amount, 0)) as outstanding FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND is_quote = 0 $ccyFilterInv $testFilter");
-$stats_outstanding_revenue = $res_rev->fetch_assoc()['outstanding'] ?? 0;
 $res_rev_all = $mysqli->query("SELECT currency, SUM(amount - COALESCE(paid_amount, 0)) as s FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND is_quote = 0 $testFilter GROUP BY currency");
 $rows_rev_all = [];
 while ($r = $res_rev_all->fetch_assoc())
     $rows_rev_all[] = $r;
 $stats_outstanding_revenue_by_ccy = invoxaGroupAmountsByCurrency($rows_rev_all, 's', $settings);
+$stats_outstanding_revenue = invoxaSumByCcyConverted($stats_outstanding_revenue_by_ccy, $stats_default_ccy, $stats_fx_rates);
 
 $res_overdue = $mysqli->query("SELECT COUNT(*) as cnt FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND due_date < CURDATE() AND is_quote = 0 $testFilter");
 $stats_overdue_count = $res_overdue->fetch_assoc()['cnt'] ?? 0;
@@ -2308,18 +2342,6 @@ $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1), 
 $startStr = $taxYearStart->format('Y-m-d');
 $taxYearLabel = $taxYearStart->format('Y-m-d') . " to " . $now->format('Y-m-d');
 
-$res_ty = $mysqli->query("
-    SELECT SUM(amount) as total_invoiced,
-           SUM(COALESCE(paid_amount, 0)) as total_paid,
-           SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding
-    FROM invoxa_invoices
-    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $ccyFilterInv $testFilter
-");
-$row_ty = $res_ty->fetch_assoc();
-$stats_ty_invoiced = $row_ty['total_invoiced'] ?? 0;
-$stats_ty_paid = $row_ty['total_paid'] ?? 0;
-$stats_ty_outstanding = $row_ty['outstanding'] ?? 0;
-
 $res_ty_all = $mysqli->query("
     SELECT currency,
            SUM(amount) as total_invoiced,
@@ -2336,14 +2358,16 @@ $tyGrouped = invoxaGroupRowsByCurrency($rows_ty_all, ['total_invoiced', 'total_p
 $stats_ty_invoiced_by_ccy = array_map(fn($g) => $g['total_invoiced'], $tyGrouped);
 $stats_ty_paid_by_ccy = array_map(fn($g) => $g['total_paid'], $tyGrouped);
 $stats_ty_outstanding_by_ccy = array_map(fn($g) => $g['outstanding'], $tyGrouped);
+$stats_ty_invoiced = invoxaSumByCcyConverted($stats_ty_invoiced_by_ccy, $stats_default_ccy, $stats_fx_rates);
+$stats_ty_paid = invoxaSumByCcyConverted($stats_ty_paid_by_ccy, $stats_default_ccy, $stats_fx_rates);
+$stats_ty_outstanding = invoxaSumByCcyConverted($stats_ty_outstanding_by_ccy, $stats_default_ccy, $stats_fx_rates);
 
-$res_mrr = $mysqli->query("SELECT SUM(monthly_rate) as mrr FROM invoxa_clients WHERE is_active = 1 $ccyFilterClient " . invoxaTestViewClientFilter($hideTest, $showTestOnly));
-$stats_mrr = $res_mrr->fetch_assoc()['mrr'] ?? 0;
 $res_mrr_all = $mysqli->query("SELECT currency, SUM(monthly_rate) as s FROM invoxa_clients WHERE is_active = 1 " . invoxaTestViewClientFilter($hideTest, $showTestOnly) . " GROUP BY currency");
 $rows_mrr_all = [];
 while ($r = $res_mrr_all->fetch_assoc())
     $rows_mrr_all[] = $r;
 $stats_mrr_by_ccy = invoxaGroupAmountsByCurrency($rows_mrr_all, 's', $settings);
+$stats_mrr = invoxaSumByCcyConverted($stats_mrr_by_ccy, $stats_default_ccy, $stats_fx_rates);
 
 $stats_12m_projected = ($stats_mrr * 12) + $stats_outstanding_revenue;
 
@@ -2419,6 +2443,7 @@ $stats_quote_pipeline_value_by_ccy = array_map(fn($g) => $g['total'], $pipelineG
 // by days past due date. "Current" means not yet due.
 $res_aging = $mysqli->query("
     SELECT
+        currency,
         SUM(CASE WHEN due_date >= CURDATE() THEN 1 ELSE 0 END) as c_current,
         SUM(CASE WHEN due_date >= CURDATE() THEN amount - COALESCE(paid_amount, 0) ELSE 0 END) as a_current,
         SUM(CASE WHEN due_date < CURDATE() AND due_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) as c_1_30,
@@ -2430,15 +2455,25 @@ $res_aging = $mysqli->query("
         SUM(CASE WHEN due_date < DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) as c_90_plus,
         SUM(CASE WHEN due_date < DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN amount - COALESCE(paid_amount, 0) ELSE 0 END) as a_90_plus
     FROM invoxa_invoices
-    WHERE is_quote = 0 AND status NOT IN ('paid', 'void') $ccyFilterInv $testFilter
+    WHERE is_quote = 0 AND status NOT IN ('paid', 'void') $testFilter
+    GROUP BY currency
 ");
-$row_aging = $res_aging->fetch_assoc() ?: [];
+$agingBuckets = ['current', '1_30', '31_60', '61_90', '90_plus'];
+$agingCounts = array_fill_keys($agingBuckets, 0);
+$agingByCcy = array_fill_keys($agingBuckets, []);
+while ($r = $res_aging->fetch_assoc()) {
+    $ccy = invoxaResolveCurrency($r['currency'] ?? '', $settings);
+    foreach ($agingBuckets as $b) {
+        $agingCounts[$b] += (int) $r['c_' . $b];
+        $agingByCcy[$b][$ccy] = ($agingByCcy[$b][$ccy] ?? 0) + (float) $r['a_' . $b];
+    }
+}
 $stats_aging = [
-    ['label' => 'Current', 'count' => (int) ($row_aging['c_current'] ?? 0), 'amount' => $row_aging['a_current'] ?? 0, 'color' => '#10b981'],
-    ['label' => '1-30 Days', 'count' => (int) ($row_aging['c_1_30'] ?? 0), 'amount' => $row_aging['a_1_30'] ?? 0, 'color' => '#f59e0b'],
-    ['label' => '31-60 Days', 'count' => (int) ($row_aging['c_31_60'] ?? 0), 'amount' => $row_aging['a_31_60'] ?? 0, 'color' => '#f97316'],
-    ['label' => '61-90 Days', 'count' => (int) ($row_aging['c_61_90'] ?? 0), 'amount' => $row_aging['a_61_90'] ?? 0, 'color' => '#ef4444'],
-    ['label' => '90+ Days', 'count' => (int) ($row_aging['c_90_plus'] ?? 0), 'amount' => $row_aging['a_90_plus'] ?? 0, 'color' => '#b91c1c'],
+    ['label' => 'Current', 'count' => $agingCounts['current'], 'amount' => invoxaSumByCcyConverted($agingByCcy['current'], $stats_default_ccy, $stats_fx_rates), 'color' => '#10b981'],
+    ['label' => '1-30 Days', 'count' => $agingCounts['1_30'], 'amount' => invoxaSumByCcyConverted($agingByCcy['1_30'], $stats_default_ccy, $stats_fx_rates), 'color' => '#f59e0b'],
+    ['label' => '31-60 Days', 'count' => $agingCounts['31_60'], 'amount' => invoxaSumByCcyConverted($agingByCcy['31_60'], $stats_default_ccy, $stats_fx_rates), 'color' => '#f97316'],
+    ['label' => '61-90 Days', 'count' => $agingCounts['61_90'], 'amount' => invoxaSumByCcyConverted($agingByCcy['61_90'], $stats_default_ccy, $stats_fx_rates), 'color' => '#ef4444'],
+    ['label' => '90+ Days', 'count' => $agingCounts['90_plus'], 'amount' => invoxaSumByCcyConverted($agingByCcy['90_plus'], $stats_default_ccy, $stats_fx_rates), 'color' => '#b91c1c'],
 ];
 
 // Client Growth & Mix
@@ -2480,25 +2515,10 @@ $stats_email_success_rate = $stats_email_total > 0 ? round($stats_email_sent / $
 
 // Tax Year monthly breakdown — same query the "Monthly Summary" CSV export
 // uses (see ?export=tax_year_monthly), surfaced inline here instead of only
-// as a download. The chart below plots the default currency only (a single
-// axis can't meaningfully mix currencies); the table shows every currency
-// via each row's by_ccy breakdown.
+// as a download. The chart plots one FX-converted blended total per month
+// (a single axis can't plot separate currencies side by side); the table
+// still shows every currency via each row's own by_ccy breakdown.
 $stats_ty_monthly = [];
-$res_ty_monthly = $mysqli->query("
-    SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month,
-           SUM(amount) as total_invoiced,
-           SUM(COALESCE(paid_amount, 0)) as total_paid,
-           SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding
-    FROM invoxa_invoices
-    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $ccyFilterInv $testFilter
-    GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
-    ORDER BY month ASC
-");
-$tyMonthlyDefault = [];
-if ($res_ty_monthly) {
-    while ($r = $res_ty_monthly->fetch_assoc())
-        $tyMonthlyDefault[$r['month']] = $r;
-}
 $res_ty_monthly_all = $mysqli->query("
     SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month, currency,
            SUM(amount) as total_invoiced,
@@ -2524,17 +2544,17 @@ if ($res_ty_monthly_all) {
         $tyMonthlyUnpaid[$m] = ($tyMonthlyUnpaid[$m] ?? 0) + (int) $r['unpaid_count'];
     }
 }
-$tyMonths = array_unique(array_merge(array_keys($tyMonthlyDefault), array_keys($tyMonthlyByCcy)));
+$tyMonths = array_keys($tyMonthlyByCcy);
 sort($tyMonths);
 foreach ($tyMonths as $m) {
-    $d = $tyMonthlyDefault[$m] ?? ['total_invoiced' => 0, 'total_paid' => 0, 'outstanding' => 0];
+    $d = $tyMonthlyByCcy[$m];
     $stats_ty_monthly[] = [
         'month' => $m,
-        'total_invoiced' => (float) $d['total_invoiced'],
-        'total_paid' => (float) $d['total_paid'],
-        'outstanding' => (float) $d['outstanding'],
+        'total_invoiced' => invoxaSumByCcyConverted($d['invoiced'], $stats_default_ccy, $stats_fx_rates),
+        'total_paid' => invoxaSumByCcyConverted($d['paid'], $stats_default_ccy, $stats_fx_rates),
+        'outstanding' => invoxaSumByCcyConverted($d['outstanding'], $stats_default_ccy, $stats_fx_rates),
         'unpaid_count' => (int) ($tyMonthlyUnpaid[$m] ?? 0),
-        'by_ccy' => $tyMonthlyByCcy[$m] ?? ['invoiced' => [], 'paid' => [], 'outstanding' => []],
+        'by_ccy' => $d,
     ];
 }
 // How far through the current tax year "today" is, for a simple progress bar.
@@ -2576,37 +2596,53 @@ if ($res_active) {
 $stats_invoice_status = [];
 $statusLabels = ['paid' => 'Paid', 'sent' => 'Sent', 'pending' => 'Pending', 'draft' => 'Draft', 'failed' => 'Failed', 'void' => 'Void'];
 $statusColors = ['paid' => '#10b981', 'sent' => '#3b82f6', 'pending' => '#f59e0b', 'draft' => '#94a3b8', 'failed' => '#ef4444', 'void' => '#6b7280'];
-$res_status = $mysqli->query("SELECT status, COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 0 $ccyFilterInv $testFilter GROUP BY status");
+$res_status = $mysqli->query("SELECT status, currency, COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 0 $testFilter GROUP BY status, currency");
 $statusCounts = [];
 if ($res_status) {
-    while ($r = $res_status->fetch_assoc())
-        $statusCounts[$r['status']] = $r;
+    while ($r = $res_status->fetch_assoc()) {
+        $ccy = invoxaResolveCurrency($r['currency'] ?? '', $settings);
+        if (!isset($statusCounts[$r['status']])) {
+            $statusCounts[$r['status']] = ['c' => 0, 'by_ccy' => []];
+        }
+        $statusCounts[$r['status']]['c'] += (int) $r['c'];
+        $statusCounts[$r['status']]['by_ccy'][$ccy] = ($statusCounts[$r['status']]['by_ccy'][$ccy] ?? 0) + (float) $r['total'];
+    }
 }
 foreach ($statusLabels as $sKey => $sLabel) {
     if (!empty($statusCounts[$sKey])) {
-        $stats_invoice_status[] = ['status' => $sKey, 'label' => $sLabel, 'count' => (int) $statusCounts[$sKey]['c'], 'amount' => (float) $statusCounts[$sKey]['total'], 'color' => $statusColors[$sKey]];
+        $stats_invoice_status[] = ['status' => $sKey, 'label' => $sLabel, 'count' => $statusCounts[$sKey]['c'], 'amount' => invoxaSumByCcyConverted($statusCounts[$sKey]['by_ccy'], $stats_default_ccy, $stats_fx_rates), 'color' => $statusColors[$sKey]];
     }
 }
 
 $stats_revenue_trend = [];
 $res_trend = $mysqli->query("
-    SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month,
+    SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month, currency,
            SUM(amount) as total_invoiced,
            SUM(COALESCE(paid_amount, 0)) as total_paid
     FROM invoxa_invoices
-    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH) $ccyFilterInv $testFilter
-    GROUP BY DATE_FORMAT(invoice_date, '%Y-%m')
-    ORDER BY month ASC
+    WHERE is_quote = 0 AND status != 'void' AND invoice_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH) $testFilter
+    GROUP BY DATE_FORMAT(invoice_date, '%Y-%m'), currency
 ");
 $trendByMonth = [];
 if ($res_trend) {
-    while ($r = $res_trend->fetch_assoc())
-        $trendByMonth[$r['month']] = $r;
+    while ($r = $res_trend->fetch_assoc()) {
+        $ccy = invoxaResolveCurrency($r['currency'] ?? '', $settings);
+        $m = $r['month'];
+        if (!isset($trendByMonth[$m])) {
+            $trendByMonth[$m] = ['invoiced' => [], 'paid' => []];
+        }
+        $trendByMonth[$m]['invoiced'][$ccy] = ($trendByMonth[$m]['invoiced'][$ccy] ?? 0) + (float) $r['total_invoiced'];
+        $trendByMonth[$m]['paid'][$ccy] = ($trendByMonth[$m]['paid'][$ccy] ?? 0) + (float) $r['total_paid'];
+    }
 }
 for ($m = 11; $m >= 0; $m--) {
     $monthKey = (new DateTime())->modify("-{$m} months")->format('Y-m');
-    $row = $trendByMonth[$monthKey] ?? ['total_invoiced' => 0, 'total_paid' => 0];
-    $stats_revenue_trend[] = ['month' => $monthKey, 'total_invoiced' => (float) $row['total_invoiced'], 'total_paid' => (float) $row['total_paid']];
+    $row = $trendByMonth[$monthKey] ?? ['invoiced' => [], 'paid' => []];
+    $stats_revenue_trend[] = [
+        'month' => $monthKey,
+        'total_invoiced' => invoxaSumByCcyConverted($row['invoiced'], $stats_default_ccy, $stats_fx_rates),
+        'total_paid' => invoxaSumByCcyConverted($row['paid'], $stats_default_ccy, $stats_fx_rates),
+    ];
 }
 
 $stats_expense_ty_total = (float) ($mysqli->query("SELECT SUM(amount) as t FROM invoxa_expenses WHERE expense_date >= '$startStr'")->fetch_assoc()['t'] ?? 0);
