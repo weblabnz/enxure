@@ -2,6 +2,12 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.4] - 2026-09-05
+
+### Changed
+- Settings > License: moved the Polar purchase link out of the card body and into the card header's top-right corner, as a plain grey button rather than the blue primary one — matches the header-button pattern already used elsewhere in Settings (e.g. Email's "Open Mailpit").
+
+
 ## [3.0.3] - 2026-09-05
 
 ### Changed

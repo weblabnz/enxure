@@ -1319,9 +1319,10 @@
                     <!-- License -->
                     <div class="subnav-pane" id="settings-pane-license">
                         <div class="card">
-                            <div class="card-header">
+                            <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
                                 <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-key"
                                         style="color:var(--accent); margin-right:0.5rem;"></i>License</h3>
+                                <a href="<?= htmlspecialchars(LICENSE_PURCHASE_URL) ?>" target="_blank" rel="noopener" class="btn"><i class="fa-solid fa-cart-shopping"></i> <?= $licenseValid ? 'Polar Purchase Page' : 'Buy a License' ?></a>
                             </div>
                             <div class="card-body">
                                 <div style="margin-bottom:1rem;">
@@ -1344,7 +1345,6 @@
                                         <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
                                             <?= htmlspecialchars($__licenseMsg) ?></p>
                                     <?php endif; ?>
-                                    <a href="<?= htmlspecialchars(LICENSE_PURCHASE_URL) ?>" target="_blank" rel="noopener" class="btn primary" style="margin-top:0.5rem;"><i class="fa-solid fa-cart-shopping"></i> <?= $licenseValid ? 'Polar Purchase Page' : 'Buy a License' ?></a>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label" style="font-size:0.8rem; color:var(--text-secondary);">License
