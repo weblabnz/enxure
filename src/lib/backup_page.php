@@ -179,8 +179,8 @@
                                         style="color:var(--accent); margin-right:0.5rem;"></i>Test Suite
                                     <span class="has-tooltip" data-tip="Each check creates its own disposable data and deletes it after, pass or fail.
 Never calls real Stripe/PayPal APIs or sends real notifications.
-The Email Delivery group sends through real SMTP too, but requires Mailpit — it only runs when SMTP_HOST=mailpit (the test instance's default), reporting Skipped everywhere else, including here in production.
-See DEPLOY.md's Test instance section to set up Mailpit.">?</span>
+The Email Delivery group sends through real SMTP too, but requires Mailpit — it only runs when SMTP_HOST=mailpit, reporting Skipped everywhere else, including in production.
+See INSTALL.md's Testing email safely section to set that up.">?</span>
                                     <?php $__testDefs = invoxaTestDefinitions($mysqli, $settings); ?>
                                     <span style="font-size:0.75rem; font-weight:400; color:var(--text-secondary);">(<?= count($__testDefs) ?> tests available)</span>
                                 </h3>
@@ -233,8 +233,8 @@ See DEPLOY.md's Test instance section to set up Mailpit.">?</span>
                                                                 <?= htmlspecialchars($__lastGroup) ?>
                                                                 <?php if ($__lastGroup === 'Email Delivery'): ?>
                                                                     <span style="font-weight:400; text-transform:none; letter-spacing:normal; color:var(--text-secondary); cursor:help;" class="has-tooltip" data-tip="These send through real SMTP and require Mailpit.
-They only run when SMTP_HOST=mailpit (the test instance's default) and report Skipped everywhere else.
-See DEPLOY.md's Test instance section to set up Mailpit.">(requires Mailpit — hover for setup)</span>
+They only run when SMTP_HOST=mailpit and report Skipped everywhere else.
+See INSTALL.md's Testing email safely section to set that up.">(requires Mailpit — hover for setup)</span>
                                                                 <?php endif; ?>
                                                             </label>
                                                         </td>

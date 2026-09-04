@@ -2,6 +2,14 @@
 
 All notable changes to Invoxa are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [2.12.2] - 2026-09-04
+
+### Added
+- INSTALL.md gained a "Testing email safely (optional)" section under Email/SMTP setup — how to add a Mailpit mail-sink service to your own docker-compose.yml and point SMTP_* at it, so invoice/reminder emails (and Data Management > Test Suite's Email Delivery checks) can be verified without a real send.
+
+### Fixed
+- The Test Suite's Mailpit tooltips pointed end users at DEPLOY.md, a gitignored file that exists only in the maintainer's own checkout and is never shipped to a real install. They now point at INSTALL.md's new Testing email safely section instead.
+
 ## [2.12.1] - 2026-09-04
 
 ### Fixed

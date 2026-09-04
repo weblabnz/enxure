@@ -62,6 +62,37 @@ If you're using a different provider, the same five `SMTP_*` values apply — ch
 
 Once running, use **Settings > Send Test Email** in the app to confirm it's working before relying on it.
 
+### Testing email safely (optional)
+
+If you'd rather verify invoice/reminder emails without risking a real send — or don't have SMTP credentials yet — point Invoxa at a local mail-sink instead of a real provider. [Mailpit](https://mailpit.axllent.org/) is a lightweight SMTP server that captures everything sent to it in a web inbox instead of actually delivering it; nothing ever leaves your machine.
+
+Add it as another service in your `docker-compose.yml`:
+
+```yaml
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: invoxa-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # web inbox — http://localhost:8025
+    networks:
+      - invoxa-net
+```
+
+Then in `.env`, point Invoxa's SMTP settings at it instead of a real provider:
+
+```
+SMTP_HOST=mailpit
+SMTP_PORT=1025
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM_EMAIL=test@invoxa.local
+SMTP_FROM_NAME=Invoxa (Test)
+SMTP_ENCRYPTION=none
+```
+
+`docker compose up -d --build`, then open `http://localhost:8025` — every email Invoxa sends (invoices, reminders, password resets, and Data Management > Test Suite's "Email Delivery" checks) lands there instead of a real inbox. Settings > Email also shows an "Open Mailpit" shortcut whenever `SMTP_HOST=mailpit` is detected. Switch `SMTP_HOST` back to a real provider (and drop the `mailpit` service) whenever you're ready to send real mail.
+
 ## 3. Start the stack
 
 ```bash
