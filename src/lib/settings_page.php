@@ -9,7 +9,7 @@
                     <button type="button" class="subnav-item active" data-settings-target="general"
                         onclick="navSettings('general')"><i class="fa-solid fa-sliders"></i> General</button>
                     <?php endif; ?>
-                    <?php $__u = $mysqli->query("SELECT username, email, totp_secret, email_verified_at FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
+                    <?php $__u = $mysqli->query("SELECT username, email, totp_secret, email_verified_at FROM enxure_users WHERE id = " . $currentUserId)->fetch_assoc();
                     $__totpEnabled = !empty($__u['totp_secret']); ?>
                     <button type="button" class="subnav-item<?= $isAdmin ? '' : ' active' ?>" data-settings-target="account"
                         onclick="navSettings('account')"><i class="fa-solid fa-lock"></i> Account
@@ -45,7 +45,7 @@
                             <span class="subnav-dot <?= $__paymentsOn ? 'on' : 'off' ?>" style="margin-left:0;"
                                 title="<?= !$licenseValid ? 'Online payment collection requires a license — inactive regardless of this setting' : ($__paymentsOn ? 'Online payment collection active' : 'Online payment collection off') ?>"></span>
                         </span></button>
-                    <?php $__apiTokenCount = $licenseValid ? (int) ($mysqli->query("SELECT COUNT(*) as c FROM invoxa_api_tokens WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())")->fetch_assoc()['c'] ?? 0) : 0; ?>
+                    <?php $__apiTokenCount = $licenseValid ? (int) ($mysqli->query("SELECT COUNT(*) as c FROM enxure_api_tokens WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())")->fetch_assoc()['c'] ?? 0) : 0; ?>
                     <button type="button" class="subnav-item" data-settings-target="api"
                         onclick="navSettings('api')"><i class="fa-solid fa-plug-circle-bolt"></i> API Access
                         <span style="margin-left:auto; display:inline-flex; align-items:center; gap:0.4rem;">
@@ -59,7 +59,7 @@
                         onclick="navSettings('notifications')"><i class="fa-solid fa-bell"></i> Notifications
                         <span class="subnav-dot <?= $__notificationsOn ? 'on' : 'off' ?>"
                             title="<?= $__notificationsOn ? 'Notifications active (' . htmlspecialchars(ucfirst($settings['notification_channel'])) . ')' : 'Notifications off' ?>"></span></button>
-                    <?php $__userCount = (int) ($mysqli->query("SELECT COUNT(*) as c FROM invoxa_users")->fetch_assoc()['c'] ?? 0); ?>
+                    <?php $__userCount = (int) ($mysqli->query("SELECT COUNT(*) as c FROM enxure_users")->fetch_assoc()['c'] ?? 0); ?>
                     <button type="button" class="subnav-item" data-settings-target="users"
                         onclick="navSettings('users')"><i class="fa-solid fa-users-gear"></i> Users
                         <span style="margin-left:auto; display:inline-flex; align-items:center; gap:0.4rem;">
@@ -902,7 +902,7 @@
 
                                 <!-- Existing tokens -->
                                 <?php
-                                $__apiTokens = $mysqli->query("SELECT id, label, token_prefix, created_at, last_used_at, expires_at, revoked_at FROM invoxa_api_tokens ORDER BY created_at DESC");
+                                $__apiTokens = $mysqli->query("SELECT id, label, token_prefix, created_at, last_used_at, expires_at, revoked_at FROM enxure_api_tokens ORDER BY created_at DESC");
                                 ?>
                                 <table style="width:100%; border-collapse:collapse; margin-bottom:1.5rem; font-size:0.85rem;">
                                     <thead>
@@ -1418,7 +1418,7 @@
                                 </div>
 
                                 <!-- Existing users -->
-                                <?php $__allUsers = $mysqli->query("SELECT id, username, email, role, created_at FROM invoxa_users ORDER BY id ASC"); ?>
+                                <?php $__allUsers = $mysqli->query("SELECT id, username, email, role, created_at FROM enxure_users ORDER BY id ASC"); ?>
                                 <div style="overflow-x:auto;">
                                 <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
                                     <thead>

@@ -2,6 +2,14 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.1] - 2026-09-04
+
+### Changed
+- Database table names renamed from `invoxa_*` to `enxure_*` (e.g. `invoxa_users` -> `enxure_users`) for full consistency with the 3.0.0 rename — reversing that release's deliberate choice to leave them as-is, now that the query updates across every `src/lib/*.php` file and `sql/01-schema.sql` have been made and verified end to end (health check, row counts, live queries) on both the production and test databases.
+
+
+All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
+
 ## [3.0.0] - 2026-09-04
 
 ### Changed

@@ -779,7 +779,7 @@
            drag-reorder logic in page_script.php, initDashboardDragDrop() /
            applyDashboardLayouts()) so nothing here can change how Statistics
            behaves. Saved per user under the 'dashboard-tidbits' and
-           'dashboard-charts' panes in invoxa_stats_layout — same table
+           'dashboard-charts' panes in enxure_stats_layout — same table
            Statistics uses, just a different pane, since the save/load
            functions are pane-agnostic. */
         .dashboard-tidbit-row .card,

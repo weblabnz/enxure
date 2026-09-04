@@ -101,9 +101,9 @@ function enxureGenerateBackupCodes(int $count = 10): array
 // the plaintext codes for the caller to show the admin once.
 function enxureIssueBackupCodes($mysqli, int $userId): array
 {
-    $mysqli->query("DELETE FROM invoxa_totp_backup_codes WHERE user_id = " . (int) $userId);
+    $mysqli->query("DELETE FROM enxure_totp_backup_codes WHERE user_id = " . (int) $userId);
     $codes = enxureGenerateBackupCodes();
-    $insert = $mysqli->prepare("INSERT INTO invoxa_totp_backup_codes (user_id, code_hash) VALUES (?, ?)");
+    $insert = $mysqli->prepare("INSERT INTO enxure_totp_backup_codes (user_id, code_hash) VALUES (?, ?)");
     foreach ($codes as $code) {
         $hash = password_hash(str_replace('-', '', $code), PASSWORD_DEFAULT);
         $insert->bind_param("is", $userId, $hash);
@@ -130,12 +130,12 @@ function enxureRegisterFailedLogin($mysqli, int $userId, int $currentAttempts): 
 {
     $attempts = $currentAttempts + 1;
     if ($attempts >= LOGIN_MAX_ATTEMPTS) {
-        $stmt = $mysqli->prepare("UPDATE invoxa_users SET failed_login_attempts = 0, locked_until = DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id = ?");
+        $stmt = $mysqli->prepare("UPDATE enxure_users SET failed_login_attempts = 0, locked_until = DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id = ?");
         $lockoutMinutes = LOGIN_LOCKOUT_MINUTES;
         $stmt->bind_param("ii", $lockoutMinutes, $userId);
         $stmt->execute();
     } else {
-        $stmt = $mysqli->prepare("UPDATE invoxa_users SET failed_login_attempts = ? WHERE id = ?");
+        $stmt = $mysqli->prepare("UPDATE enxure_users SET failed_login_attempts = ? WHERE id = ?");
         $stmt->bind_param("ii", $attempts, $userId);
         $stmt->execute();
     }
@@ -219,7 +219,7 @@ function enxureIssueUserWelcomeEmail($mysqli, int $userId, string $username, str
 {
     $rawToken = bin2hex(random_bytes(32));
     $resetTokenHash = hash('sha256', $rawToken);
-    $stmt = $mysqli->prepare("UPDATE invoxa_users SET reset_token_hash = ?, reset_token_expires = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?");
+    $stmt = $mysqli->prepare("UPDATE enxure_users SET reset_token_hash = ?, reset_token_expires = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?");
     $stmt->bind_param("si", $resetTokenHash, $userId);
     $stmt->execute();
     return enxureSendWelcomeEmail($username, $email, $rawToken);
@@ -266,7 +266,7 @@ function enxureIssueEmailVerification($mysqli, int $userId, string $username, st
 {
     $rawToken = bin2hex(random_bytes(32));
     $verifyHash = hash('sha256', $rawToken);
-    $stmt = $mysqli->prepare("UPDATE invoxa_users SET verify_token_hash = ?, verify_token_expires = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?");
+    $stmt = $mysqli->prepare("UPDATE enxure_users SET verify_token_hash = ?, verify_token_expires = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?");
     $stmt->bind_param("si", $verifyHash, $userId);
     $stmt->execute();
     return enxureSendVerificationEmail($username, $email, $rawToken);
@@ -305,13 +305,13 @@ function enxureConsumeBackupCode($mysqli, int $userId, string $code): bool
     if ($normalized === '') {
         return false;
     }
-    $stmt = $mysqli->prepare("SELECT id, code_hash FROM invoxa_totp_backup_codes WHERE user_id = ? AND used_at IS NULL");
+    $stmt = $mysqli->prepare("SELECT id, code_hash FROM enxure_totp_backup_codes WHERE user_id = ? AND used_at IS NULL");
     $stmt->bind_param("i", $userId);
     $stmt->execute();
     $rows = $stmt->get_result();
     while ($row = $rows->fetch_assoc()) {
         if (password_verify($normalized, $row['code_hash'])) {
-            $upd = $mysqli->prepare("UPDATE invoxa_totp_backup_codes SET used_at = NOW() WHERE id = ?");
+            $upd = $mysqli->prepare("UPDATE enxure_totp_backup_codes SET used_at = NOW() WHERE id = ?");
             $upd->bind_param("i", $row['id']);
             $upd->execute();
             return true;
@@ -336,10 +336,10 @@ function enxureCreateApiToken($mysqli, string $label, ?int $expiresDays): array
     $hash = hash('sha256', $raw);
     $prefix = substr($raw, 0, 10);
     if ($expiresDays === null) {
-        $stmt = $mysqli->prepare("INSERT INTO invoxa_api_tokens (label, token_hash, token_prefix) VALUES (?, ?, ?)");
+        $stmt = $mysqli->prepare("INSERT INTO enxure_api_tokens (label, token_hash, token_prefix) VALUES (?, ?, ?)");
         $stmt->bind_param("sss", $label, $hash, $prefix);
     } else {
-        $stmt = $mysqli->prepare("INSERT INTO invoxa_api_tokens (label, token_hash, token_prefix, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))");
+        $stmt = $mysqli->prepare("INSERT INTO enxure_api_tokens (label, token_hash, token_prefix, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))");
         $stmt->bind_param("sssi", $label, $hash, $prefix, $expiresDays);
     }
     $stmt->execute();
@@ -354,7 +354,7 @@ function enxureAuthenticateApiRequest($mysqli): ?array
 {
     // The API is a paid feature — re-checked on every request, not just at
     // token creation, so a deactivated license stops authenticating tokens.
-    $licenseRow = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'license_key'")->fetch_assoc();
+    $licenseRow = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'license_key'")->fetch_assoc();
     $license = trim((string) ($licenseRow['setting_value'] ?? ''));
     $parts = $license === '' ? [] : explode('.', $license, 2);
     if (getenv('ENXURE_DEMO_MODE') || count($parts) !== 2) {
@@ -373,7 +373,7 @@ function enxureAuthenticateApiRequest($mysqli): ?array
     if (count($fields) !== 3) {
         return null;
     }
-    $ownerRow = $mysqli->query("SELECT email FROM invoxa_users ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $ownerRow = $mysqli->query("SELECT email FROM enxure_users ORDER BY id ASC LIMIT 1")->fetch_assoc();
     $ownerEmail = trim((string) ($ownerRow['email'] ?? ''));
     if ($ownerEmail === '' || strcasecmp($ownerEmail, trim($fields[0])) !== 0) {
         return null;
@@ -393,13 +393,13 @@ function enxureAuthenticateApiRequest($mysqli): ?array
         return null;
     }
     $hash = hash('sha256', $m[1]);
-    $stmt = $mysqli->prepare("SELECT id, label FROM invoxa_api_tokens WHERE token_hash = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())");
+    $stmt = $mysqli->prepare("SELECT id, label FROM enxure_api_tokens WHERE token_hash = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())");
     $stmt->bind_param("s", $hash);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
     if (!$row) {
         return null;
     }
-    $mysqli->query("UPDATE invoxa_api_tokens SET last_used_at = NOW() WHERE id = " . (int) $row['id']);
+    $mysqli->query("UPDATE enxure_api_tokens SET last_used_at = NOW() WHERE id = " . (int) $row['id']);
     return $row;
 }

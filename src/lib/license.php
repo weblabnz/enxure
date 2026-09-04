@@ -13,7 +13,7 @@
  *
  * Two identity anchors are required: the request domain and the email on
  * the original account — the one created via the signup screen, i.e. the
- * lowest id in invoxa_users, regardless of how many teammates get added
+ * lowest id in enxure_users, regardless of how many teammates get added
  * later via Settings > Users — must both match what the license was issued
  * for.
  *
@@ -84,7 +84,7 @@ function licenseIsValid($mysqli, array $settings, bool $skipDomainCheck = false,
     // currently logged in (or no one, on the cron path). Applies to both the
     // browser and cron paths (unlike the domain check below, it doesn't
     // depend on $skipDomainCheck).
-    $userRes = $mysqli->query("SELECT email FROM invoxa_users ORDER BY id ASC LIMIT 1");
+    $userRes = $mysqli->query("SELECT email FROM enxure_users ORDER BY id ASC LIMIT 1");
     $profileEmail = $userRes ? trim((string) ($userRes->fetch_assoc()['email'] ?? '')) : '';
     if ($profileEmail === '') {
         $reason = 'no_profile_email';

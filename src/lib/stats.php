@@ -16,7 +16,7 @@ const DASHBOARD_TIDBIT_VISIBLE_MAX = 4;
 // endpoint). Two independent customizable regions, each with their own
 // drag-reorder JS (initDashboardDragDrop/applyDashboardLayouts in
 // page_script.php) deliberately separate from Statistics' own — saved per
-// user in invoxa_stats_layout under the 'dashboard-tidbits'/'dashboard-charts'
+// user in enxure_stats_layout under the 'dashboard-tidbits'/'dashboard-charts'
 // panes (see STATS_PANES below; that table/functions are pane-agnostic, so
 // reusing them here doesn't touch Statistics' own behavior).
 function renderDashboardStats($mysqli, int $currentUserId, array $settings, array $failedInvoices, array $overdueInvoices, array $total_invoiced_by_ccy, array $total_monthly_by_ccy, array $total_paid_by_ccy, int $client_count): string
@@ -122,7 +122,7 @@ function renderDashboardStats($mysqli, int $currentUserId, array $settings, arra
 }
 
 // Panes with a draggable/reorderable card grid, saved per pane in
-// invoxa_stats_layout — the Statistics subnav tabs (their own drag/resize
+// enxure_stats_layout — the Statistics subnav tabs (their own drag/resize
 // logic in page_script.php, unrelated to Dashboard's), plus
 // 'dashboard-tidbits'/'dashboard-charts' for the Dashboard tab's own stat
 // cards and charts (see renderDashboardStats() — separate drag-reorder logic
@@ -147,7 +147,7 @@ function enxureGetStatsLayouts($mysqli, int $userId): array
     if ($userId <= 0) {
         return $layouts;
     }
-    $res = $mysqli->query("SELECT pane, layout_json FROM invoxa_stats_layout WHERE user_id = " . $userId);
+    $res = $mysqli->query("SELECT pane, layout_json FROM enxure_stats_layout WHERE user_id = " . $userId);
     while ($res && $row = $res->fetch_assoc()) {
         if (!in_array($row['pane'], STATS_PANES, true)) {
             continue;
@@ -184,7 +184,7 @@ function enxureHandleSaveStatsLayout($mysqli, int $currentUserId): void
         $clean[] = ['id' => $entry['id'], 'width' => $width, 'col' => $col, 'hidden' => $hidden];
     }
     $json = json_encode($clean);
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_stats_layout (user_id, pane, layout_json) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE layout_json = VALUES(layout_json)");
+    $stmt = $mysqli->prepare("INSERT INTO enxure_stats_layout (user_id, pane, layout_json) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE layout_json = VALUES(layout_json)");
     $stmt->bind_param('iss', $currentUserId, $pane, $json);
     $stmt->execute();
     echo json_encode(['success' => true]);
@@ -1060,11 +1060,11 @@ function enxureHandleGetNavCounts($mysqli, array $settings): void
 $hideTestNav = isset($settings['hide_test']) ? ($settings['hide_test'] === '1') : true;
 $showTestOnlyNav = ($settings['show_test_only'] ?? '0') === '1';
 $testFilterNav = enxureTestViewFilter($hideTestNav, $showTestOnlyNav);
-$navUnpaid = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE status IN ('sent', 'pending') $testFilterNav")->fetch_assoc()['c'] ?? 0;
-$navClients = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTestNav, $showTestOnlyNav))->fetch_assoc()['c'] ?? 0;
-$navQuotes = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE is_quote = 1")->fetch_assoc()['c'] ?? 0;
-$navInvoices = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE is_quote = 0 $testFilterNav")->fetch_assoc()['c'] ?? 0;
-$navExpenses = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_expenses")->fetch_assoc()['c'] ?? 0;
+$navUnpaid = $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE status IN ('sent', 'pending') $testFilterNav")->fetch_assoc()['c'] ?? 0;
+$navClients = $mysqli->query("SELECT COUNT(*) as c FROM enxure_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTestNav, $showTestOnlyNav))->fetch_assoc()['c'] ?? 0;
+$navQuotes = $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE is_quote = 1")->fetch_assoc()['c'] ?? 0;
+$navInvoices = $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE is_quote = 0 $testFilterNav")->fetch_assoc()['c'] ?? 0;
+$navExpenses = $mysqli->query("SELECT COUNT(*) as c FROM enxure_expenses")->fetch_assoc()['c'] ?? 0;
 echo json_encode([
     'success' => true,
     'invoice_count' => (int) $navInvoices,
@@ -1103,13 +1103,13 @@ $now = new DateTime();
 $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1), $now);
 $startStr = $taxYearStart->format('Y-m-d');
 $taxYearLabel = $taxYearStart->format('Y-m-d') . " to " . $now->format('Y-m-d');
-$hideTestRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'hide_test'");
+$hideTestRes2 = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'hide_test'");
 $hideTest2 = ($hideTestRes2 && $hideTestRes2->num_rows > 0) ? ($hideTestRes2->fetch_assoc()['setting_value'] === '1') : true;
-$showTestOnlyRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
+$showTestOnlyRes2 = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'show_test_only'");
 $showTestOnly2 = ($showTestOnlyRes2 && $showTestOnlyRes2->num_rows > 0) ? ($showTestOnlyRes2->fetch_assoc()['setting_value'] === '1') : false;
 $tf2 = enxureTestViewFilter($hideTest2, $showTestOnly2);
 $defaultCcy2 = enxureResolveCurrency('', $settings);
-$res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $tf2 ORDER BY invoice_date ASC");
+$res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM enxure_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $tf2 ORDER BY invoice_date ASC");
 $rows = [];
 $invoicedByCcy = [];
 $paidByCcy = [];
@@ -1132,7 +1132,7 @@ foreach ($invoicedByCcy as $ccy => $inv) {
 // window) — unlike Total Invoiced above, this excludes unpaid billings.
 // Kept in the default currency only, since expenses have no currency field
 // to convert other-currency revenue against.
-$totalExpenses = (float) ($mysqli->query("SELECT SUM(amount) as s FROM invoxa_expenses WHERE expense_date >= '$startStr'")->fetch_assoc()['s'] ?? 0);
+$totalExpenses = (float) ($mysqli->query("SELECT SUM(amount) as s FROM enxure_expenses WHERE expense_date >= '$startStr'")->fetch_assoc()['s'] ?? 0);
 echo json_encode(['success' => true, 'rows' => $rows, 'label' => $taxYearLabel, 'start' => $startStr, 'total_invoiced' => enxureStatDisplay($invoicedByCcy), 'total_paid' => enxureStatDisplay($paidByCcy), 'outstanding' => enxureStatDisplay($outstandingByCcy), 'total_expenses' => $totalExpenses, 'net_income' => $defaultPaid - $totalExpenses]);
 exit;
 }
@@ -1143,9 +1143,9 @@ $now = new DateTime();
 $taxYearStart = getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1), $now);
 $startStr = $taxYearStart->format('Y-m-d');
 $taxYearLabel = $taxYearStart->format('Y-m-d') . " to " . $now->format('Y-m-d');
-$hideTestRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'hide_test'");
+$hideTestRes2 = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'hide_test'");
 $hideTest2 = ($hideTestRes2 && $hideTestRes2->num_rows > 0) ? ($hideTestRes2->fetch_assoc()['setting_value'] === '1') : true;
-$showTestOnlyRes2 = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
+$showTestOnlyRes2 = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'show_test_only'");
 $showTestOnly2 = ($showTestOnlyRes2 && $showTestOnlyRes2->num_rows > 0) ? ($showTestOnlyRes2->fetch_assoc()['setting_value'] === '1') : false;
 $tf2 = enxureTestViewFilter($hideTest2, $showTestOnly2);
 $defaultCcy3 = enxureResolveCurrency('', $settings);
@@ -1157,7 +1157,7 @@ $res = $mysqli->query("
            SUM(COALESCE(paid_amount, 0)) as total_paid,
            SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding,
            SUM(CASE WHEN status NOT IN ('paid') THEN 1 ELSE 0 END) as unpaid_count
-    FROM invoxa_invoices
+    FROM enxure_invoices
     WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $tf2
     GROUP BY DATE_FORMAT(invoice_date, '%Y-%m'), currency
     ORDER BY month ASC
@@ -1175,7 +1175,7 @@ while ($r = $res->fetch_assoc()) {
     $byMonthCcy[$key]['unpaid_count'] += (int) $r['unpaid_count'];
 }
 $expensesByMonth = [];
-$expRes = $mysqli->query("SELECT DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(amount) as total FROM invoxa_expenses WHERE expense_date >= '$startStr' GROUP BY DATE_FORMAT(expense_date, '%Y-%m')");
+$expRes = $mysqli->query("SELECT DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(amount) as total FROM enxure_expenses WHERE expense_date >= '$startStr' GROUP BY DATE_FORMAT(expense_date, '%Y-%m')");
 while ($er = $expRes->fetch_assoc())
     $expensesByMonth[$er['month']] = (float) $er['total'];
 
@@ -1231,18 +1231,18 @@ function enxureHandleStatsApiRoutes($mysqli, array $settings): void
         header('Content-Type: application/json');
         // Respect the same "Hide Test Clients Globally" setting every other view
         // honours (this used to hardcode is_test=0, ignoring the toggle).
-        $hideTestRes = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'hide_test'");
+        $hideTestRes = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'hide_test'");
         $hideTestChart = ($hideTestRes && $hideTestRes->num_rows > 0) ? ($hideTestRes->fetch_assoc()['setting_value'] === '1') : true;
-        $showTestOnlyResChart = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
+        $showTestOnlyResChart = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'show_test_only'");
         $showTestOnlyChart = ($showTestOnlyResChart && $showTestOnlyResChart->num_rows > 0) ? ($showTestOnlyResChart->fetch_assoc()['setting_value'] === '1') : false;
         $chartClientFilter = enxureTestViewClientFilter($hideTestChart, $showTestOnlyChart, 'WHERE');
         $chartInvoiceFilter = enxureTestViewFilter($hideTestChart, $showTestOnlyChart);
-        $clientsRes = $mysqli->query("SELECT client_key, client_name FROM invoxa_clients $chartClientFilter ORDER BY client_name ASC");
+        $clientsRes = $mysqli->query("SELECT client_key, client_name FROM enxure_clients $chartClientFilter ORDER BY client_name ASC");
         $chartClients = [];
         while ($cr = $clientsRes->fetch_assoc())
             $chartClients[$cr['client_key']] = $cr['client_name'];
         $chartDefaultCcyEsc = $mysqli->real_escape_string(enxureResolveCurrency('', $settings));
-        $q = "SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month, client_key, SUM(amount) as total FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') AND (currency = '' OR currency = '$chartDefaultCcyEsc') $chartInvoiceFilter GROUP BY month, client_key ORDER BY month ASC";
+        $q = "SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month, client_key, SUM(amount) as total FROM enxure_invoices WHERE status NOT IN ('failed', 'void') AND (currency = '' OR currency = '$chartDefaultCcyEsc') $chartInvoiceFilter GROUP BY month, client_key ORDER BY month ASC";
         $byMonth = [];
         $res = $mysqli->query($q);
         while ($r = $res->fetch_assoc()) {
@@ -1275,18 +1275,18 @@ function enxureHandleStatsApiRoutes($mysqli, array $settings): void
         header('Content-Type: application/json');
         // For external consumers hitting this with ?cron_key=... instead of a
         // browser session — same hide-test-clients convention as the chart endpoint.
-        $hideTestRes = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'hide_test'");
+        $hideTestRes = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'hide_test'");
         $hideTestStats = ($hideTestRes && $hideTestRes->num_rows > 0) ? ($hideTestRes->fetch_assoc()['setting_value'] === '1') : true;
-        $showTestOnlyResStats = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
+        $showTestOnlyResStats = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'show_test_only'");
         $showTestOnlyStats = ($showTestOnlyResStats && $showTestOnlyResStats->num_rows > 0) ? ($showTestOnlyResStats->fetch_assoc()['setting_value'] === '1') : false;
         $statsInvoiceFilter = enxureTestViewFilter($hideTestStats, $showTestOnlyStats);
 
         // Same definition of "unpaid" the dashboard stat card uses.
-        $unpaidRow = $mysqli->query("SELECT COUNT(*) as c, SUM(amount - COALESCE(paid_amount, 0)) as amt FROM invoxa_invoices WHERE status IN ('sent', 'pending') $statsInvoiceFilter")->fetch_assoc();
+        $unpaidRow = $mysqli->query("SELECT COUNT(*) as c, SUM(amount - COALESCE(paid_amount, 0)) as amt FROM enxure_invoices WHERE status IN ('sent', 'pending') $statsInvoiceFilter")->fetch_assoc();
         // Same definition of "overdue" the dashboard stat card uses.
-        $overdueRow = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND due_date < CURDATE() AND is_quote = 0 $statsInvoiceFilter")->fetch_assoc();
+        $overdueRow = $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE status NOT IN ('paid', 'void') AND due_date < CURDATE() AND is_quote = 0 $statsInvoiceFilter")->fetch_assoc();
         // Same definition of "failed" (email send failures) the dashboard's failed-invoices list uses.
-        $failedRow = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE status = 'failed' $statsInvoiceFilter")->fetch_assoc();
+        $failedRow = $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE status = 'failed' $statsInvoiceFilter")->fetch_assoc();
 
         echo json_encode([
             'failed' => [

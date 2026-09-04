@@ -204,7 +204,7 @@ function renderAuditItems($mysqli, int $offset, int $pageSize = 100): array
 {
     $icons = enxureAuditIcons();
     $fetchLimit = $pageSize + 1;
-    $stmt = $mysqli->prepare("SELECT a.*, i.client_name FROM invoxa_actions a LEFT JOIN invoxa_invoices i ON a.invoice_number = i.invoice_number ORDER BY a.performed_at DESC LIMIT ? OFFSET ?");
+    $stmt = $mysqli->prepare("SELECT a.*, i.client_name FROM enxure_actions a LEFT JOIN enxure_invoices i ON a.invoice_number = i.invoice_number ORDER BY a.performed_at DESC LIMIT ? OFFSET ?");
     $stmt->bind_param('ii', $fetchLimit, $offset);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -325,7 +325,7 @@ const ENXURE_DEMO_CLIENT_KEY_PREFIX = 'dm';
 
 function clearDemoData($mysqli): int
 {
-    $res = $mysqli->query("SELECT client_key, client_name FROM invoxa_clients WHERE client_key LIKE '" . ENXURE_DEMO_CLIENT_KEY_PREFIX . "%'");
+    $res = $mysqli->query("SELECT client_key, client_name FROM enxure_clients WHERE client_key LIKE '" . ENXURE_DEMO_CLIENT_KEY_PREFIX . "%'");
     $keys = [];
     $folders = [];
     while ($row = $res->fetch_assoc()) {
@@ -336,17 +336,17 @@ function clearDemoData($mysqli): int
         return 0;
     }
     $inList = "'" . implode("','", array_map([$mysqli, 'real_escape_string'], $keys)) . "'";
-    $idsRes = $mysqli->query("SELECT id FROM invoxa_invoices WHERE client_key IN ($inList)");
+    $idsRes = $mysqli->query("SELECT id FROM enxure_invoices WHERE client_key IN ($inList)");
     $ids = [];
     while ($r = $idsRes->fetch_assoc()) {
         $ids[] = (int) $r['id'];
     }
     if ($ids) {
-        $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id IN (" . implode(',', $ids) . ")");
-        $mysqli->query("DELETE FROM invoxa_payments WHERE invoice_id IN (" . implode(',', $ids) . ")");
+        $mysqli->query("DELETE FROM enxure_actions WHERE invoice_id IN (" . implode(',', $ids) . ")");
+        $mysqli->query("DELETE FROM enxure_payments WHERE invoice_id IN (" . implode(',', $ids) . ")");
     }
-    $mysqli->query("DELETE FROM invoxa_invoices WHERE client_key IN ($inList)");
-    $mysqli->query("DELETE FROM invoxa_clients WHERE client_key IN ($inList)");
+    $mysqli->query("DELETE FROM enxure_invoices WHERE client_key IN ($inList)");
+    $mysqli->query("DELETE FROM enxure_clients WHERE client_key IN ($inList)");
     foreach (array_unique($folders) as $folder) {
         $dir = INVOICES_DIR . $folder;
         if (is_dir($dir)) {
@@ -368,7 +368,7 @@ function seedDemoData($mysqli, array $settings): int
 
     // "Hide Test Clients Globally" defaults ON, which would otherwise hide the
     // data this just inserted from the Invoices tab, Dashboard, and Stats.
-    $mysqli->query("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('hide_test', '0') ON DUPLICATE KEY UPDATE setting_value = '0'");
+    $mysqli->query("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('hide_test', '0') ON DUPLICATE KEY UPDATE setting_value = '0'");
 
     $demoClients = [
         ['name' => 'Acme Web Co', 'rate' => 450, 'acc' => 'Acme Web Co', 'accnum' => '12-3001-0000001-00', 'desc' => 'Website hosting & maintenance'],
@@ -386,8 +386,8 @@ function seedDemoData($mysqli, array $settings): int
     $fingerprint = invoiceWatermarkFingerprint($settings);
     $monthsBack = 24;
     $today = new DateTime();
-    $insertClient = $mysqli->prepare("INSERT INTO invoxa_clients (client_key, client_name, email, account_name, account_number, monthly_rate, is_active, is_test) VALUES (?, ?, ?, ?, ?, ?, 1, 1)");
-    $insertInvoice = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, paid_at, paid_amount, html_content, file_path, is_quote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $insertClient = $mysqli->prepare("INSERT INTO enxure_clients (client_key, client_name, email, account_name, account_number, monthly_rate, is_active, is_test) VALUES (?, ?, ?, ?, ?, ?, 1, 1)");
+    $insertInvoice = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, paid_at, paid_amount, html_content, file_path, is_quote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     foreach ($demoClients as $ci => $dc) {
         $clientKey = ENXURE_DEMO_CLIENT_KEY_PREFIX . sprintf('%02d', $ci + 1);
@@ -540,7 +540,7 @@ function enxureTestCreateClient($mysqli): array
 {
     $key = 'zt' . substr(bin2hex(random_bytes(4)), 0, 6);
     $name = 'Test Suite Fixture';
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_clients (client_key, client_name, email, is_active, is_test) VALUES (?, ?, 'testsuite@invalid.example', 1, 1)");
+    $stmt = $mysqli->prepare("INSERT INTO enxure_clients (client_key, client_name, email, is_active, is_test) VALUES (?, ?, 'testsuite@invalid.example', 1, 1)");
     $stmt->bind_param("ss", $key, $name);
     $stmt->execute();
     return [$mysqli->insert_id, $key];
@@ -551,7 +551,7 @@ function enxureTestCreateInvoice($mysqli, string $clientKey, float $amount, stri
     // Must end in digits — generateInvoiceNumber()'s "highest number so far"
     // lookup only matches a trailing run of digits (/(\d+)$/).
     $invNum = 'ZTEST-' . strtoupper(bin2hex(random_bytes(3))) . random_int(100, 999);
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), ?, ?, 'sent')");
+    $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), ?, ?, 'sent')");
     $stmt->bind_param("ssds", $invNum, $clientKey, $amount, $currency);
     $stmt->execute();
     return $mysqli->insert_id;
@@ -562,17 +562,17 @@ function enxureTestCreateInvoice($mysqli, string $clientKey, float $amount, stri
 function enxureTestCleanupClient($mysqli, int $clientId, string $clientKey): void
 {
     $ids = [];
-    $res = $mysqli->query("SELECT id FROM invoxa_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "'");
+    $res = $mysqli->query("SELECT id FROM enxure_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "'");
     while ($r = $res->fetch_assoc()) {
         $ids[] = (int) $r['id'];
     }
     if ($ids) {
         $inList = implode(',', $ids);
-        $mysqli->query("DELETE FROM invoxa_payments WHERE invoice_id IN ($inList)");
-        $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id IN ($inList)");
-        $mysqli->query("DELETE FROM invoxa_invoices WHERE id IN ($inList)");
+        $mysqli->query("DELETE FROM enxure_payments WHERE invoice_id IN ($inList)");
+        $mysqli->query("DELETE FROM enxure_actions WHERE invoice_id IN ($inList)");
+        $mysqli->query("DELETE FROM enxure_invoices WHERE id IN ($inList)");
     }
-    $mysqli->query("DELETE FROM invoxa_clients WHERE id = " . (int) $clientId);
+    $mysqli->query("DELETE FROM enxure_clients WHERE id = " . (int) $clientId);
 }
 
 // Non-null only when SMTP_HOST is 'mailpit' — set exclusively by
@@ -680,10 +680,10 @@ function enxureTestDefinitions($mysqli, array $settings): array
         enxureAssertTrue($remaining >= 4 && $remaining <= 5, "expected ~5 minutes, got {$remaining}");
     });
     $run('Core Logic', 'enxureTestViewFilter', 'all three data-view states', 'The Preferences data-view filter picks the right SQL fragment for each of its three states — real-only (hide test), everything (both off), and test-only (the "Show Only Test/Dummy Data" toggle, which wins over "Hide Test Clients Globally" whenever both are somehow on) — for both the client_key-subquery shape (invoices) and the direct-column shape (clients).', function () {
-        enxureAssertEquals("AND client_key NOT IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)", enxureTestViewFilter(true, false), 'real-only');
+        enxureAssertEquals("AND client_key NOT IN (SELECT client_key FROM enxure_clients WHERE is_test = 1)", enxureTestViewFilter(true, false), 'real-only');
         enxureAssertEquals("", enxureTestViewFilter(false, false), 'everything');
-        enxureAssertEquals("AND client_key IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)", enxureTestViewFilter(false, true), 'test-only');
-        enxureAssertEquals("AND client_key IN (SELECT client_key FROM invoxa_clients WHERE is_test = 1)", enxureTestViewFilter(true, true), 'test-only wins when both are on');
+        enxureAssertEquals("AND client_key IN (SELECT client_key FROM enxure_clients WHERE is_test = 1)", enxureTestViewFilter(false, true), 'test-only');
+        enxureAssertEquals("AND client_key IN (SELECT client_key FROM enxure_clients WHERE is_test = 1)", enxureTestViewFilter(true, true), 'test-only wins when both are on');
         enxureAssertEquals("WHERE is_test = 0", enxureTestViewClientFilter(true, false, 'WHERE'), 'real-only, direct column');
         enxureAssertEquals("WHERE is_test = 1", enxureTestViewClientFilter(false, true, 'WHERE'), 'test-only, direct column');
         enxureAssertEquals("", enxureTestViewClientFilter(false, false, 'WHERE'), 'everything, direct column');
@@ -796,7 +796,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
     $run('Clients & Invoices', 'Client', 'created with correct defaults', 'A newly inserted client comes back active, flagged as test data, and with 0% discount/tax — the same defaults the Add Client form relies on.', function () use ($mysqli) {
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $row = $mysqli->query("SELECT is_active, is_test, discount_pct, tax_rate, currency FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+            $row = $mysqli->query("SELECT is_active, is_test, discount_pct, tax_rate, currency FROM enxure_clients WHERE id = $clientId")->fetch_assoc();
             enxureAssertTrue((bool) $row, 'client row exists');
             enxureAssertEquals(1, (int) $row['is_active']);
             enxureAssertEquals(1, (int) $row['is_test']);
@@ -810,21 +810,21 @@ function enxureTestDefinitions($mysqli, array $settings): array
     $run('Clients & Invoices', 'Client currency', 'blank currency resolves to the instance default', 'A freshly added client (Currency left blank, the default) resolves to Settings > General\'s currency rather than an empty string once an invoice is generated for them.', function () use ($mysqli, $settings) {
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+            $client = $mysqli->query("SELECT * FROM enxure_clients WHERE id = $clientId")->fetch_assoc();
             enxureAssertEquals(strtoupper($settings['currency'] ?? (getenv('APP_CURRENCY') ?: 'USD')), enxureResolveCurrency($client['currency'] ?? '', $settings));
         } finally {
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
-    $run('Clients & Invoices', 'Client currency', 'invoice snapshots the client\'s currency, unaffected by a later change', 'An invoice stamped with a client\'s currency at creation time (the same enxureResolveCurrency() call processInvoice()/save_quote make) keeps that value even after the client\'s own currency is changed afterward — invoxa_invoices.currency is a snapshot, not a live link to invoxa_clients.currency.', function () use ($mysqli, $settings) {
+    $run('Clients & Invoices', 'Client currency', 'invoice snapshots the client\'s currency, unaffected by a later change', 'An invoice stamped with a client\'s currency at creation time (the same enxureResolveCurrency() call processInvoice()/save_quote make) keeps that value even after the client\'s own currency is changed afterward — enxure_invoices.currency is a snapshot, not a live link to enxure_clients.currency.', function () use ($mysqli, $settings) {
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $mysqli->query("UPDATE invoxa_clients SET currency = 'EUR' WHERE id = $clientId");
-            $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+            $mysqli->query("UPDATE enxure_clients SET currency = 'EUR' WHERE id = $clientId");
+            $client = $mysqli->query("SELECT * FROM enxure_clients WHERE id = $clientId")->fetch_assoc();
             $stampedCurrency = enxureResolveCurrency($client['currency'] ?? '', $settings);
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 50.00, $stampedCurrency);
-            $mysqli->query("UPDATE invoxa_clients SET currency = 'GBP' WHERE id = $clientId");
-            $invRow = $mysqli->query("SELECT currency FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $mysqli->query("UPDATE enxure_clients SET currency = 'GBP' WHERE id = $clientId");
+            $invRow = $mysqli->query("SELECT currency FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals('EUR', $invRow['currency']);
         } finally {
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
@@ -849,7 +849,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 123.45);
-            $row = $mysqli->query("SELECT amount, status FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $row = $mysqli->query("SELECT amount, status FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals(123.45, (float) $row['amount']);
             enxureAssertEquals('sent', $row['status']);
         } finally {
@@ -861,9 +861,9 @@ function enxureTestDefinitions($mysqli, array $settings): array
         try {
             $sentId = enxureTestCreateInvoice($mysqli, $clientKey, 40.00);
             $draftId = enxureTestCreateInvoice($mysqli, $clientKey, 40.00);
-            $mysqli->query("UPDATE invoxa_invoices SET status = 'draft' WHERE id = $draftId");
+            $mysqli->query("UPDATE enxure_invoices SET status = 'draft' WHERE id = $draftId");
             $visibleIds = [];
-            $res = $mysqli->query("SELECT id FROM invoxa_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "' AND is_quote = 0 AND status != 'draft'");
+            $res = $mysqli->query("SELECT id FROM enxure_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "' AND is_quote = 0 AND status != 'draft'");
             while ($r = $res->fetch_assoc()) {
                 $visibleIds[] = (int) $r['id'];
             }
@@ -877,8 +877,8 @@ function enxureTestDefinitions($mysqli, array $settings): array
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $token = bin2hex(random_bytes(24));
-            $mysqli->query("UPDATE invoxa_clients SET portal_token = '" . $mysqli->real_escape_string($token) . "' WHERE id = $clientId");
-            $found = $mysqli->query("SELECT id FROM invoxa_clients WHERE portal_token = '" . $mysqli->real_escape_string($token) . "'")->fetch_assoc();
+            $mysqli->query("UPDATE enxure_clients SET portal_token = '" . $mysqli->real_escape_string($token) . "' WHERE id = $clientId");
+            $found = $mysqli->query("SELECT id FROM enxure_clients WHERE portal_token = '" . $mysqli->real_escape_string($token) . "'")->fetch_assoc();
             enxureAssertTrue($found && (int) $found['id'] === $clientId);
         } finally {
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
@@ -888,13 +888,13 @@ function enxureTestDefinitions($mysqli, array $settings): array
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $token = bin2hex(random_bytes(24));
-            $mysqli->query("UPDATE invoxa_clients SET portal_token = '" . $mysqli->real_escape_string($token) . "' WHERE id = $clientId");
-            $stillFound = $mysqli->query("SELECT id FROM invoxa_clients WHERE portal_token = '" . $mysqli->real_escape_string($token) . "'")->fetch_assoc();
+            $mysqli->query("UPDATE enxure_clients SET portal_token = '" . $mysqli->real_escape_string($token) . "' WHERE id = $clientId");
+            $stillFound = $mysqli->query("SELECT id FROM enxure_clients WHERE portal_token = '" . $mysqli->real_escape_string($token) . "'")->fetch_assoc();
             enxureAssertTrue((bool) $stillFound, 'token should resolve before revoking');
-            $stmt = $mysqli->prepare("UPDATE invoxa_clients SET portal_token = NULL, portal_token_expires_at = NULL WHERE id = ?");
+            $stmt = $mysqli->prepare("UPDATE enxure_clients SET portal_token = NULL, portal_token_expires_at = NULL WHERE id = ?");
             $stmt->bind_param("i", $clientId);
             $stmt->execute();
-            $afterRevoke = $mysqli->query("SELECT id FROM invoxa_clients WHERE portal_token = '" . $mysqli->real_escape_string($token) . "'")->fetch_assoc();
+            $afterRevoke = $mysqli->query("SELECT id FROM enxure_clients WHERE portal_token = '" . $mysqli->real_escape_string($token) . "'")->fetch_assoc();
             enxureAssertTrue(!$afterRevoke, 'old token should no longer resolve after being revoked');
         } finally {
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
@@ -906,7 +906,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
             $items = [['amount' => 150], ['amount' => 75.50], ['amount' => 24.50]];
             $totals = computeInvoiceTotals($items, 10, 8);
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, $totals['total']);
-            $row = $mysqli->query("SELECT amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $row = $mysqli->query("SELECT amount FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals(round($totals['total'], 2), round((float) $row['amount'], 2), 'stored amount matches computed total');
         } finally {
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
@@ -919,7 +919,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
             $totals = computeInvoiceTotals($items, 10, 8);
             enxureAssertEquals(4568.40, round($totals['total'], 2), 'computed total');
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, $totals['total']);
-            $row = $mysqli->query("SELECT amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $row = $mysqli->query("SELECT amount FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals(4568.40, round((float) $row['amount'], 2), 'stored amount matches computed total');
         } finally {
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
@@ -929,15 +929,15 @@ function enxureTestDefinitions($mysqli, array $settings): array
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 200.00);
-            $outstandingSql = "SELECT COUNT(*) as c FROM invoxa_invoices WHERE id = $invId AND status NOT IN ('paid', 'void')";
+            $outstandingSql = "SELECT COUNT(*) as c FROM enxure_invoices WHERE id = $invId AND status NOT IN ('paid', 'void')";
             $before = (int) $mysqli->query($outstandingSql)->fetch_assoc()['c'];
             enxureAssertEquals(1, $before, 'freshly sent invoice should count as outstanding');
-            $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = 'void' WHERE id = ?");
+            $stmt = $mysqli->prepare("UPDATE enxure_invoices SET status = 'void' WHERE id = ?");
             $stmt->bind_param("i", $invId);
             $stmt->execute();
             $whileVoid = (int) $mysqli->query($outstandingSql)->fetch_assoc()['c'];
             enxureAssertEquals(0, $whileVoid, 'voided invoice should drop out of the outstanding total');
-            $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = 'sent' WHERE id = ? AND status = 'void'");
+            $stmt = $mysqli->prepare("UPDATE enxure_invoices SET status = 'sent' WHERE id = ? AND status = 'void'");
             $stmt->bind_param("i", $invId);
             $stmt->execute();
             $afterUnvoid = (int) $mysqli->query($outstandingSql)->fetch_assoc()['c'];
@@ -951,11 +951,11 @@ function enxureTestDefinitions($mysqli, array $settings): array
         try {
             $quoteNum = 'Q' . strtoupper($clientKey) . '001';
             enxureAssertTrue((bool) preg_match('/^Q[A-Z0-9]+\d{3}$/', $quoteNum), 'quote number format');
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, is_quote) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), 500.00, 'sent', 1)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, is_quote) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), 500.00, 'sent', 1)");
             $stmt->bind_param("ss", $quoteNum, $clientKey);
             $stmt->execute();
-            $realCount = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "' AND is_quote = 0")->fetch_assoc()['c'];
-            $quoteCount = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "' AND is_quote = 1")->fetch_assoc()['c'];
+            $realCount = (int) $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "' AND is_quote = 0")->fetch_assoc()['c'];
+            $quoteCount = (int) $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE client_key = '" . $mysqli->real_escape_string($clientKey) . "' AND is_quote = 1")->fetch_assoc()['c'];
             enxureAssertEquals(0, $realCount, 'a quote should not appear in the real-invoice list');
             enxureAssertEquals(1, $quoteCount, 'the quote should appear in the quotes list');
         } finally {
@@ -965,37 +965,37 @@ function enxureTestDefinitions($mysqli, array $settings): array
     $run('Clients & Invoices', 'Expense', 'created with correct fields', 'Recording an expense (the same fields save_expense writes: date, vendor, category, amount, description) reads back exactly as entered, including the DECIMAL(10,2) amount.', function () use ($mysqli) {
         $expenseId = null;
         try {
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description) VALUES (CURDATE(), ?, 'software', ?, 'Test suite fixture expense')");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description) VALUES (CURDATE(), ?, 'software', ?, 'Test suite fixture expense')");
             $vendor = 'Test Suite Vendor';
             $amount = 42.75;
             $stmt->bind_param("sd", $vendor, $amount);
             $stmt->execute();
             $expenseId = $mysqli->insert_id;
-            $row = $mysqli->query("SELECT vendor, category, amount FROM invoxa_expenses WHERE id = $expenseId")->fetch_assoc();
+            $row = $mysqli->query("SELECT vendor, category, amount FROM enxure_expenses WHERE id = $expenseId")->fetch_assoc();
             enxureAssertEquals('Test Suite Vendor', $row['vendor']);
             enxureAssertEquals('software', $row['category']);
             enxureAssertEquals(42.75, (float) $row['amount']);
         } finally {
             if ($expenseId) {
-                $mysqli->query("DELETE FROM invoxa_expenses WHERE id = " . (int) $expenseId);
+                $mysqli->query("DELETE FROM enxure_expenses WHERE id = " . (int) $expenseId);
             }
         }
     });
     $run('Clients & Invoices', 'Client', 'bulk flag update toggles independently', 'The Clients tab\'s bulk action bar updates one flag at a time (update_client_flags) — flipping is_active to 0 leaves is_test untouched, and flipping is_test to 1 afterward leaves is_active untouched, exactly as if each button were its own single-column UPDATE.', function () use ($mysqli) {
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
-            $stmt = $mysqli->prepare("UPDATE invoxa_clients SET is_active = ? WHERE id = ?");
+            $stmt = $mysqli->prepare("UPDATE enxure_clients SET is_active = ? WHERE id = ?");
             $inactive = 0;
             $stmt->bind_param("ii", $inactive, $clientId);
             $stmt->execute();
-            $row = $mysqli->query("SELECT is_active, is_test FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+            $row = $mysqli->query("SELECT is_active, is_test FROM enxure_clients WHERE id = $clientId")->fetch_assoc();
             enxureAssertEquals(0, (int) $row['is_active'], 'is_active should now be 0');
             enxureAssertEquals(1, (int) $row['is_test'], 'is_test should be untouched by the is_active update');
-            $stmt = $mysqli->prepare("UPDATE invoxa_clients SET is_test = ? WHERE id = ?");
+            $stmt = $mysqli->prepare("UPDATE enxure_clients SET is_test = ? WHERE id = ?");
             $stillTest = 1;
             $stmt->bind_param("ii", $stillTest, $clientId);
             $stmt->execute();
-            $after = $mysqli->query("SELECT is_active, is_test FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+            $after = $mysqli->query("SELECT is_active, is_test FROM enxure_clients WHERE id = $clientId")->fetch_assoc();
             enxureAssertEquals(0, (int) $after['is_active'], 'is_active should still be untouched by the is_test update');
             enxureAssertEquals(1, (int) $after['is_test']);
         } finally {
@@ -1007,25 +1007,25 @@ function enxureTestDefinitions($mysqli, array $settings): array
         $quoteId = null;
         try {
             $quoteNum = 'Q' . strtoupper($clientKey) . '001';
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, is_quote, html_content) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), 250.00, 'sent', 1, ?)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, is_quote, html_content) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), 250.00, 'sent', 1, ?)");
             $html = "<html>{$quoteNum}</html>";
             $stmt->bind_param("sss", $quoteNum, $clientKey, $html);
             $stmt->execute();
             $quoteId = $mysqli->insert_id;
             $result = convertQuoteToInvoice($mysqli, $settings, $quoteId, 'admin');
             enxureAssertTrue($result['success'], 'conversion should succeed for a real quote');
-            $row = $mysqli->query("SELECT is_quote, amount, invoice_number FROM invoxa_invoices WHERE id = $quoteId")->fetch_assoc();
+            $row = $mysqli->query("SELECT is_quote, amount, invoice_number FROM enxure_invoices WHERE id = $quoteId")->fetch_assoc();
             enxureAssertEquals(0, (int) $row['is_quote'], 'should no longer be flagged as a quote');
             enxureAssertEquals(250.00, (float) $row['amount'], 'amount should carry over unchanged');
             enxureAssertTrue($row['invoice_number'] !== $quoteNum, 'should be renumbered away from the quote number');
-            $action = $mysqli->query("SELECT action_type FROM invoxa_actions WHERE invoice_id = $quoteId AND action_type = 'quote_converted'")->fetch_assoc();
+            $action = $mysqli->query("SELECT action_type FROM enxure_actions WHERE invoice_id = $quoteId AND action_type = 'quote_converted'")->fetch_assoc();
             enxureAssertTrue((bool) $action, 'expected a quote_converted audit entry');
             $missing = convertQuoteToInvoice($mysqli, $settings, 999999999, 'admin');
             enxureAssertTrue(!$missing['success'], 'converting a non-existent quote id should fail cleanly');
         } finally {
             if ($quoteId) {
-                $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id = " . (int) $quoteId);
-                $mysqli->query("DELETE FROM invoxa_invoices WHERE id = " . (int) $quoteId);
+                $mysqli->query("DELETE FROM enxure_actions WHERE invoice_id = " . (int) $quoteId);
+                $mysqli->query("DELETE FROM enxure_invoices WHERE id = " . (int) $quoteId);
             }
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
             foreach (glob(INVOICES_DIR . 'test_suite_fixture/*.html') ?: [] as $__f) {
@@ -1039,19 +1039,19 @@ function enxureTestDefinitions($mysqli, array $settings): array
         $quoteId = null;
         try {
             $quoteNum = 'Q' . strtoupper($clientKey) . '002';
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, is_quote, html_content) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), 45250.75, 'sent', 1, ?)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, status, is_quote, html_content) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), 45250.75, 'sent', 1, ?)");
             $html = "<html>{$quoteNum}</html>";
             $stmt->bind_param("sss", $quoteNum, $clientKey, $html);
             $stmt->execute();
             $quoteId = $mysqli->insert_id;
             $result = convertQuoteToInvoice($mysqli, $settings, $quoteId, 'admin');
             enxureAssertTrue($result['success'], 'conversion should succeed');
-            $row = $mysqli->query("SELECT amount FROM invoxa_invoices WHERE id = $quoteId")->fetch_assoc();
+            $row = $mysqli->query("SELECT amount FROM enxure_invoices WHERE id = $quoteId")->fetch_assoc();
             enxureAssertEquals(45250.75, (float) $row['amount'], 'amount should carry over unchanged');
         } finally {
             if ($quoteId) {
-                $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id = " . (int) $quoteId);
-                $mysqli->query("DELETE FROM invoxa_invoices WHERE id = " . (int) $quoteId);
+                $mysqli->query("DELETE FROM enxure_actions WHERE invoice_id = " . (int) $quoteId);
+                $mysqli->query("DELETE FROM enxure_invoices WHERE id = " . (int) $quoteId);
             }
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
             foreach (glob(INVOICES_DIR . 'test_suite_fixture/*.html') ?: [] as $__f) {
@@ -1068,12 +1068,12 @@ function enxureTestDefinitions($mysqli, array $settings): array
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 100.00);
             $r1 = recordInvoicePayment($mysqli, $settings, $invId, 40.00, 'test partial', 'manual');
             enxureAssertTrue($r1['success'] && !$r1['duplicate']);
-            $mid = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $mid = $mysqli->query("SELECT status, paid_amount FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals('sent', $mid['status'], 'status stays open after partial payment');
             enxureAssertEquals(40.00, (float) $mid['paid_amount']);
             $r2 = recordInvoicePayment($mysqli, $settings, $invId, 60.00, 'test remainder', 'manual');
             enxureAssertTrue($r2['success']);
-            $after = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $after = $mysqli->query("SELECT status, paid_amount FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals('paid', $after['status']);
             enxureAssertEquals(100.00, (float) $after['paid_amount']);
         } finally {
@@ -1089,7 +1089,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
             enxureAssertTrue($r1['success'] && !$r1['duplicate']);
             $r2 = recordInvoicePayment($mysqli, $settings, $invId, 50.00, 'test', 'stripe', $ref);
             enxureAssertTrue($r2['success'] && $r2['duplicate'], 'second call with the same provider_ref should be a no-op');
-            $count = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_payments WHERE invoice_id = $invId")->fetch_assoc()['c'];
+            $count = (int) $mysqli->query("SELECT COUNT(*) as c FROM enxure_payments WHERE invoice_id = $invId")->fetch_assoc()['c'];
             enxureAssertEquals(1, $count, 'exactly one ledger row despite two calls');
         } finally {
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
@@ -1100,10 +1100,10 @@ function enxureTestDefinitions($mysqli, array $settings): array
         try {
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 80.00);
             recordInvoicePayment($mysqli, $settings, $invId, 80.00, 'test', 'stripe', 'test_charge_' . bin2hex(random_bytes(6)));
-            $before = $mysqli->query("SELECT status FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $before = $mysqli->query("SELECT status FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals('paid', $before['status']);
             recordInvoiceRefund($mysqli, $settings, $invId, 80.00, 'stripe', 'test_refund_' . bin2hex(random_bytes(6)));
-            $after = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $after = $mysqli->query("SELECT status, paid_amount FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals('sent', $after['status'], 'invoice reopens after a full refund');
             enxureAssertEquals(0.00, (float) $after['paid_amount']);
         } finally {
@@ -1116,12 +1116,12 @@ function enxureTestDefinitions($mysqli, array $settings): array
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 12345.67);
             $r1 = recordInvoicePayment($mysqli, $settings, $invId, 5000.00, 'test partial', 'manual');
             enxureAssertTrue($r1['success'] && !$r1['duplicate']);
-            $mid = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $mid = $mysqli->query("SELECT status, paid_amount FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals('sent', $mid['status'], 'status stays open after partial payment');
             enxureAssertEquals(5000.00, (float) $mid['paid_amount']);
             $r2 = recordInvoicePayment($mysqli, $settings, $invId, 7345.67, 'test remainder', 'manual');
             enxureAssertTrue($r2['success']);
-            $after = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $after = $mysqli->query("SELECT status, paid_amount FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals('paid', $after['status']);
             enxureAssertEquals(12345.67, (float) $after['paid_amount']);
         } finally {
@@ -1133,22 +1133,22 @@ function enxureTestDefinitions($mysqli, array $settings): array
         try {
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 12345.67);
             recordInvoicePayment($mysqli, $settings, $invId, 12345.67, 'test', 'stripe', 'test_charge_' . bin2hex(random_bytes(6)));
-            $before = $mysqli->query("SELECT status FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $before = $mysqli->query("SELECT status FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals('paid', $before['status']);
             recordInvoiceRefund($mysqli, $settings, $invId, 5000.00, 'stripe', 'test_refund_' . bin2hex(random_bytes(6)));
-            $after = $mysqli->query("SELECT status, paid_amount FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $after = $mysqli->query("SELECT status, paid_amount FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             enxureAssertEquals('sent', $after['status'], 'invoice reopens once total paid drops below the invoice amount');
             enxureAssertEquals(7345.67, (float) $after['paid_amount'], 'remaining paid_amount after the partial refund');
         } finally {
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
-    $run('Payments & Refunds', 'Audit Log', 'payment creates a matching entry', 'recordInvoicePayment() writes its own invoxa_actions row (mark_paid/mark_partial_paid) against the right invoice — the same audit trail the Activity tab reads.', function () use ($mysqli, $settings) {
+    $run('Payments & Refunds', 'Audit Log', 'payment creates a matching entry', 'recordInvoicePayment() writes its own enxure_actions row (mark_paid/mark_partial_paid) against the right invoice — the same audit trail the Activity tab reads.', function () use ($mysqli, $settings) {
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 25.00);
             recordInvoicePayment($mysqli, $settings, $invId, 25.00, 'test', 'manual');
-            $row = $mysqli->query("SELECT action_type FROM invoxa_actions WHERE invoice_id = $invId AND action_type IN ('mark_paid', 'mark_partial_paid') ORDER BY id DESC LIMIT 1")->fetch_assoc();
+            $row = $mysqli->query("SELECT action_type FROM enxure_actions WHERE invoice_id = $invId AND action_type IN ('mark_paid', 'mark_partial_paid') ORDER BY id DESC LIMIT 1")->fetch_assoc();
             enxureAssertTrue((bool) $row, 'expected an audit log entry for this payment');
         } finally {
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
@@ -1158,7 +1158,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 60.00);
-            $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $invId")->fetch_assoc()['invoice_number'];
+            $invNum = $mysqli->query("SELECT invoice_number FROM enxure_invoices WHERE id = $invId")->fetch_assoc()['invoice_number'];
             recordInvoicePayment($mysqli, $settings, $invId, 60.00, 'test', 'manual');
             $journal = buildAccountingJournal($mysqli, $settings, date('Y-m-d', strtotime('-1 day')), '');
             $ours = array_values(array_filter($journal, fn($r) => $r['ref'] === $invNum));
@@ -1175,7 +1175,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 23456.78);
-            $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $invId")->fetch_assoc()['invoice_number'];
+            $invNum = $mysqli->query("SELECT invoice_number FROM enxure_invoices WHERE id = $invId")->fetch_assoc()['invoice_number'];
             recordInvoicePayment($mysqli, $settings, $invId, 23456.78, 'test', 'manual');
             $journal = buildAccountingJournal($mysqli, $settings, date('Y-m-d', strtotime('-1 day')), '');
             $ours = array_values(array_filter($journal, fn($r) => $r['ref'] === $invNum));
@@ -1192,11 +1192,11 @@ function enxureTestDefinitions($mysqli, array $settings): array
         $reference = 'ztest_ref_' . bin2hex(random_bytes(6));
         try {
             enxureLogUnmatchedWebhook($mysqli, 'stripe', 'checkout.session.completed', $reference);
-            $row = $mysqli->query("SELECT notes FROM invoxa_actions WHERE action_type = 'webhook_unmatched' AND notes LIKE '%" . $mysqli->real_escape_string($reference) . "%'")->fetch_assoc();
+            $row = $mysqli->query("SELECT notes FROM enxure_actions WHERE action_type = 'webhook_unmatched' AND notes LIKE '%" . $mysqli->real_escape_string($reference) . "%'")->fetch_assoc();
             enxureAssertTrue((bool) $row, 'expected a webhook_unmatched entry mentioning the reference');
             enxureAssertTrue(str_contains($row['notes'], 'Stripe'), 'provider name should be capitalized in the note');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_actions WHERE action_type = 'webhook_unmatched' AND notes LIKE '%" . $mysqli->real_escape_string($reference) . "%'");
+            $mysqli->query("DELETE FROM enxure_actions WHERE action_type = 'webhook_unmatched' AND notes LIKE '%" . $mysqli->real_escape_string($reference) . "%'");
         }
     });
 
@@ -1213,11 +1213,11 @@ function enxureTestDefinitions($mysqli, array $settings): array
             rewind($fh);
             $result = enxureImportClientsCsvRows($mysqli, $fh);
             enxureAssertEquals(1, $result['imported'], 'one row should import');
-            $row = $mysqli->query("SELECT monthly_rate FROM invoxa_clients WHERE client_name = '" . $mysqli->real_escape_string($name) . "'")->fetch_assoc();
+            $row = $mysqli->query("SELECT monthly_rate FROM enxure_clients WHERE client_name = '" . $mysqli->real_escape_string($name) . "'")->fetch_assoc();
             enxureAssertTrue((bool) $row, 'imported client should exist');
             enxureAssertEquals(1200.00, (float) $row['monthly_rate'], 'rate should be 1200, not comma-truncated to 1');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_clients WHERE client_name = '" . $mysqli->real_escape_string($name) . "'");
+            $mysqli->query("DELETE FROM enxure_clients WHERE client_name = '" . $mysqli->real_escape_string($name) . "'");
         }
     });
     $run('CSV Import/Export', 'Invoice import', 'an amount and paid amount with commas import correctly', 'A CSV row with Amount "12,345.67" and Paid Amount "5,000.00" must import as exactly those figures, both past the thousands-separator threshold.', function () use ($mysqli) {
@@ -1230,13 +1230,13 @@ function enxureTestDefinitions($mysqli, array $settings): array
             rewind($fh);
             $result = enxureImportInvoicesCsvRows($mysqli, $fh, []);
             enxureAssertEquals(1, $result['imported'], 'one row should import');
-            $row = $mysqli->query("SELECT amount, paid_amount FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
+            $row = $mysqli->query("SELECT amount, paid_amount FROM enxure_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
             enxureAssertTrue((bool) $row, 'imported invoice should exist');
             enxureAssertEquals(12345.67, (float) $row['amount'], 'amount should be 12,345.67, not comma-truncated to 12');
             enxureAssertEquals(5000.00, (float) $row['paid_amount'], 'paid amount should be 5,000.00, not comma-truncated to 5');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_payments WHERE invoice_id IN (SELECT id FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "')");
-            $mysqli->query("DELETE FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'");
+            $mysqli->query("DELETE FROM enxure_payments WHERE invoice_id IN (SELECT id FROM enxure_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "')");
+            $mysqli->query("DELETE FROM enxure_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'");
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
     });
@@ -1249,11 +1249,11 @@ function enxureTestDefinitions($mysqli, array $settings): array
             rewind($fh);
             $result = enxureImportExpensesCsvRows($mysqli, $fh);
             enxureAssertEquals(1, $result['imported'], 'one row should import');
-            $row = $mysqli->query("SELECT amount FROM invoxa_expenses WHERE vendor = '" . $mysqli->real_escape_string($vendor) . "'")->fetch_assoc();
+            $row = $mysqli->query("SELECT amount FROM enxure_expenses WHERE vendor = '" . $mysqli->real_escape_string($vendor) . "'")->fetch_assoc();
             enxureAssertTrue((bool) $row, 'imported expense should exist');
             enxureAssertEquals(3400.00, (float) $row['amount'], 'amount should be 3,400.00, not comma-truncated to 3');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_expenses WHERE vendor = '" . $mysqli->real_escape_string($vendor) . "'");
+            $mysqli->query("DELETE FROM enxure_expenses WHERE vendor = '" . $mysqli->real_escape_string($vendor) . "'");
         }
     });
     $run('CSV Import/Export', 'Export → re-import round trip', 'a five-figure invoice survives export and re-import unchanged', 'Writes a $34,567.89 invoice through the exact query + fputcsv() shape "Export Invoices" uses, then feeds that CSV straight back through the invoice importer (with the invoice number blanked, as re-adding an edited spreadsheet row would) — the re-imported amount must still be $34,567.89, proving the two features agree on format in both directions, not just import in isolation.', function () use ($mysqli, $settings) {
@@ -1261,7 +1261,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
         $reimportedNum = null;
         try {
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 34567.89, 'USD');
-            $exportRow = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $exportRow = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
             $exportRow['currency'] = enxureResolveCurrency($exportRow['currency'], $settings);
 
             $fh = fopen('php://temp', 'r+');
@@ -1272,14 +1272,14 @@ function enxureTestDefinitions($mysqli, array $settings): array
 
             $result = enxureImportInvoicesCsvRows($mysqli, $fh, $settings);
             enxureAssertEquals(1, $result['imported'], 'one row should import');
-            $reimported = $mysqli->query("SELECT id, invoice_number, amount FROM invoxa_invoices WHERE client_key = '{$clientKey}' AND id != $invId ORDER BY id DESC LIMIT 1")->fetch_assoc();
+            $reimported = $mysqli->query("SELECT id, invoice_number, amount FROM enxure_invoices WHERE client_key = '{$clientKey}' AND id != $invId ORDER BY id DESC LIMIT 1")->fetch_assoc();
             enxureAssertTrue((bool) $reimported, 're-imported invoice should exist');
             $reimportedNum = $reimported['invoice_number'];
             enxureAssertEquals(34567.89, (float) $reimported['amount'], 're-imported amount should still be $34,567.89');
         } finally {
             if ($reimportedNum) {
-                $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_number = '" . $mysqli->real_escape_string($reimportedNum) . "'");
-                $mysqli->query("DELETE FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($reimportedNum) . "'");
+                $mysqli->query("DELETE FROM enxure_actions WHERE invoice_number = '" . $mysqli->real_escape_string($reimportedNum) . "'");
+                $mysqli->query("DELETE FROM enxure_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($reimportedNum) . "'");
             }
             enxureTestCleanupClient($mysqli, $clientId, $clientKey);
         }
@@ -1295,37 +1295,37 @@ function enxureTestDefinitions($mysqli, array $settings): array
         try {
             enxureAssertTrue(str_starts_with($created['token'], 'ivx_'), 'token should use the ivx_ prefix');
             $hash = hash('sha256', $created['token']);
-            $row = $mysqli->query("SELECT id, revoked_at, expires_at FROM invoxa_api_tokens WHERE token_hash = '" . $mysqli->real_escape_string($hash) . "'")->fetch_assoc();
+            $row = $mysqli->query("SELECT id, revoked_at, expires_at FROM enxure_api_tokens WHERE token_hash = '" . $mysqli->real_escape_string($hash) . "'")->fetch_assoc();
             enxureAssertTrue((bool) $row && (int) $row['id'] === (int) $created['id'], 'stored hash should resolve back to the created token');
             enxureAssertTrue($row['revoked_at'] === null && $row['expires_at'] === null, 'a freshly created never-expiring token should be neither revoked nor expired');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_api_tokens WHERE id = " . (int) $created['id']);
+            $mysqli->query("DELETE FROM enxure_api_tokens WHERE id = " . (int) $created['id']);
         }
     });
     $run('External API', 'Token', 'revoked token fails to authenticate', 'The same query enxureAuthenticateApiRequest() runs (token_hash match AND revoked_at IS NULL) stops matching a token the instant it\'s revoked — mirroring what "Revoke" in Settings > API Access actually does.', function () use ($mysqli) {
         $created = enxureCreateApiToken($mysqli, 'Test Suite Fixture Token', null);
         try {
             $hash = hash('sha256', $created['token']);
-            $authSql = "SELECT id FROM invoxa_api_tokens WHERE token_hash = '" . $mysqli->real_escape_string($hash) . "' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())";
+            $authSql = "SELECT id FROM enxure_api_tokens WHERE token_hash = '" . $mysqli->real_escape_string($hash) . "' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())";
             $before = $mysqli->query($authSql)->fetch_assoc();
             enxureAssertTrue((bool) $before, 'token should authenticate before being revoked');
-            $mysqli->query("UPDATE invoxa_api_tokens SET revoked_at = NOW() WHERE id = " . (int) $created['id']);
+            $mysqli->query("UPDATE enxure_api_tokens SET revoked_at = NOW() WHERE id = " . (int) $created['id']);
             $after = $mysqli->query($authSql)->fetch_assoc();
             enxureAssertTrue(!$after, 'a revoked token should no longer authenticate');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_api_tokens WHERE id = " . (int) $created['id']);
+            $mysqli->query("DELETE FROM enxure_api_tokens WHERE id = " . (int) $created['id']);
         }
     });
     $run('External API', 'Token', 'expired token fails to authenticate', 'A token created with its expiry already in the past fails the same "not expired" check a live request goes through, even though it was never explicitly revoked.', function () use ($mysqli) {
         $created = enxureCreateApiToken($mysqli, 'Test Suite Fixture Token', 30);
         try {
-            $mysqli->query("UPDATE invoxa_api_tokens SET expires_at = DATE_SUB(NOW(), INTERVAL 1 DAY) WHERE id = " . (int) $created['id']);
+            $mysqli->query("UPDATE enxure_api_tokens SET expires_at = DATE_SUB(NOW(), INTERVAL 1 DAY) WHERE id = " . (int) $created['id']);
             $hash = hash('sha256', $created['token']);
-            $authSql = "SELECT id FROM invoxa_api_tokens WHERE token_hash = '" . $mysqli->real_escape_string($hash) . "' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())";
+            $authSql = "SELECT id FROM enxure_api_tokens WHERE token_hash = '" . $mysqli->real_escape_string($hash) . "' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())";
             $row = $mysqli->query($authSql)->fetch_assoc();
             enxureAssertTrue(!$row, 'a token past its expiry should not authenticate');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_api_tokens WHERE id = " . (int) $created['id']);
+            $mysqli->query("DELETE FROM enxure_api_tokens WHERE id = " . (int) $created['id']);
         }
     });
     // ── Billing Cron ── the double-billing guard's query, checked
@@ -1335,7 +1335,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
         [$freshId, $freshKey] = enxureTestCreateClient($mysqli);
         try {
             enxureTestCreateInvoice($mysqli, $billedKey, 30.00);
-            $guardSql = "SELECT COUNT(*) as c FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND MONTH(invoice_date) = MONTH(CURDATE()) AND YEAR(invoice_date) = YEAR(CURDATE())";
+            $guardSql = "SELECT COUNT(*) as c FROM enxure_invoices WHERE client_key = ? AND is_quote = 0 AND MONTH(invoice_date) = MONTH(CURDATE()) AND YEAR(invoice_date) = YEAR(CURDATE())";
             $stmt = $mysqli->prepare($guardSql);
             $stmt->bind_param("s", $billedKey);
             $stmt->execute();
@@ -1381,21 +1381,21 @@ function enxureTestDefinitions($mysqli, array $settings): array
         try {
             $graceDays = 7;
             $eligibleId = enxureTestCreateInvoice($mysqli, $clientKey, 100.00);
-            $mysqli->query("UPDATE invoxa_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 10 DAY) WHERE id = $eligibleId");
+            $mysqli->query("UPDATE enxure_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 10 DAY) WHERE id = $eligibleId");
             $withinGraceId = enxureTestCreateInvoice($mysqli, $clientKey, 100.00);
-            $mysqli->query("UPDATE invoxa_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 3 DAY) WHERE id = $withinGraceId");
+            $mysqli->query("UPDATE enxure_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 3 DAY) WHERE id = $withinGraceId");
             $alreadyChargedId = enxureTestCreateInvoice($mysqli, $clientKey, 100.00);
-            $mysqli->query("UPDATE invoxa_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 30 DAY) WHERE id = $alreadyChargedId");
-            $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $alreadyChargedId")->fetch_assoc()['invoice_number'];
+            $mysqli->query("UPDATE enxure_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 30 DAY) WHERE id = $alreadyChargedId");
+            $invNum = $mysqli->query("SELECT invoice_number FROM enxure_invoices WHERE id = $alreadyChargedId")->fetch_assoc()['invoice_number'];
             enxureLogAction($mysqli, $alreadyChargedId, $invNum, 'late_fee_charged', 'test fixture');
 
-            $eligibleSql = "SELECT i.id FROM invoxa_invoices i
+            $eligibleSql = "SELECT i.id FROM enxure_invoices i
                  WHERE i.is_quote = 0
                    AND i.status IN ('sent', 'pending')
                    AND i.due_date IS NOT NULL
                    AND i.due_date <= DATE_SUB(CURDATE(), INTERVAL ? DAY)
                    AND NOT EXISTS (
-                       SELECT 1 FROM invoxa_actions a
+                       SELECT 1 FROM enxure_actions a
                        WHERE a.invoice_id = i.id AND a.action_type = 'late_fee_charged'
                    )
                    AND i.client_key = ?";
@@ -1462,8 +1462,8 @@ function enxureTestDefinitions($mysqli, array $settings): array
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 150.00);
-            $mysqli->query("UPDATE invoxa_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 10 DAY) WHERE id = $invId");
-            $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $mysqli->query("UPDATE enxure_invoices SET due_date = DATE_SUB(CURDATE(), INTERVAL 10 DAY) WHERE id = $invId");
+            $inv = $mysqli->query("SELECT * FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
 
             $result = sendReminderEmailForInvoice($mysqli, $inv, $settings, getenv('SMTP_PASSWORD') ?: '');
             enxureAssertTrue($result['sent'], 'sendReminderEmailForInvoice() reported failure: ' . $result['error']);
@@ -1487,10 +1487,10 @@ function enxureTestDefinitions($mysqli, array $settings): array
             $invId = enxureTestCreateInvoice($mysqli, $clientKey, 90.00);
             $marker = 'ZT-RESEND-' . bin2hex(random_bytes(4));
             $html = '<p>Test Suite Fixture invoice body ' . $marker . '</p>';
-            $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET html_content = ? WHERE id = ?");
+            $stmt = $mysqli->prepare("UPDATE enxure_invoices SET html_content = ? WHERE id = ?");
             $stmt->bind_param("si", $html, $invId);
             $stmt->execute();
-            $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $invId")->fetch_assoc();
+            $inv = $mysqli->query("SELECT * FROM enxure_invoices WHERE id = $invId")->fetch_assoc();
 
             $result = resendInvoiceEmail($mysqli, $inv, $settings, getenv('SMTP_PASSWORD') ?: '');
             enxureAssertTrue($result['sent'], 'resendInvoiceEmail() reported failure: ' . $result['error']);
@@ -1603,7 +1603,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
 
     // ── Security ── crypto/signature checks that are pure functions, plus the
     // account-recovery paths that touch the database, using a real but
-    // isolated, fake user id (never invoxa_users itself).
+    // isolated, fake user id (never enxure_users itself).
     $run('Security', 'TOTP', 'current code verifies', 'A freshly generated secret\'s current 30-second TOTP code passes verifyTotpCode().', function () {
         $secret = generateTotpSecret();
         $code = totpCodeAt($secret, (int) floor(time() / 30));
@@ -1654,19 +1654,19 @@ function enxureTestDefinitions($mysqli, array $settings): array
     });
     $run('Security', 'Backup codes', 'single-use consumption', 'A backup code works the first time it\'s used; reusing that exact same code a second time is rejected.', function () use ($mysqli) {
         // A fake, out-of-range user_id — enxureConsumeBackupCode() only ever
-        // queries invoxa_totp_backup_codes by user_id, never invoxa_users, so
+        // queries enxure_totp_backup_codes by user_id, never enxure_users, so
         // this never touches the real admin account.
         $fakeUserId = 999900000 + random_int(1, 99999);
         try {
             $codes = enxureGenerateBackupCodes(1);
             $hash = password_hash(str_replace('-', '', $codes[0]), PASSWORD_DEFAULT);
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_totp_backup_codes (user_id, code_hash) VALUES (?, ?)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_totp_backup_codes (user_id, code_hash) VALUES (?, ?)");
             $stmt->bind_param("is", $fakeUserId, $hash);
             $stmt->execute();
             enxureAssertTrue(enxureConsumeBackupCode($mysqli, $fakeUserId, $codes[0]), 'valid unused code is accepted');
             enxureAssertTrue(!enxureConsumeBackupCode($mysqli, $fakeUserId, $codes[0]), 'the same code cannot be used twice');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_totp_backup_codes WHERE user_id = " . (int) $fakeUserId);
+            $mysqli->query("DELETE FROM enxure_totp_backup_codes WHERE user_id = " . (int) $fakeUserId);
         }
     });
 
@@ -1720,41 +1720,41 @@ function enxureTestDefinitions($mysqli, array $settings): array
         }
     });
     $run('Receipt OCR', 'Expense attachments', 'doc_type separates Invoice and Receipt uploads', 'A row inserted as doc_type=\'invoice\' and another as doc_type=\'receipt\' against the same expense are both stored and stay distinguishable by that column — the same one the Add Expense modal\'s two upload slots (and Receipt OCR, which only ever reads the receipt one) rely on.', function () use ($mysqli) {
-        $mysqli->query("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description) VALUES (CURDATE(), 'Test Suite Fixture', 'other', 10.00, '')");
+        $mysqli->query("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description) VALUES (CURDATE(), 'Test Suite Fixture', 'other', 10.00, '')");
         $expenseId = $mysqli->insert_id;
         try {
-            $ins = $mysqli->prepare("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, 'inv.pdf', 'zt/inv.pdf', 100, 'invoice')");
+            $ins = $mysqli->prepare("INSERT INTO enxure_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, 'inv.pdf', 'zt/inv.pdf', 100, 'invoice')");
             $ins->bind_param("i", $expenseId);
             $ins->execute();
-            $ins2 = $mysqli->prepare("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, 'rcpt.jpg', 'zt/rcpt.jpg', 100, 'receipt')");
+            $ins2 = $mysqli->prepare("INSERT INTO enxure_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, 'rcpt.jpg', 'zt/rcpt.jpg', 100, 'receipt')");
             $ins2->bind_param("i", $expenseId);
             $ins2->execute();
-            $rows = $mysqli->query("SELECT filename, doc_type FROM invoxa_expense_receipts WHERE expense_id = $expenseId")->fetch_all(MYSQLI_ASSOC);
+            $rows = $mysqli->query("SELECT filename, doc_type FROM enxure_expense_receipts WHERE expense_id = $expenseId")->fetch_all(MYSQLI_ASSOC);
             enxureAssertEquals(2, count($rows), 'both attachments should be stored');
             $byType = array_column($rows, 'filename', 'doc_type');
             enxureAssertEquals('inv.pdf', $byType['invoice'] ?? null, 'invoice row');
             enxureAssertEquals('rcpt.jpg', $byType['receipt'] ?? null, 'receipt row');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_expense_receipts WHERE expense_id = $expenseId");
-            $mysqli->query("DELETE FROM invoxa_expenses WHERE id = $expenseId");
+            $mysqli->query("DELETE FROM enxure_expense_receipts WHERE expense_id = $expenseId");
+            $mysqli->query("DELETE FROM enxure_expenses WHERE id = $expenseId");
         }
     });
     $run('Receipt OCR', 'Expense attachments', 'move_expense_receipt re-tags a file between Invoice and Receipt', 'The same UPDATE the "Move to Invoice/Receipt" button runs flips a row\'s doc_type in place, for when the wrong slot was picked at upload time — the stored file itself is never touched, only which section it shows up in.', function () use ($mysqli) {
-        $mysqli->query("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description) VALUES (CURDATE(), 'Test Suite Fixture', 'other', 10.00, '')");
+        $mysqli->query("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description) VALUES (CURDATE(), 'Test Suite Fixture', 'other', 10.00, '')");
         $expenseId = $mysqli->insert_id;
         try {
-            $ins = $mysqli->prepare("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, 'oops.jpg', 'zt/oops.jpg', 100, 'invoice')");
+            $ins = $mysqli->prepare("INSERT INTO enxure_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, 'oops.jpg', 'zt/oops.jpg', 100, 'invoice')");
             $ins->bind_param("i", $expenseId);
             $ins->execute();
             $receiptId = $mysqli->insert_id;
-            $upd = $mysqli->prepare("UPDATE invoxa_expense_receipts SET doc_type = 'receipt' WHERE id = ?");
+            $upd = $mysqli->prepare("UPDATE enxure_expense_receipts SET doc_type = 'receipt' WHERE id = ?");
             $upd->bind_param("i", $receiptId);
             $upd->execute();
-            $docType = $mysqli->query("SELECT doc_type FROM invoxa_expense_receipts WHERE id = $receiptId")->fetch_assoc()['doc_type'];
+            $docType = $mysqli->query("SELECT doc_type FROM enxure_expense_receipts WHERE id = $receiptId")->fetch_assoc()['doc_type'];
             enxureAssertEquals('receipt', $docType, 'doc_type should flip to receipt');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_expense_receipts WHERE expense_id = $expenseId");
-            $mysqli->query("DELETE FROM invoxa_expenses WHERE id = $expenseId");
+            $mysqli->query("DELETE FROM enxure_expense_receipts WHERE expense_id = $expenseId");
+            $mysqli->query("DELETE FROM enxure_expenses WHERE id = $expenseId");
         }
     });
 
@@ -1763,61 +1763,61 @@ function enxureTestDefinitions($mysqli, array $settings): array
     // client/invoice fixtures above.
     $run('Users & Roles', 'Last admin guard', 'counts other admins correctly', 'The same "how many OTHER admins exist" query update_user/delete_user run before demoting or deleting an admin never counts the target account itself, and correctly counts a newly added second admin — the two ways that count could be wrong and let the last admin lock everyone out.', function () use ($mysqli) {
         $adminUser = 'zt_admin_' . bin2hex(random_bytes(4));
-        $stmt = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, 'zt@invalid.example', 'admin', 'x')");
+        $stmt = $mysqli->prepare("INSERT INTO enxure_users (username, email, role, password_hash) VALUES (?, 'zt@invalid.example', 'admin', 'x')");
         $stmt->bind_param("s", $adminUser);
         $stmt->execute();
         $fixtureId = $mysqli->insert_id;
         try {
-            $selfIncluded = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != $fixtureId AND id = $fixtureId")->fetch_assoc()['c'];
+            $selfIncluded = (int) $mysqli->query("SELECT COUNT(*) as c FROM enxure_users WHERE role = 'admin' AND id != $fixtureId AND id = $fixtureId")->fetch_assoc()['c'];
             enxureAssertEquals(0, $selfIncluded, 'the target admin itself should never be counted as an "other" admin');
-            $before = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != $fixtureId")->fetch_assoc()['c'];
+            $before = (int) $mysqli->query("SELECT COUNT(*) as c FROM enxure_users WHERE role = 'admin' AND id != $fixtureId")->fetch_assoc()['c'];
             $secondAdmin = 'zt_admin2_' . bin2hex(random_bytes(4));
-            $stmt2 = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, 'zt2@invalid.example', 'admin', 'x')");
+            $stmt2 = $mysqli->prepare("INSERT INTO enxure_users (username, email, role, password_hash) VALUES (?, 'zt2@invalid.example', 'admin', 'x')");
             $stmt2->bind_param("s", $secondAdmin);
             $stmt2->execute();
             $secondId = $mysqli->insert_id;
             try {
-                $after = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != $fixtureId")->fetch_assoc()['c'];
+                $after = (int) $mysqli->query("SELECT COUNT(*) as c FROM enxure_users WHERE role = 'admin' AND id != $fixtureId")->fetch_assoc()['c'];
                 enxureAssertEquals($before + 1, $after, 'adding a second admin should increase the "other admins" count by exactly one');
             } finally {
-                $mysqli->query("DELETE FROM invoxa_users WHERE id = $secondId");
+                $mysqli->query("DELETE FROM enxure_users WHERE id = $secondId");
             }
         } finally {
-            $mysqli->query("DELETE FROM invoxa_users WHERE id = $fixtureId");
+            $mysqli->query("DELETE FROM enxure_users WHERE id = $fixtureId");
         }
     });
-    $run('Users & Roles', 'Role assignment', 'a new account stores its role and update_user\'s UPDATE flips it', 'A user created with role=member is stored as member (never silently promoted), and the same "UPDATE invoxa_users SET role = ?" update_user runs correctly flips it to admin.', function () use ($mysqli) {
+    $run('Users & Roles', 'Role assignment', 'a new account stores its role and update_user\'s UPDATE flips it', 'A user created with role=member is stored as member (never silently promoted), and the same "UPDATE enxure_users SET role = ?" update_user runs correctly flips it to admin.', function () use ($mysqli) {
         $username = 'zt_user_' . bin2hex(random_bytes(4));
-        $stmt = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, 'zt@invalid.example', 'member', 'x')");
+        $stmt = $mysqli->prepare("INSERT INTO enxure_users (username, email, role, password_hash) VALUES (?, 'zt@invalid.example', 'member', 'x')");
         $stmt->bind_param("s", $username);
         $stmt->execute();
         $id = $mysqli->insert_id;
         try {
-            $role = $mysqli->query("SELECT role FROM invoxa_users WHERE id = $id")->fetch_assoc()['role'];
+            $role = $mysqli->query("SELECT role FROM enxure_users WHERE id = $id")->fetch_assoc()['role'];
             enxureAssertEquals('member', $role, 'newly created user should be member');
-            $upd = $mysqli->prepare("UPDATE invoxa_users SET role = 'admin' WHERE id = ?");
+            $upd = $mysqli->prepare("UPDATE enxure_users SET role = 'admin' WHERE id = ?");
             $upd->bind_param("i", $id);
             $upd->execute();
-            $role2 = $mysqli->query("SELECT role FROM invoxa_users WHERE id = $id")->fetch_assoc()['role'];
+            $role2 = $mysqli->query("SELECT role FROM enxure_users WHERE id = $id")->fetch_assoc()['role'];
             enxureAssertEquals('admin', $role2, 'role should update to admin');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_users WHERE id = $id");
+            $mysqli->query("DELETE FROM enxure_users WHERE id = $id");
         }
     });
 
-    $run('Users & Roles', 'Audit Log attribution', 'enxureLogAction() stamps the current session\'s user id/username on the row it writes', 'invoxa_actions rows carry performed_by_user_id/performed_by_username (the username is denormalized so the Audit Log stays readable even after that user is later deleted) — confirms enxureLogAction(), the one shared helper every audit entry now goes through, actually stamps them rather than leaving the row anonymous.', function () use ($mysqli) {
+    $run('Users & Roles', 'Audit Log attribution', 'enxureLogAction() stamps the current session\'s user id/username on the row it writes', 'enxure_actions rows carry performed_by_user_id/performed_by_username (the username is denormalized so the Audit Log stays readable even after that user is later deleted) — confirms enxureLogAction(), the one shared helper every audit entry now goes through, actually stamps them rather than leaving the row anonymous.', function () use ($mysqli) {
         global $__actorUserId, $__actorUsername;
         $marker = 'zt_audit_' . bin2hex(random_bytes(4));
         enxureLogAction($mysqli, null, '', 'note_added', $marker);
         try {
-            $row = $mysqli->query("SELECT performed_by_user_id, performed_by_username FROM invoxa_actions WHERE notes = '" . $mysqli->real_escape_string($marker) . "' ORDER BY id DESC LIMIT 1")->fetch_assoc();
+            $row = $mysqli->query("SELECT performed_by_user_id, performed_by_username FROM enxure_actions WHERE notes = '" . $mysqli->real_escape_string($marker) . "' ORDER BY id DESC LIMIT 1")->fetch_assoc();
             enxureAssertTrue($row !== null, 'expected the logged row to exist');
             $expectedUserId = $__actorUserId !== null ? (string) $__actorUserId : null;
             $actualUserId = $row['performed_by_user_id'] !== null ? (string) $row['performed_by_user_id'] : null;
             enxureAssertEquals($expectedUserId, $actualUserId, 'performed_by_user_id should match the current session');
             enxureAssertEquals($__actorUsername, $row['performed_by_username'], 'performed_by_username should match the current session');
         } finally {
-            $mysqli->query("DELETE FROM invoxa_actions WHERE notes = '" . $mysqli->real_escape_string($marker) . "'");
+            $mysqli->query("DELETE FROM enxure_actions WHERE notes = '" . $mysqli->real_escape_string($marker) . "'");
         }
     });
 
@@ -1872,7 +1872,7 @@ function enxureHandleSaveOffsiteBackup($mysqli): void
     if ($retention < 1 || $retention > 365)
         $retention = 14;
 
-    $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'offsite_backup_enabled' => $enabled,
         'offsite_remote_name' => $remoteName,
@@ -2078,7 +2078,7 @@ function enxureHandleFactoryReset($mysqli, int $currentUserId): void
         if (($_POST['confirm'] ?? '') !== 'RESET') {
             throw new Exception('Type RESET to confirm.');
         }
-        $userRes = $mysqli->query("SELECT password_hash FROM invoxa_users WHERE id = " . $currentUserId);
+        $userRes = $mysqli->query("SELECT password_hash FROM enxure_users WHERE id = " . $currentUserId);
         $user = $userRes ? $userRes->fetch_assoc() : null;
         if (!$user || !password_verify($_POST['password'] ?? '', $user['password_hash'])) {
             throw new Exception('Current password is incorrect.');
@@ -2210,7 +2210,7 @@ function enxureHandleSaveAuditRetention($mysqli): void
 {
     $days = in_array($_POST['audit_log_retention_days'] ?? '', ['0', '30', '180', '365'], true)
         ? $_POST['audit_log_retention_days'] : '0';
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('audit_log_retention_days', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $stmt = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('audit_log_retention_days', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     $stmt->bind_param("s", $days);
     $stmt->execute();
     echo json_encode(['success' => true]);
@@ -2222,7 +2222,7 @@ function enxureHandleSaveBackupRetention($mysqli): void
     $count = (int) ($_POST['local_backup_retention_count'] ?? 0);
     if ($count < 0 || $count > 365)
         $count = 0;
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('local_backup_retention_count', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $stmt = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('local_backup_retention_count', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     $val = (string) $count;
     $stmt->bind_param("s", $val);
     $stmt->execute();
@@ -2240,12 +2240,12 @@ function enxureHandleSyncMissing($mysqli, array $settings): void
     $mismatches = [];
     $failures = [];
     $clientMap = [];
-    $res = $mysqli->query("SELECT * FROM invoxa_clients");
+    $res = $mysqli->query("SELECT * FROM enxure_clients");
     while ($row = $res->fetch_assoc()) {
         $clientMap[strtolower(str_replace(' ', '_', $row['client_name']))] = $row;
     }
-    $insertInvoice = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?) ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), html_content = VALUES(html_content), amount = VALUES(amount), currency = VALUES(currency), client_key = VALUES(client_key), client_name = VALUES(client_name)");
-    $insertAction = $mysqli->prepare("INSERT INTO invoxa_actions (invoice_number, action_type, notes, performed_by_user_id, performed_by_username) SELECT ?, 'synced', 'Imported via Web UI Sync', ?, ? WHERE NOT EXISTS (SELECT 1 FROM invoxa_actions WHERE invoice_number = ? AND action_type = 'synced')");
+    $insertInvoice = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?) ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), html_content = VALUES(html_content), amount = VALUES(amount), currency = VALUES(currency), client_key = VALUES(client_key), client_name = VALUES(client_name)");
+    $insertAction = $mysqli->prepare("INSERT INTO enxure_actions (invoice_number, action_type, notes, performed_by_user_id, performed_by_username) SELECT ?, 'synced', 'Imported via Web UI Sync', ?, ? WHERE NOT EXISTS (SELECT 1 FROM enxure_actions WHERE invoice_number = ? AND action_type = 'synced')");
     foreach ($files as $filePath) {
         $fullPath = "/usr/share/nginx/html/enxure-invoices/" . preg_replace('#^invoices/#', '', $filePath);
         if (!file_exists($fullPath)) {
@@ -2303,8 +2303,8 @@ function enxureHandleRestoreMissing($mysqli): void
         exit;
     }
     $idList = implode(',', array_map('intval', $ids));
-    $noContent = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE id IN ($idList) AND (html_content IS NULL OR html_content = '')")->fetch_assoc()['c'] ?? 0;
-    $res = $mysqli->query("SELECT id, client_name, file_path, html_content FROM invoxa_invoices WHERE id IN ($idList) AND html_content IS NOT NULL AND html_content != ''");
+    $noContent = $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE id IN ($idList) AND (html_content IS NULL OR html_content = '')")->fetch_assoc()['c'] ?? 0;
+    $res = $mysqli->query("SELECT id, client_name, file_path, html_content FROM enxure_invoices WHERE id IN ($idList) AND html_content IS NOT NULL AND html_content != ''");
     while ($row = $res->fetch_assoc()) {
         if (!$row['file_path'])
             continue;
@@ -2330,8 +2330,8 @@ function enxureHandleDeleteMissingDb($mysqli): void
         exit;
     }
     $idList = implode(',', array_map('intval', $ids));
-    $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id IN ($idList)");
-    $mysqli->query("DELETE FROM invoxa_invoices WHERE id IN ($idList)");
+    $mysqli->query("DELETE FROM enxure_actions WHERE invoice_id IN ($idList)");
+    $mysqli->query("DELETE FROM enxure_invoices WHERE id IN ($idList)");
     echo json_encode(['success' => true, 'deleted' => $mysqli->affected_rows]);
     exit;
 }
@@ -2377,15 +2377,15 @@ function enxureHandleDeleteAllUntrackedFiles(): void
 function enxureHandleDeleteSingleDbEntry($mysqli): void
 {
     $id = (int) ($_POST['id'] ?? 0);
-    $row = $mysqli->query("SELECT file_path FROM invoxa_invoices WHERE id = $id")->fetch_assoc();
+    $row = $mysqli->query("SELECT file_path FROM enxure_invoices WHERE id = $id")->fetch_assoc();
     if ($row) {
         if ($row['file_path']) {
             $fp = '/usr/share/nginx/html/enxure-invoices/' . preg_replace('#^invoices/#', '', $row['file_path']);
             if (file_exists($fp))
                 @unlink($fp);
         }
-        $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id = $id");
-        $mysqli->query("DELETE FROM invoxa_invoices WHERE id = $id");
+        $mysqli->query("DELETE FROM enxure_actions WHERE invoice_id = $id");
+        $mysqli->query("DELETE FROM enxure_invoices WHERE id = $id");
         echo json_encode(['success' => true]);
     } else {
         echo json_encode(['success' => false, 'error' => 'Record not found']);

@@ -4,7 +4,7 @@
 -- signup screen.
 -- =============================================================
 
-CREATE TABLE IF NOT EXISTS `invoxa_users` (
+CREATE TABLE IF NOT EXISTS `enxure_users` (
   `id`            INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `username`      VARCHAR(255) NOT NULL UNIQUE,
   `email`         VARCHAR(255) DEFAULT NULL COMMENT 'The first (id ASC) account''s email must match the email a license was issued to — see lib/license.php',
@@ -22,16 +22,16 @@ CREATE TABLE IF NOT EXISTS `invoxa_users` (
   `created_at`    DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_totp_backup_codes` (
+CREATE TABLE IF NOT EXISTS `enxure_totp_backup_codes` (
   `id`          INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `user_id`     INT NOT NULL COMMENT 'FK to invoxa_users.id',
+  `user_id`     INT NOT NULL COMMENT 'FK to enxure_users.id',
   `code_hash`   VARCHAR(255) NOT NULL COMMENT 'password_hash() of the normalized (dash-stripped, uppercased) code — never stored in plaintext, shown to the admin exactly once at generation time.',
   `used_at`     DATETIME DEFAULT NULL COMMENT 'NULL = still valid. Each code is single-use.',
   `created_at`  DATETIME DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_api_tokens` (
+CREATE TABLE IF NOT EXISTS `enxure_api_tokens` (
   `id`            INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `label`         VARCHAR(100) NOT NULL COMMENT 'Admin-chosen name, e.g. "Zapier integration" — purely descriptive.',
   `token_hash`    VARCHAR(64) NOT NULL COMMENT 'SHA-256 hex of the raw token. A fast hash (not bcrypt) is deliberate here: the token itself already has ~160 bits of entropy, so unlike a human password or backup code there is no low-entropy guess to slow down — a fast hash instead gives an indexed exact-match lookup on every API request.',
@@ -44,20 +44,20 @@ CREATE TABLE IF NOT EXISTS `invoxa_api_tokens` (
   INDEX `idx_revoked` (`revoked_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_settings` (
+CREATE TABLE IF NOT EXISTS `enxure_settings` (
   `setting_key`   VARCHAR(50) PRIMARY KEY,
   `setting_value` TEXT COMMENT 'TEXT (not VARCHAR(255)) so it can hold longer values like reminder_email_body and license_key'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_stats_layout` (
-  `user_id`      INT NOT NULL COMMENT 'FK to invoxa_users.id',
+CREATE TABLE IF NOT EXISTS `enxure_stats_layout` (
+  `user_id`      INT NOT NULL COMMENT 'FK to enxure_users.id',
   `pane`         VARCHAR(30) NOT NULL COMMENT 'Statistics subnav tab (revenue, forecasting, clients, ...) or dashboard-tidbits/dashboard-charts',
   `layout_json`  TEXT NOT NULL COMMENT 'JSON array of {id, width, col, hidden} in the user''s chosen card order; width/col meaning is pane-specific (Statistics: width 1=half/2=full, col 0/1; dashboard-charts: width is a 6-unit grid span, col unused)',
   `updated_at`   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`, `pane`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_clients` (
+CREATE TABLE IF NOT EXISTS `enxure_clients` (
   `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `client_key`     VARCHAR(10)  NOT NULL UNIQUE COMMENT 'Short key e.g. asj, gjm',
   `client_name`    VARCHAR(100) NOT NULL,
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS `invoxa_clients` (
   `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_invoices` (
+CREATE TABLE IF NOT EXISTS `enxure_invoices` (
   `id`              INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `invoice_number`  VARCHAR(20)  NOT NULL UNIQUE,
   `client_key`      VARCHAR(10)  NOT NULL,
@@ -106,14 +106,14 @@ CREATE TABLE IF NOT EXISTS `invoxa_invoices` (
   INDEX `idx_status`       (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_actions` (
+CREATE TABLE IF NOT EXISTS `enxure_actions` (
   `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `invoice_id`     INT          NULL     COMMENT 'FK to invoxa_invoices.id',
+  `invoice_id`     INT          NULL     COMMENT 'FK to enxure_invoices.id',
   `invoice_number` VARCHAR(20)  DEFAULT '' COMMENT 'Denormalised for display',
   `action_type`    VARCHAR(50)  NOT NULL  COMMENT 'email_sent|email_failed|manual_send|resent|synced|mark_paid|note_added|viewed',
   `notes`          TEXT,
   `performed_at`   DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `performed_by_user_id`   INT NULL COMMENT 'FK to invoxa_users.id; NULL for system/cron-triggered rows',
+  `performed_by_user_id`   INT NULL COMMENT 'FK to enxure_users.id; NULL for system/cron-triggered rows',
   `performed_by_username`  VARCHAR(190) NULL COMMENT 'Denormalised at insert time so the row stays readable after that user is deleted',
   INDEX `idx_invoice_id`  (`invoice_id`),
   INDEX `idx_action_type` (`action_type`),
@@ -121,15 +121,15 @@ CREATE TABLE IF NOT EXISTS `invoxa_actions` (
   INDEX `idx_performed_by_user_id`(`performed_by_user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_expenses` (
+CREATE TABLE IF NOT EXISTS `enxure_expenses` (
   `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `expense_date`   DATE NOT NULL,
   `vendor`         VARCHAR(150) NOT NULL DEFAULT '',
   `category`       VARCHAR(50)  NOT NULL DEFAULT 'other' COMMENT 'See expenseCategories() in invoxa.php for the whitelist',
   `amount`         DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `description`    TEXT,
-  `receipt_path`   VARCHAR(500) DEFAULT NULL COMMENT 'Legacy single-receipt path, superseded by invoxa_expense_receipts — kept for old rows, migrated into that table on boot',
-  `recurring_expense_id` INT DEFAULT NULL COMMENT 'FK to invoxa_recurring_expenses.id when auto-logged by the recurring cron run, NULL for a manually-entered expense',
+  `receipt_path`   VARCHAR(500) DEFAULT NULL COMMENT 'Legacy single-receipt path, superseded by enxure_expense_receipts — kept for old rows, migrated into that table on boot',
+  `recurring_expense_id` INT DEFAULT NULL COMMENT 'FK to enxure_recurring_expenses.id when auto-logged by the recurring cron run, NULL for a manually-entered expense',
   `created_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_expense_date` (`expense_date`),
@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS `invoxa_expenses` (
   INDEX `idx_recurring_expense_id` (`recurring_expense_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_recurring_expenses` (
+CREATE TABLE IF NOT EXISTS `enxure_recurring_expenses` (
   `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `vendor`         VARCHAR(150) NOT NULL DEFAULT '',
   `category`       VARCHAR(50)  NOT NULL DEFAULT 'other' COMMENT 'See expenseCategories() in invoxa.php for the whitelist',
@@ -149,9 +149,9 @@ CREATE TABLE IF NOT EXISTS `invoxa_recurring_expenses` (
   `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_expense_receipts` (
+CREATE TABLE IF NOT EXISTS `enxure_expense_receipts` (
   `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `expense_id`     INT NOT NULL COMMENT 'FK to invoxa_expenses.id',
+  `expense_id`     INT NOT NULL COMMENT 'FK to enxure_expenses.id',
   `filename`       VARCHAR(255) NOT NULL COMMENT 'Original uploaded filename, shown in the UI',
   `stored_path`    VARCHAR(500) NOT NULL COMMENT 'Relative path under invoxa-invoices/receipts/<expense_id>/',
   `file_size`      INT NOT NULL DEFAULT 0,
@@ -160,10 +160,10 @@ CREATE TABLE IF NOT EXISTS `invoxa_expense_receipts` (
   INDEX `idx_expense_id` (`expense_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_payments` (
+CREATE TABLE IF NOT EXISTS `enxure_payments` (
   `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `invoice_id`     INT NOT NULL COMMENT 'FK to invoxa_invoices.id',
-  `amount`         DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT 'This installment only, not a running total — see invoxa_invoices.paid_amount for the cached sum',
+  `invoice_id`     INT NOT NULL COMMENT 'FK to enxure_invoices.id',
+  `amount`         DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT 'This installment only, not a running total — see enxure_invoices.paid_amount for the cached sum',
   `note`           VARCHAR(255) DEFAULT '' COMMENT 'Free-text, e.g. "bank transfer" or "2 of 3"',
   `provider`       VARCHAR(20) NOT NULL DEFAULT 'manual' COMMENT 'manual|stripe|paypal',
   `provider_ref`   VARCHAR(255) DEFAULT NULL COMMENT 'Stripe checkout session id / PayPal capture id — used as an idempotency key so a redelivered webhook or a webhook racing the return-URL handler can never double-credit the same payment',
@@ -173,9 +173,9 @@ CREATE TABLE IF NOT EXISTS `invoxa_payments` (
   UNIQUE KEY `uniq_provider_ref` (`provider`, `provider_ref`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `invoxa_invoice_attachments` (
+CREATE TABLE IF NOT EXISTS `enxure_invoice_attachments` (
   `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  `invoice_id`     INT NOT NULL COMMENT 'FK to invoxa_invoices.id',
+  `invoice_id`     INT NOT NULL COMMENT 'FK to enxure_invoices.id',
   `filename`       VARCHAR(255) NOT NULL COMMENT 'Original uploaded filename, shown in the UI',
   `stored_path`    VARCHAR(500) NOT NULL COMMENT 'Relative path under invoxa-invoices/attachments/<invoice_id>/',
   `file_size`      INT NOT NULL DEFAULT 0,

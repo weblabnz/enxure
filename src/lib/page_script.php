@@ -483,7 +483,7 @@
 
             // Statistics cards: drag-to-reorder (including between columns, or
             // into an empty one) and half/full width, saved per-user to
-            // invoxa_stats_layout (see save_stats_layout / renderStatsSection()).
+            // enxure_stats_layout (see save_stats_layout / renderStatsSection()).
             //
             // Server markup for a pane (`.stats-columns[data-stats-pane]`) is a
             // flat list of cards. layoutStatsPane() turns that into real layout:
@@ -593,7 +593,7 @@
             // The "flash card" stat tidbits (.dashboard-tidbit-row) and the chart
             // row (.dashboard-chart-row) each get simple drag-to-reorder, saved
             // per-user under the 'dashboard-tidbits'/'dashboard-charts' panes in
-            // invoxa_stats_layout (see save_stats_layout / renderDashboardStats()).
+            // enxure_stats_layout (see save_stats_layout / renderDashboardStats()).
             // Deliberately its own code, not a rename of Statistics' layoutStatsPane/
             // initStatsDragDrop/etc above — the layout rules differ (a flat 4-wide
             // grid vs. a 6-unit span grid, vs. Statistics' 2-column pairing), and
@@ -1630,7 +1630,7 @@
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                 btn.innerHTML = '<i class="fa-solid fa-eye"></i> Preview'; btn.disabled = false;
                 if (json.success) {
-                    // Not saved yet, so there's no invoxa_invoices row for the PDF
+                    // Not saved yet, so there's no enxure_invoices row for the PDF
                     // button's usual GET export — stash the same inputs so it can
                     // re-render straight to PDF via preview_adhoc_pdf instead.
                     _lastAdhocPreviewParams = params;

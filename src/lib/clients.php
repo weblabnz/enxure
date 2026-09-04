@@ -78,7 +78,7 @@ function renderClientRows(array $clients): string
     return ob_get_clean();
 }
 
-// Label + formatter for each editable invoxa_clients column, in the order
+// Label + formatter for each editable enxure_clients column, in the order
 // they should appear in a diff — used by enxureHandleSaveClient() to turn an
 // old-row/new-values pair into the "Field: old → new" notes stored on the
 // client_updated audit entry.
@@ -159,11 +159,11 @@ $act = (int) ($_POST['is_active'] ?? 0);
 $test = (int) ($_POST['is_test'] ?? 0);
 $newValues = ['client_name' => $name, 'email' => $email, 'phone' => $phone, 'address' => $address, 'account_name' => $aname, 'account_number' => $anum, 'monthly_rate' => $rate, 'payment_terms_days' => $terms, 'billing_frequency' => $freq, 'discount_pct' => $discountPct, 'tax_rate' => $taxRate, 'currency' => $currency, 'is_active' => $act, 'is_test' => $test];
 if ($id > 0) {
-    $oldRow = $mysqli->prepare("SELECT * FROM invoxa_clients WHERE id = ?");
+    $oldRow = $mysqli->prepare("SELECT * FROM enxure_clients WHERE id = ?");
     $oldRow->bind_param("i", $id);
     $oldRow->execute();
     $oldRow = $oldRow->get_result()->fetch_assoc();
-    $stmt = $mysqli->prepare("UPDATE invoxa_clients SET client_name=?, email=?, phone=?, address=?, account_name=?, account_number=?, monthly_rate=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, currency=?, is_active=?, is_test=? WHERE id=?");
+    $stmt = $mysqli->prepare("UPDATE enxure_clients SET client_name=?, email=?, phone=?, address=?, account_name=?, account_number=?, monthly_rate=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, currency=?, is_active=?, is_test=? WHERE id=?");
     $stmt->bind_param("ssssssdisddsiii", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $id);
     $stmt->execute();
     if ($oldRow) {
@@ -173,7 +173,7 @@ if ($id > 0) {
         }
     }
 } else {
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_clients (client_name, email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, discount_pct, tax_rate, currency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $mysqli->prepare("INSERT INTO enxure_clients (client_name, email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, discount_pct, tax_rate, currency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("ssssssdisddsiis", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $key);
     $stmt->execute();
     enxureLogAction($mysqli, null, '', 'client_created', $name . ' — ' . implode('; ', enxureClientFieldDiffs(array_fill_keys(array_keys(ENXURE_CLIENT_DIFF_FIELDS), ''), $newValues)));
@@ -184,7 +184,7 @@ exit;
 
 function enxureHandleDeleteClient($mysqli): void
 {
-$stmt = $mysqli->prepare("DELETE FROM invoxa_clients WHERE id=?");
+$stmt = $mysqli->prepare("DELETE FROM enxure_clients WHERE id=?");
 $stmt->bind_param("i", $_POST['id']);
 $stmt->execute();
 echo json_encode(['success' => true]);
@@ -200,11 +200,11 @@ if (!in_array($field, ['is_active', 'is_test'], true)) {
     exit;
 }
 $value = (int) ($_POST['value'] ?? 0);
-$before = $mysqli->prepare("SELECT client_name, $field AS current_value FROM invoxa_clients WHERE id = ?");
+$before = $mysqli->prepare("SELECT client_name, $field AS current_value FROM enxure_clients WHERE id = ?");
 $before->bind_param("i", $id);
 $before->execute();
 $before = $before->get_result()->fetch_assoc();
-$stmt = $mysqli->prepare("UPDATE invoxa_clients SET $field = ? WHERE id = ?");
+$stmt = $mysqli->prepare("UPDATE enxure_clients SET $field = ? WHERE id = ?");
 $stmt->bind_param("ii", $value, $id);
 $stmt->execute();
 if ($before && (int) $before['current_value'] !== $value) {
@@ -223,10 +223,10 @@ $id = (int) ($_POST['id'] ?? 0);
 $token = bin2hex(random_bytes(24));
 $expiryDays = ['never' => null, '30' => 30, '90' => 90, '365' => 365][$_POST['expiry'] ?? 'never'] ?? null;
 if ($expiryDays === null) {
-    $stmt = $mysqli->prepare("UPDATE invoxa_clients SET portal_token = ?, portal_token_expires_at = NULL WHERE id = ?");
+    $stmt = $mysqli->prepare("UPDATE enxure_clients SET portal_token = ?, portal_token_expires_at = NULL WHERE id = ?");
     $stmt->bind_param("si", $token, $id);
 } else {
-    $stmt = $mysqli->prepare("UPDATE invoxa_clients SET portal_token = ?, portal_token_expires_at = DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id = ?");
+    $stmt = $mysqli->prepare("UPDATE enxure_clients SET portal_token = ?, portal_token_expires_at = DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id = ?");
     $stmt->bind_param("sii", $token, $expiryDays, $id);
 }
 $stmt->execute();
@@ -237,7 +237,7 @@ exit;
 function enxureHandleRevokePortalToken($mysqli): void
 {
 $id = (int) ($_POST['id'] ?? 0);
-$stmt = $mysqli->prepare("UPDATE invoxa_clients SET portal_token = NULL, portal_token_expires_at = NULL WHERE id = ?");
+$stmt = $mysqli->prepare("UPDATE enxure_clients SET portal_token = NULL, portal_token_expires_at = NULL WHERE id = ?");
 $stmt->bind_param("i", $id);
 $stmt->execute();
 echo json_encode(['success' => true]);
@@ -271,11 +271,11 @@ exit;
 function enxureImportClientsCsvRows($mysqli, $fh): array
 {
 $existingKeys = [];
-$keyRes = $mysqli->query("SELECT client_key FROM invoxa_clients");
+$keyRes = $mysqli->query("SELECT client_key FROM enxure_clients");
 while ($kr = $keyRes->fetch_assoc())
     $existingKeys[$kr['client_key']] = true;
 
-$insert = $mysqli->prepare("INSERT INTO invoxa_clients (client_name, email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)");
+$insert = $mysqli->prepare("INSERT INTO enxure_clients (client_name, email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)");
 $imported = 0;
 $skipped = 0;
 $rowNum = 0;
@@ -335,12 +335,12 @@ return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
 function enxureHandleGetCrmData($mysqli): void
 {
 $clientId = (int) ($_POST['client_id'] ?? 0);
-$stats = $mysqli->query("SELECT SUM(amount) as total_billed, SUM(CASE WHEN status='paid' THEN amount ELSE 0 END) as total_paid, COUNT(*) as inv_count FROM invoxa_invoices WHERE client_key = (SELECT client_key FROM invoxa_clients WHERE id = $clientId) AND is_quote = 0")->fetch_assoc();
+$stats = $mysqli->query("SELECT SUM(amount) as total_billed, SUM(CASE WHEN status='paid' THEN amount ELSE 0 END) as total_paid, COUNT(*) as inv_count FROM enxure_invoices WHERE client_key = (SELECT client_key FROM enxure_clients WHERE id = $clientId) AND is_quote = 0")->fetch_assoc();
 $recent = [];
-$rRes = $mysqli->query("SELECT invoice_number, invoice_date, amount, status FROM invoxa_invoices WHERE client_key = (SELECT client_key FROM invoxa_clients WHERE id = $clientId) AND is_quote = 0 ORDER BY invoice_date DESC LIMIT 5");
+$rRes = $mysqli->query("SELECT invoice_number, invoice_date, amount, status FROM enxure_invoices WHERE client_key = (SELECT client_key FROM enxure_clients WHERE id = $clientId) AND is_quote = 0 ORDER BY invoice_date DESC LIMIT 5");
 while ($r = $rRes->fetch_assoc())
     $recent[] = $r;
-$clientRow = $mysqli->query("SELECT crm_notes FROM invoxa_clients WHERE id = $clientId")->fetch_assoc();
+$clientRow = $mysqli->query("SELECT crm_notes FROM enxure_clients WHERE id = $clientId")->fetch_assoc();
 echo json_encode(['success' => true, 'stats' => $stats, 'recent' => $recent, 'crm_notes' => $clientRow['crm_notes'] ?? '']);
 exit;
 }
@@ -349,7 +349,7 @@ function enxureHandleSaveCrmNotes($mysqli): void
 {
 $clientId = (int) ($_POST['client_id'] ?? 0);
 $notes = $_POST['notes'] ?? '';
-$stmt = $mysqli->prepare("UPDATE invoxa_clients SET crm_notes = ? WHERE id = ?");
+$stmt = $mysqli->prepare("UPDATE enxure_clients SET crm_notes = ? WHERE id = ?");
 $stmt->bind_param("si", $notes, $clientId);
 $stmt->execute();
 echo json_encode(['success' => true]);

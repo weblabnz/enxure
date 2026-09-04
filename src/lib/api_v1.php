@@ -35,7 +35,7 @@ if (isset($_GET['apiv1'])) {
         $types .= 'ii';
         $params[] = $limit;
         $params[] = $offset;
-        $stmt = $mysqli->prepare("SELECT id, invoice_number, client_key, client_name, invoice_date, due_date, amount, paid_amount, status FROM invoxa_invoices WHERE " . implode(' AND ', $where) . " ORDER BY invoice_date DESC LIMIT ? OFFSET ?");
+        $stmt = $mysqli->prepare("SELECT id, invoice_number, client_key, client_name, invoice_date, due_date, amount, paid_amount, status FROM enxure_invoices WHERE " . implode(' AND ', $where) . " ORDER BY invoice_date DESC LIMIT ? OFFSET ?");
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
         echo json_encode(['data' => $stmt->get_result()->fetch_all(MYSQLI_ASSOC)]);
@@ -43,7 +43,7 @@ if (isset($_GET['apiv1'])) {
     }
     if ($endpoint === 'invoices.get' && $method === 'GET') {
         $invNum = (string) ($_GET['invoice_number'] ?? '');
-        $stmt = $mysqli->prepare("SELECT id, invoice_number, client_key, client_name, invoice_date, due_date, amount, paid_amount, status FROM invoxa_invoices WHERE invoice_number = ? AND is_quote = 0");
+        $stmt = $mysqli->prepare("SELECT id, invoice_number, client_key, client_name, invoice_date, due_date, amount, paid_amount, status FROM enxure_invoices WHERE invoice_number = ? AND is_quote = 0");
         $stmt->bind_param("s", $invNum);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
@@ -58,7 +58,7 @@ if (isset($_GET['apiv1'])) {
     if ($endpoint === 'clients.list' && $method === 'GET') {
         $limit = min(200, max(1, (int) ($_GET['limit'] ?? 50)));
         $offset = max(0, (int) ($_GET['offset'] ?? 0));
-        $stmt = $mysqli->prepare("SELECT id, client_key, client_name, email, is_active, billing_frequency FROM invoxa_clients ORDER BY client_name ASC LIMIT ? OFFSET ?");
+        $stmt = $mysqli->prepare("SELECT id, client_key, client_name, email, is_active, billing_frequency FROM enxure_clients ORDER BY client_name ASC LIMIT ? OFFSET ?");
         $stmt->bind_param("ii", $limit, $offset);
         $stmt->execute();
         echo json_encode(['data' => $stmt->get_result()->fetch_all(MYSQLI_ASSOC)]);
@@ -73,7 +73,7 @@ if (isset($_GET['apiv1'])) {
         $amount = (float) ($body['amount'] ?? 0);
         $note = trim((string) ($body['note'] ?? ''));
         $reference = isset($body['reference']) && trim((string) $body['reference']) !== '' ? trim((string) $body['reference']) : null;
-        $invRow = $mysqli->query("SELECT id FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
+        $invRow = $mysqli->query("SELECT id FROM enxure_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
         if (!$invRow) {
             http_response_code(404);
             echo json_encode(['error' => 'Invoice not found']);

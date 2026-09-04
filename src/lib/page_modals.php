@@ -457,7 +457,7 @@
             </div>
         </div>
 
-        <?php $__ev = $mysqli->query("SELECT email, email_verified_at FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc(); ?>
+        <?php $__ev = $mysqli->query("SELECT email, email_verified_at FROM enxure_users WHERE id = " . $currentUserId)->fetch_assoc(); ?>
         <div id="onboardingModal" class="modal-overlay">
             <div class="modal" style="max-width:440px; text-align:center;">
                 <div class="modal-body" style="padding-top:2.5rem;">

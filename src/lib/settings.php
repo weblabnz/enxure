@@ -3,7 +3,7 @@
 function enxureHandleSaveLicenseKey($mysqli, array $settings): void
 {
     $key = trim($_POST['license_key'] ?? '');
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('license_key', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $stmt = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('license_key', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     $stmt->bind_param("s", $key);
     $stmt->execute();
     $reason = null;
@@ -80,7 +80,7 @@ function enxureHandleSaveNotificationSettings($mysqli): void
     $notifyRecurringRun = ($_POST['notify_on_recurring_run'] ?? '0') === '1' ? '1' : '0';
     $notifyRecurringErrors = ($_POST['notify_on_recurring_errors'] ?? '0') === '1' ? '1' : '0';
     $notifySecurityEvent = ($_POST['notify_on_security_event'] ?? '0') === '1' ? '1' : '0';
-    $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'notification_channel' => $channel,
         'telegram_bot_token' => $botToken,
@@ -150,10 +150,10 @@ function enxureHandleRenewApiToken($mysqli): void
     $id = (int) ($_POST['id'] ?? 0);
     $expiryDays = ['never' => null, '30' => 30, '90' => 90, '365' => 365][$_POST['expiry'] ?? 'never'] ?? null;
     if ($expiryDays === null) {
-        $stmt = $mysqli->prepare("UPDATE invoxa_api_tokens SET expires_at = NULL WHERE id = ? AND revoked_at IS NULL");
+        $stmt = $mysqli->prepare("UPDATE enxure_api_tokens SET expires_at = NULL WHERE id = ? AND revoked_at IS NULL");
         $stmt->bind_param("i", $id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE invoxa_api_tokens SET expires_at = DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id = ? AND revoked_at IS NULL");
+        $stmt = $mysqli->prepare("UPDATE enxure_api_tokens SET expires_at = DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id = ? AND revoked_at IS NULL");
         $stmt->bind_param("ii", $expiryDays, $id);
     }
     $stmt->execute();
@@ -164,8 +164,8 @@ function enxureHandleRenewApiToken($mysqli): void
 function enxureHandleRevokeApiToken($mysqli, array $settings): void
 {
     $id = (int) ($_POST['id'] ?? 0);
-    $label = $mysqli->query("SELECT label FROM invoxa_api_tokens WHERE id = " . $id)->fetch_assoc()['label'] ?? '';
-    $stmt = $mysqli->prepare("UPDATE invoxa_api_tokens SET revoked_at = NOW() WHERE id = ?");
+    $label = $mysqli->query("SELECT label FROM enxure_api_tokens WHERE id = " . $id)->fetch_assoc()['label'] ?? '';
+    $stmt = $mysqli->prepare("UPDATE enxure_api_tokens SET revoked_at = NOW() WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     enxureLogAction($mysqli, null, '', 'api_token_revoked', 'API token revoked: ' . $label);
@@ -177,7 +177,7 @@ function enxureHandleRevokeApiToken($mysqli, array $settings): void
 function enxureHandleDeleteApiToken($mysqli): void
 {
     $id = (int) ($_POST['id'] ?? 0);
-    $row = $mysqli->query("SELECT label, revoked_at, expires_at FROM invoxa_api_tokens WHERE id = " . $id)->fetch_assoc();
+    $row = $mysqli->query("SELECT label, revoked_at, expires_at FROM enxure_api_tokens WHERE id = " . $id)->fetch_assoc();
     if (!$row) {
         throw new Exception('Token not found');
     }
@@ -185,7 +185,7 @@ function enxureHandleDeleteApiToken($mysqli): void
     if (empty($row['revoked_at']) && !$isExpired) {
         throw new Exception('Revoke this token before deleting it.');
     }
-    $stmt = $mysqli->prepare("DELETE FROM invoxa_api_tokens WHERE id = ?");
+    $stmt = $mysqli->prepare("DELETE FROM enxure_api_tokens WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     enxureLogAction($mysqli, null, '', 'api_token_revoked', 'API token permanently deleted: ' . $row['label']);
@@ -200,7 +200,7 @@ function enxureHandleUpdateProfile($mysqli, int $currentUserId): void
     $currentPassword = $_POST['current_password'] ?? '';
     $newPassword = $_POST['new_password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
-    $userRes = $mysqli->query("SELECT * FROM invoxa_users WHERE id = " . $currentUserId);
+    $userRes = $mysqli->query("SELECT * FROM enxure_users WHERE id = " . $currentUserId);
     if (!$userRes || $userRes->num_rows === 0) {
         throw new Exception('User not found');
     }
@@ -239,7 +239,7 @@ function enxureHandleUpdateProfile($mysqli, int $currentUserId): void
         $types .= 's';
     }
     if (count($fields) > 0) {
-        $stmt = $mysqli->prepare('UPDATE invoxa_users SET ' . implode(', ', $fields) . ' WHERE id = ?');
+        $stmt = $mysqli->prepare('UPDATE enxure_users SET ' . implode(', ', $fields) . ' WHERE id = ?');
         $params[] = $user['id'];
         $types .= 'i';
         $stmt->bind_param($types, ...$params);
@@ -254,12 +254,12 @@ function enxureHandleUpdateProfile($mysqli, int $currentUserId): void
 
 function enxureHandleTotpSetupInit($mysqli, int $currentUserId): void
 {
-    $userRow = $mysqli->query("SELECT id, username FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
+    $userRow = $mysqli->query("SELECT id, username FROM enxure_users WHERE id = " . $currentUserId)->fetch_assoc();
     if (!$userRow) {
         throw new Exception('Account not found');
     }
     $secret = generateTotpSecret();
-    $stmt = $mysqli->prepare("UPDATE invoxa_users SET totp_secret_pending = ? WHERE id = ?");
+    $stmt = $mysqli->prepare("UPDATE enxure_users SET totp_secret_pending = ? WHERE id = ?");
     $stmt->bind_param("si", $secret, $userRow['id']);
     $stmt->execute();
     echo json_encode(['success' => true, 'secret' => $secret, 'account_label' => $userRow['username'], 'otpauth_uri' => totpOtpauthUri($secret, $userRow['username'])]);
@@ -268,14 +268,14 @@ function enxureHandleTotpSetupInit($mysqli, int $currentUserId): void
 
 function enxureHandleTotpSetupConfirm($mysqli, int $currentUserId, array $settings): void
 {
-    $userRow = $mysqli->query("SELECT id, totp_secret_pending FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
+    $userRow = $mysqli->query("SELECT id, totp_secret_pending FROM enxure_users WHERE id = " . $currentUserId)->fetch_assoc();
     if (!$userRow || empty($userRow['totp_secret_pending'])) {
         throw new Exception('No setup in progress — click Enable Two-Factor Authentication to start again.');
     }
     if (!verifyTotpCode($userRow['totp_secret_pending'], $_POST['code'] ?? '')) {
         throw new Exception('Invalid code. Check the time on your device and try again.');
     }
-    $stmt = $mysqli->prepare("UPDATE invoxa_users SET totp_secret = totp_secret_pending, totp_secret_pending = NULL WHERE id = ?");
+    $stmt = $mysqli->prepare("UPDATE enxure_users SET totp_secret = totp_secret_pending, totp_secret_pending = NULL WHERE id = ?");
     $stmt->bind_param("i", $userRow['id']);
     $stmt->execute();
     $backupCodes = enxureIssueBackupCodes($mysqli, (int) $userRow['id']);
@@ -287,7 +287,7 @@ function enxureHandleTotpSetupConfirm($mysqli, int $currentUserId, array $settin
 
 function enxureHandleTotpRegenerateBackupCodes($mysqli, int $currentUserId, array $settings): void
 {
-    $userRow = $mysqli->query("SELECT id, password_hash, totp_secret FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
+    $userRow = $mysqli->query("SELECT id, password_hash, totp_secret FROM enxure_users WHERE id = " . $currentUserId)->fetch_assoc();
     if (!$userRow || empty($userRow['totp_secret'])) {
         throw new Exception('Two-factor authentication is not enabled.');
     }
@@ -303,14 +303,14 @@ function enxureHandleTotpRegenerateBackupCodes($mysqli, int $currentUserId, arra
 
 function enxureHandleTotpDisable($mysqli, int $currentUserId, array $settings): void
 {
-    $userRow = $mysqli->query("SELECT id, password_hash FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
+    $userRow = $mysqli->query("SELECT id, password_hash FROM enxure_users WHERE id = " . $currentUserId)->fetch_assoc();
     if (!$userRow || !password_verify($_POST['current_password'] ?? '', $userRow['password_hash'])) {
         throw new Exception('Current password is incorrect.');
     }
-    $stmt = $mysqli->prepare("UPDATE invoxa_users SET totp_secret = NULL, totp_secret_pending = NULL WHERE id = ?");
+    $stmt = $mysqli->prepare("UPDATE enxure_users SET totp_secret = NULL, totp_secret_pending = NULL WHERE id = ?");
     $stmt->bind_param("i", $userRow['id']);
     $stmt->execute();
-    $mysqli->query("DELETE FROM invoxa_totp_backup_codes WHERE user_id = " . (int) $userRow['id']);
+    $mysqli->query("DELETE FROM enxure_totp_backup_codes WHERE user_id = " . (int) $userRow['id']);
     enxureLogAction($mysqli, null, '', 'totp_disabled', 'Two-factor authentication disabled');
     notifyChannel($mysqli, $settings, 'notify_on_security_event', "\xF0\x9F\x9B\xA1\xEF\xB8\x8F Two-factor authentication disabled");
     echo json_encode(['success' => true]);
@@ -332,12 +332,12 @@ function enxureHandleCreateUser($mysqli, array $settings): void
     if (strlen($newPassword) < PASSWORD_MIN_LENGTH) {
         throw new Exception('Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters.');
     }
-    $exists = $mysqli->query("SELECT 1 FROM invoxa_users WHERE username = '" . $mysqli->real_escape_string($newUsername) . "'")->num_rows > 0;
+    $exists = $mysqli->query("SELECT 1 FROM enxure_users WHERE username = '" . $mysqli->real_escape_string($newUsername) . "'")->num_rows > 0;
     if ($exists) {
         throw new Exception('That username is already taken.');
     }
     $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_users (username, email, role, password_hash) VALUES (?, ?, ?, ?)");
+    $stmt = $mysqli->prepare("INSERT INTO enxure_users (username, email, role, password_hash) VALUES (?, ?, ?, ?)");
     $stmt->bind_param("ssss", $newUsername, $newEmail, $newRole, $hash);
     $stmt->execute();
     enxureIssueUserWelcomeEmail($mysqli, (int) $mysqli->insert_id, $newUsername, $newEmail);
@@ -352,12 +352,12 @@ function enxureHandleUpdateUser($mysqli, array $settings): void
     $id = (int) ($_POST['id'] ?? 0);
     $newRole = ($_POST['role'] ?? 'member') === 'admin' ? 'admin' : 'member';
     $newPassword = $_POST['new_password'] ?? '';
-    $target = $mysqli->query("SELECT id, username, role FROM invoxa_users WHERE id = " . $id)->fetch_assoc();
+    $target = $mysqli->query("SELECT id, username, role FROM enxure_users WHERE id = " . $id)->fetch_assoc();
     if (!$target) {
         throw new Exception('User not found.');
     }
     if ($target['role'] === 'admin' && $newRole === 'member') {
-        $otherAdmins = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != " . $id)->fetch_assoc()['c'];
+        $otherAdmins = (int) $mysqli->query("SELECT COUNT(*) as c FROM enxure_users WHERE role = 'admin' AND id != " . $id)->fetch_assoc()['c'];
         if ($otherAdmins === 0) {
             throw new Exception("Can't demote the last admin — promote someone else first.");
         }
@@ -367,10 +367,10 @@ function enxureHandleUpdateUser($mysqli, array $settings): void
     }
     if ($newPassword !== '') {
         $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-        $stmt = $mysqli->prepare("UPDATE invoxa_users SET role = ?, password_hash = ? WHERE id = ?");
+        $stmt = $mysqli->prepare("UPDATE enxure_users SET role = ?, password_hash = ? WHERE id = ?");
         $stmt->bind_param("ssi", $newRole, $hash, $id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE invoxa_users SET role = ? WHERE id = ?");
+        $stmt = $mysqli->prepare("UPDATE enxure_users SET role = ? WHERE id = ?");
         $stmt->bind_param("si", $newRole, $id);
     }
     $stmt->execute();
@@ -391,18 +391,18 @@ function enxureHandleDeleteUser($mysqli, int $currentUserId, array $settings): v
     if ($id === $currentUserId) {
         throw new Exception("You can't delete your own account — have another admin do it.");
     }
-    $target = $mysqli->query("SELECT username, role FROM invoxa_users WHERE id = " . $id)->fetch_assoc();
+    $target = $mysqli->query("SELECT username, role FROM enxure_users WHERE id = " . $id)->fetch_assoc();
     if (!$target) {
         throw new Exception('User not found.');
     }
     if ($target['role'] === 'admin') {
-        $otherAdmins = (int) $mysqli->query("SELECT COUNT(*) as c FROM invoxa_users WHERE role = 'admin' AND id != " . $id)->fetch_assoc()['c'];
+        $otherAdmins = (int) $mysqli->query("SELECT COUNT(*) as c FROM enxure_users WHERE role = 'admin' AND id != " . $id)->fetch_assoc()['c'];
         if ($otherAdmins === 0) {
             throw new Exception("Can't delete the last admin.");
         }
     }
-    $mysqli->query("DELETE FROM invoxa_totp_backup_codes WHERE user_id = " . $id);
-    $stmt = $mysqli->prepare("DELETE FROM invoxa_users WHERE id = ?");
+    $mysqli->query("DELETE FROM enxure_totp_backup_codes WHERE user_id = " . $id);
+    $stmt = $mysqli->prepare("DELETE FROM enxure_users WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     enxureLogAction($mysqli, null, '', 'user_deleted', "User account deleted: {$target['username']}");
@@ -414,7 +414,7 @@ function enxureHandleDeleteUser($mysqli, int $currentUserId, array $settings): v
 function enxureHandleToggleTestClients($mysqli): void
 {
     $val = $_POST['hide'] === '1' ? '1' : '0';
-    $mysqli->query("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('hide_test', '$val') ON DUPLICATE KEY UPDATE setting_value = '$val'");
+    $mysqli->query("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('hide_test', '$val') ON DUPLICATE KEY UPDATE setting_value = '$val'");
     echo json_encode(['success' => true]);
     exit;
 }
@@ -422,7 +422,7 @@ function enxureHandleToggleTestClients($mysqli): void
 function enxureHandleToggleShowTestOnly($mysqli): void
 {
     $val = $_POST['show'] === '1' ? '1' : '0';
-    $mysqli->query("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('show_test_only', '$val') ON DUPLICATE KEY UPDATE setting_value = '$val'");
+    $mysqli->query("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('show_test_only', '$val') ON DUPLICATE KEY UPDATE setting_value = '$val'");
     echo json_encode(['success' => true]);
     exit;
 }
@@ -446,7 +446,7 @@ function enxureHandleSaveInvoiceTemplate($mysqli): void
     $invoiceTemplate = in_array($_POST['invoice_template'] ?? '', ['compact', 'custom'], true) ? $_POST['invoice_template'] : 'detailed';
     $customInvoiceTemplate = $_POST['custom_invoice_template'] ?? '';
 
-    $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'invoice_template' => $invoiceTemplate,
         'custom_invoice_template' => $customInvoiceTemplate,
@@ -464,7 +464,7 @@ function enxureHandleSaveBusinessIdentity($mysqli, bool $licenseValid): void
     $vatNumber = trim($_POST['vat_number'] ?? '');
     $brandColor = $_POST['brand_color'] ?? '#4a90e2';
 
-    $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'business_name' => $businessName,
         'vat_number' => $vatNumber,
@@ -476,7 +476,7 @@ function enxureHandleSaveBusinessIdentity($mysqli, bool $licenseValid): void
 
     if ($licenseValid) {
         $hidePoweredBy = ($_POST['hide_powered_by'] ?? '0') === '1' ? '1' : '0';
-        $upsertHidePB = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('hide_powered_by', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        $upsertHidePB = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('hide_powered_by', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
         $upsertHidePB->bind_param("s", $hidePoweredBy);
         $upsertHidePB->execute();
     }
@@ -505,7 +505,7 @@ function enxureHandleSaveInvoiceDefaults($mysqli): void
     $fxCustomUrl = trim($_POST['fx_custom_url'] ?? '');
     $fxCustomApiKey = trim($_POST['fx_custom_api_key'] ?? '');
 
-    $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'currency' => $currency,
         'tax_year_start_month' => (string) $taxYearStartMonth,
@@ -526,7 +526,7 @@ function enxureHandleSavePaymentDetails($mysqli): void
     $defaultAccountName = $_POST['default_account_name'] ?? '';
     $defaultAccountNumber = $_POST['default_account_number'] ?? '';
 
-    $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'footer_text' => $footerText,
         'default_account_name' => $defaultAccountName,
@@ -545,7 +545,7 @@ function enxureHandleSaveEmailTemplates($mysqli): void
     $reminderEmailSubject = trim($_POST['reminder_email_subject'] ?? '') ?: DEFAULT_REMINDER_SUBJECT;
     $reminderEmailBody = trim($_POST['reminder_email_body'] ?? '') ?: DEFAULT_REMINDER_BODY;
 
-    $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'invoice_email_subject' => $invoiceEmailSubject,
         'reminder_email_subject' => $reminderEmailSubject,
@@ -564,7 +564,7 @@ function enxureHandleSaveInvoiceNumbering($mysqli): void
     $padding = (int) ($_POST['invoice_number_padding'] ?? 3);
     if ($padding < 1 || $padding > 10)
         $padding = 3;
-    $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'invoice_number_template' => $template,
         'invoice_number_padding' => (string) $padding,
@@ -581,7 +581,7 @@ function enxureHandleResendVerificationEmail($mysqli, int $currentUserId): void
     error_reporting(0);
     ob_start();
     try {
-        $user = $mysqli->query("SELECT id, username, email FROM invoxa_users WHERE id = " . $currentUserId)->fetch_assoc();
+        $user = $mysqli->query("SELECT id, username, email FROM enxure_users WHERE id = " . $currentUserId)->fetch_assoc();
         if (!$user || empty($user['email'])) {
             throw new Exception('No account email on file.');
         }

@@ -31,7 +31,7 @@ function enxurePaymentAccessOk($mysqli, array $settings): bool
     if (count($fields) !== 3 || $host !== enxureNormaliseDomain($fields[1])) {
         return false;
     }
-    $owner = $mysqli->query("SELECT email FROM invoxa_users ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $owner = $mysqli->query("SELECT email FROM enxure_users ORDER BY id ASC LIMIT 1")->fetch_assoc();
     $ownerEmail = trim((string) ($owner['email'] ?? ''));
     return $ownerEmail !== '' && strcasecmp($ownerEmail, trim($fields[0])) === 0;
 }
@@ -49,7 +49,7 @@ function enxureHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
     if (isset($_GET['pay'])) {
         header('Content-Type: text/html; charset=utf-8');
         $invNum = (string) $_GET['pay'];
-        $stmt = $mysqli->prepare("SELECT id, amount, currency, paid_amount, status FROM invoxa_invoices WHERE invoice_number = ? AND is_quote = 0");
+        $stmt = $mysqli->prepare("SELECT id, amount, currency, paid_amount, status FROM enxure_invoices WHERE invoice_number = ? AND is_quote = 0");
         $stmt->bind_param("s", $invNum);
         $stmt->execute();
         $payInv = $stmt->get_result()->fetch_assoc();
@@ -160,7 +160,7 @@ function enxureHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
         $session = $result['success'] ? $result['session'] : null;
         if ($session && ($session['payment_status'] ?? '') === 'paid') {
             $invNum = $session['client_reference_id'] ?? '';
-            $invRow = $mysqli->query("SELECT id FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
+            $invRow = $mysqli->query("SELECT id FROM enxure_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
             if ($invRow) {
                 $amountPaid = stripeAmountFromMinorUnits((int) ($session['amount_total'] ?? 0), $session['currency'] ?? 'usd');
                 recordInvoicePayment($mysqli, $settings, (int) $invRow['id'], $amountPaid, 'Paid via Stripe Checkout', 'stripe', $sessionId);
@@ -199,7 +199,7 @@ function enxureHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
         $capture = $tokenResult['success'] ? paypalCaptureOrder($tokenResult['access_token'], $env, $orderId) : ['success' => false];
         if ($capture['success']) {
             $customId = $capture['custom_id'] ?? '';
-            $invRow = $mysqli->query("SELECT id FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($customId) . "'")->fetch_assoc();
+            $invRow = $mysqli->query("SELECT id FROM enxure_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($customId) . "'")->fetch_assoc();
             if ($invRow) {
                 recordInvoicePayment($mysqli, $settings, (int) $invRow['id'], $capture['amount'], 'Paid via PayPal', 'paypal', $capture['capture_id']);
             }
@@ -237,7 +237,7 @@ function enxureHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
             $session = $event['data']['object'] ?? [];
             if (($session['payment_status'] ?? '') === 'paid' && !empty($session['id'])) {
                 $invNum = $session['client_reference_id'] ?? '';
-                $invRow = $mysqli->query("SELECT id FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
+                $invRow = $mysqli->query("SELECT id FROM enxure_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
                 if ($invRow) {
                     $amountPaid = stripeAmountFromMinorUnits((int) ($session['amount_total'] ?? 0), $session['currency'] ?? 'usd');
                     recordInvoicePayment($mysqli, $settings, (int) $invRow['id'], $amountPaid, 'Paid via Stripe (webhook)', 'stripe', $session['id']);
@@ -256,7 +256,7 @@ function enxureHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
             $refundedAmount = stripeAmountFromMinorUnits((int) ($charge['amount_refunded'] ?? 0), $charge['currency'] ?? 'usd');
             $chargeId = $charge['id'] ?? '';
             if ($invNum !== '' && $chargeId !== '' && $refundedAmount > 0) {
-                $invRow = $mysqli->query("SELECT id FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
+                $invRow = $mysqli->query("SELECT id FROM enxure_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($invNum) . "'")->fetch_assoc();
                 if ($invRow) {
                     // amount_refunded is cumulative (a second partial refund on the same
                     // charge reports the running total, not just the new increment), so
@@ -316,7 +316,7 @@ function enxureHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
             $captureId = $resource['id'] ?? '';
             $customId = $resource['custom_id'] ?? '';
             if ($captureId !== '' && $customId !== '') {
-                $invRow = $mysqli->query("SELECT id FROM invoxa_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($customId) . "'")->fetch_assoc();
+                $invRow = $mysqli->query("SELECT id FROM enxure_invoices WHERE invoice_number = '" . $mysqli->real_escape_string($customId) . "'")->fetch_assoc();
                 if ($invRow) {
                     $amountPaid = (float) ($resource['amount']['value'] ?? 0);
                     recordInvoicePayment($mysqli, $settings, (int) $invRow['id'], $amountPaid, 'Paid via PayPal (webhook)', 'paypal', $captureId);
@@ -341,7 +341,7 @@ function enxureHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
                 }
             }
             if ($refundId !== '' && $captureId !== null && $refundAmount > 0) {
-                $origRow = $mysqli->query("SELECT invoice_id FROM invoxa_payments WHERE provider = 'paypal' AND provider_ref = '" . $mysqli->real_escape_string($captureId) . "'")->fetch_assoc();
+                $origRow = $mysqli->query("SELECT invoice_id FROM enxure_payments WHERE provider = 'paypal' AND provider_ref = '" . $mysqli->real_escape_string($captureId) . "'")->fetch_assoc();
                 if ($origRow) {
                     recordInvoiceRefund($mysqli, $settings, (int) $origRow['invoice_id'], $refundAmount, 'paypal', $refundId);
                 } else {
@@ -362,7 +362,7 @@ function enxureHandlePublicPaymentRoutes($mysqli, array $settings, bool $license
 //
 // $providerRef, when given, is the gateway's id for this charge (Stripe
 // Checkout Session id, PayPal capture id) and combines with $provider as the
-// ledger's idempotency key (see uniq_provider_ref on invoxa_payments) — a
+// ledger's idempotency key (see uniq_provider_ref on enxure_payments) — a
 // duplicate delivery is skipped rather than double-crediting. Manual
 // payments never pass $providerRef, so they're never deduplicated against
 // each other.
@@ -378,7 +378,7 @@ function recordInvoicePayment($mysqli, array $settings, int $invoiceId, float $a
         return ['success' => false, 'error' => 'Enter a payment amount greater than zero.', 'duplicate' => false];
     }
     if ($providerRef !== null) {
-        $dupCheck = $mysqli->prepare("SELECT id FROM invoxa_payments WHERE provider = ? AND provider_ref = ?");
+        $dupCheck = $mysqli->prepare("SELECT id FROM enxure_payments WHERE provider = ? AND provider_ref = ?");
         $dupCheck->bind_param("ss", $provider, $providerRef);
         $dupCheck->execute();
         if ($dupCheck->get_result()->fetch_assoc()) {
@@ -386,7 +386,7 @@ function recordInvoicePayment($mysqli, array $settings, int $invoiceId, float $a
         }
     }
 
-    $invRow = $mysqli->query("SELECT amount, currency, invoice_number, status, client_name FROM invoxa_invoices WHERE id = " . (int) $invoiceId)->fetch_assoc();
+    $invRow = $mysqli->query("SELECT amount, currency, invoice_number, status, client_name FROM enxure_invoices WHERE id = " . (int) $invoiceId)->fetch_assoc();
     if (!$invRow) {
         return ['success' => false, 'error' => 'Invoice not found', 'duplicate' => false];
     }
@@ -394,7 +394,7 @@ function recordInvoicePayment($mysqli, array $settings, int $invoiceId, float $a
     $invNum = $invRow['invoice_number'];
     $currentStatus = $invRow['status'];
 
-    $paymentStmt = $mysqli->prepare("INSERT INTO invoxa_payments (invoice_id, amount, note, provider, provider_ref) VALUES (?, ?, ?, ?, ?)");
+    $paymentStmt = $mysqli->prepare("INSERT INTO enxure_payments (invoice_id, amount, note, provider, provider_ref) VALUES (?, ?, ?, ?, ?)");
     $paymentStmt->bind_param("idsss", $invoiceId, $amount, $note, $provider, $providerRef);
     try {
         $paymentStmt->execute();
@@ -410,11 +410,11 @@ function recordInvoicePayment($mysqli, array $settings, int $invoiceId, float $a
 
     // paid_amount/paid_at stay a cached SUM()/latest-payment snapshot of the
     // ledger, since stats/export/dashboard queries read those columns directly.
-    $totalPaid = (float) ($mysqli->query("SELECT COALESCE(SUM(amount), 0) as t FROM invoxa_payments WHERE invoice_id = " . (int) $invoiceId)->fetch_assoc()['t'] ?? 0);
+    $totalPaid = (float) ($mysqli->query("SELECT COALESCE(SUM(amount), 0) as t FROM enxure_payments WHERE invoice_id = " . (int) $invoiceId)->fetch_assoc()['t'] ?? 0);
     $isPartial = $totalPaid < $invAmount;
     $newStatus = $isPartial ? $currentStatus : 'paid';
 
-    $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = ?, paid_at = NOW(), paid_amount = ? WHERE id = ?");
+    $stmt = $mysqli->prepare("UPDATE enxure_invoices SET status = ?, paid_at = NOW(), paid_amount = ? WHERE id = ?");
     $stmt->bind_param("sdi", $newStatus, $totalPaid, $invoiceId);
     $stmt->execute();
 
@@ -434,7 +434,7 @@ function recordInvoicePayment($mysqli, array $settings, int $invoiceId, float $a
 
 // Reverses money out of the ledger when Stripe/PayPal reports a refund
 // (a dashboard refund doesn't touch enXure on its own). Recorded as a
-// negative-amount row in the same invoxa_payments ledger recordInvoicePayment()
+// negative-amount row in the same enxure_payments ledger recordInvoicePayment()
 // writes to, so every existing SUM(amount) read of paid_amount stays correct.
 // Uses the same (provider, provider_ref) idempotency guarantee as payments.
 function recordInvoiceRefund($mysqli, array $settings, int $invoiceId, float $refundAmount, string $provider, string $providerRef): array
@@ -442,21 +442,21 @@ function recordInvoiceRefund($mysqli, array $settings, int $invoiceId, float $re
     if ($refundAmount <= 0) {
         return ['success' => false, 'error' => 'Refund amount must be greater than zero.', 'duplicate' => false];
     }
-    $dupCheck = $mysqli->prepare("SELECT id FROM invoxa_payments WHERE provider = ? AND provider_ref = ?");
+    $dupCheck = $mysqli->prepare("SELECT id FROM enxure_payments WHERE provider = ? AND provider_ref = ?");
     $dupCheck->bind_param("ss", $provider, $providerRef);
     $dupCheck->execute();
     if ($dupCheck->get_result()->fetch_assoc()) {
         return ['success' => true, 'duplicate' => true];
     }
 
-    $invRow = $mysqli->query("SELECT amount, currency, invoice_number, status, client_name FROM invoxa_invoices WHERE id = " . (int) $invoiceId)->fetch_assoc();
+    $invRow = $mysqli->query("SELECT amount, currency, invoice_number, status, client_name FROM enxure_invoices WHERE id = " . (int) $invoiceId)->fetch_assoc();
     if (!$invRow) {
         return ['success' => false, 'error' => 'Invoice not found', 'duplicate' => false];
     }
 
     $note = 'Refund';
     $negAmount = -abs($refundAmount);
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_payments (invoice_id, amount, note, provider, provider_ref) VALUES (?, ?, ?, ?, ?)");
+    $stmt = $mysqli->prepare("INSERT INTO enxure_payments (invoice_id, amount, note, provider, provider_ref) VALUES (?, ?, ?, ?, ?)");
     $stmt->bind_param("idsss", $invoiceId, $negAmount, $note, $provider, $providerRef);
     try {
         $stmt->execute();
@@ -468,12 +468,12 @@ function recordInvoiceRefund($mysqli, array $settings, int $invoiceId, float $re
     }
 
     $invAmount = (float) $invRow['amount'];
-    $totalPaid = (float) ($mysqli->query("SELECT COALESCE(SUM(amount), 0) as t FROM invoxa_payments WHERE invoice_id = " . (int) $invoiceId)->fetch_assoc()['t'] ?? 0);
+    $totalPaid = (float) ($mysqli->query("SELECT COALESCE(SUM(amount), 0) as t FROM enxure_payments WHERE invoice_id = " . (int) $invoiceId)->fetch_assoc()['t'] ?? 0);
     // A refund only moves the total down: void stays void, otherwise the
     // invoice reopens to 'sent' unless the remaining total still covers it.
     $newStatus = $invRow['status'] === 'void' ? 'void' : (($totalPaid >= $invAmount && $totalPaid > 0) ? 'paid' : 'sent');
 
-    $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = ?, paid_amount = ? WHERE id = ?");
+    $stmt = $mysqli->prepare("UPDATE enxure_invoices SET status = ?, paid_amount = ? WHERE id = ?");
     $stmt->bind_param("sdi", $newStatus, $totalPaid, $invoiceId);
     $stmt->execute();
 
@@ -490,7 +490,7 @@ function recordInvoiceRefund($mysqli, array $settings, int $invoiceId, float $re
 function enxureHandleMarkPaid($mysqli, array $settings): void
 {
 // $amount is this installment only, not a cumulative total — recorded as
-// its own row in invoxa_payments so part-payments build a real history.
+// its own row in enxure_payments so part-payments build a real history.
 $id = (int) $_POST['id'];
 $amount = (float) $_POST['amount'];
 $note = trim($_POST['note'] ?? '');
@@ -508,7 +508,7 @@ function enxureHandleGetInvoicePayments($mysqli): void
 // Backs the "Payment History" list in the Mark Paid modal, so a new
 // installment can be sized against what's already been paid.
 $invoiceId = (int) ($_POST['invoice_id'] ?? 0);
-$res = $mysqli->query("SELECT id, amount, note, paid_at FROM invoxa_payments WHERE invoice_id = $invoiceId ORDER BY paid_at ASC, id ASC");
+$res = $mysqli->query("SELECT id, amount, note, paid_at FROM enxure_payments WHERE invoice_id = $invoiceId ORDER BY paid_at ASC, id ASC");
 $payments = [];
 while ($r = $res->fetch_assoc())
     $payments[] = $r;
@@ -521,13 +521,13 @@ function enxureHandleMarkUnpaid($mysqli): void
 $id = (int) $_POST['id'];
 // Full reset, not just undoing the latest installment — clears the whole
 // payment ledger ("Mark Unpaid" and "Clear Partial Payment" both call this).
-$delStmt = $mysqli->prepare("DELETE FROM invoxa_payments WHERE invoice_id = ?");
+$delStmt = $mysqli->prepare("DELETE FROM enxure_payments WHERE invoice_id = ?");
 $delStmt->bind_param("i", $id);
 $delStmt->execute();
-$stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = 'sent', paid_at = NULL, paid_amount = 0 WHERE id = ?");
+$stmt = $mysqli->prepare("UPDATE enxure_invoices SET status = 'sent', paid_at = NULL, paid_amount = 0 WHERE id = ?");
 $stmt->bind_param("i", $id);
 $stmt->execute();
-$invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $id")->fetch_assoc()['invoice_number'] ?? '';
+$invNum = $mysqli->query("SELECT invoice_number FROM enxure_invoices WHERE id = $id")->fetch_assoc()['invoice_number'] ?? '';
 enxureLogAction($mysqli, $id, $invNum, 'mark_unpaid', 'Marked as unpaid — payment history cleared');
 echo json_encode(['success' => true]);
 exit;
@@ -538,7 +538,7 @@ function enxureHandleSavePaymentSettings($mysqli): void
 $stripeEnabled = ($_POST['stripe_enabled'] ?? '0') === '1' ? '1' : '0';
 $paypalEnabled = ($_POST['paypal_enabled'] ?? '0') === '1' ? '1' : '0';
 $paypalEnv = ($_POST['paypal_environment'] ?? 'sandbox') === 'live' ? 'live' : 'sandbox';
-$upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+$upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
 foreach ([
     'public_url' => rtrim(trim($_POST['public_url'] ?? ''), '/'),
     'stripe_enabled' => $stripeEnabled,

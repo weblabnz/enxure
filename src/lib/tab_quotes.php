@@ -61,7 +61,7 @@
                         </thead>
                         <tbody id="quotesTbody">
                             <?php
-                            $qRes = $mysqli->query("SELECT * FROM invoxa_invoices WHERE is_quote = 1 ORDER BY invoice_date DESC");
+                            $qRes = $mysqli->query("SELECT * FROM enxure_invoices WHERE is_quote = 1 ORDER BY invoice_date DESC");
                             echo renderQuoteRows($qRes);
                             ?>
                         </tbody>

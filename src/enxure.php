@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', 'https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.0');
+define('APP_VERSION', '3.0.1');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
@@ -51,7 +51,7 @@ define('LOGIN_LOCKOUT_MINUTES', 15);
 define('PASSWORD_MIN_LENGTH', 8);
 
 // ── Email template defaults ──────────────────────────────────────────────────
-// Used when the matching invoxa_settings key (Settings > Email Templates)
+// Used when the matching enxure_settings key (Settings > Email Templates)
 // hasn't been customized. Placeholders are plain {token} text, substituted
 // by renderEmailTemplate() below.
 define('DEFAULT_INVOICE_SUBJECT', '{business_name} - Invoice for {client_name}');
@@ -103,7 +103,7 @@ require_once __DIR__ . '/lib/auth_gate.php';
 if (isset($_GET['portal'])) {
     header('Content-Type: text/html; charset=utf-8');
     $portalToken = (string) $_GET['portal'];
-    $stmt = $mysqli->prepare("SELECT client_key, client_name, portal_token_expires_at FROM invoxa_clients WHERE portal_token = ?");
+    $stmt = $mysqli->prepare("SELECT client_key, client_name, portal_token_expires_at FROM enxure_clients WHERE portal_token = ?");
     $stmt->bind_param("s", $portalToken);
     $stmt->execute();
     $portalClient = $stmt->get_result()->fetch_assoc();
@@ -133,7 +133,7 @@ if (isset($_GET['portal'])) {
     // prefetching the URL, for example — can never trigger it by itself.
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_accept_quote'])) {
         $quoteId = (int) $_POST['confirm_accept_quote'];
-        $quoteRow = $mysqli->query("SELECT client_key FROM invoxa_invoices WHERE id = $quoteId AND is_quote = 1")->fetch_assoc();
+        $quoteRow = $mysqli->query("SELECT client_key FROM enxure_invoices WHERE id = $quoteId AND is_quote = 1")->fetch_assoc();
         if (!$quoteRow || $quoteRow['client_key'] !== $portalClient['client_key']) {
             echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Quote not found</h1><p class="sub">This quote is no longer available. <a href="?portal=' . htmlspecialchars($portalToken) . '" class="back-link">Back to your invoices</a></p></div></body></html>';
             exit;
@@ -148,7 +148,7 @@ if (isset($_GET['portal'])) {
     }
     if (isset($_GET['accept_quote'])) {
         $quoteId = (int) $_GET['accept_quote'];
-        $quoteRow = $mysqli->query("SELECT invoice_number, amount, currency, quote_expires_at, client_key FROM invoxa_invoices WHERE id = $quoteId AND is_quote = 1")->fetch_assoc();
+        $quoteRow = $mysqli->query("SELECT invoice_number, amount, currency, quote_expires_at, client_key FROM enxure_invoices WHERE id = $quoteId AND is_quote = 1")->fetch_assoc();
         if (!$quoteRow || $quoteRow['client_key'] !== $portalClient['client_key']) {
             echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Quote not found</h1><p class="sub">This quote is no longer available. <a href="?portal=' . htmlspecialchars($portalToken) . '" class="back-link">Back to your invoices</a></p></div></body></html>';
             exit;
@@ -161,7 +161,7 @@ if (isset($_GET['portal'])) {
         echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . htmlspecialchars($businessName) . '</title><style>' . $portalStyle . '</style></head><body><div class="wrap"><h1>Accept quote ' . htmlspecialchars($quoteRow['invoice_number']) . '?</h1><div class="confirm-box"><p style="margin:0; color:#90a0bb;">' . htmlspecialchars(enxureResolveCurrency($quoteRow['currency'] ?? '', $settings)) . ' ' . number_format((float) $quoteRow['amount'], 2) . '. Accepting turns this into a real invoice — ' . htmlspecialchars($businessName) . ' will be notified right away.</p><form method="POST" class="confirm-actions"><input type="hidden" name="confirm_accept_quote" value="' . (int) $quoteId . '"><button type="submit" class="accept-btn">Accept Quote</button><a href="?portal=' . htmlspecialchars($portalToken) . '" class="cancel-link">Cancel</a></form></div></div></body></html>';
         exit;
     }
-    $invRes = $mysqli->prepare("SELECT invoice_number, invoice_date, due_date, amount, currency, paid_amount, status FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND status != 'draft' ORDER BY invoice_date DESC");
+    $invRes = $mysqli->prepare("SELECT invoice_number, invoice_date, due_date, amount, currency, paid_amount, status FROM enxure_invoices WHERE client_key = ? AND is_quote = 0 AND status != 'draft' ORDER BY invoice_date DESC");
     $invRes->bind_param("s", $portalClient['client_key']);
     $invRes->execute();
     $portalInvoices = $invRes->get_result();
@@ -193,7 +193,7 @@ if (isset($_GET['portal'])) {
         ? '<table><thead><tr><th>Invoice</th><th>Date</th><th>Due</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>' . $rowsHtml . '</tbody></table>'
         : '<div class="empty">No invoices yet.</div>';
 
-    $quoteRes = $mysqli->prepare("SELECT id, invoice_number, invoice_date, amount, currency, quote_expires_at FROM invoxa_invoices WHERE client_key = ? AND is_quote = 1 ORDER BY invoice_date DESC");
+    $quoteRes = $mysqli->prepare("SELECT id, invoice_number, invoice_date, amount, currency, quote_expires_at FROM enxure_invoices WHERE client_key = ? AND is_quote = 1 ORDER BY invoice_date DESC");
     $quoteRes->bind_param("s", $portalClient['client_key']);
     $quoteRes->execute();
     $portalQuotes = $quoteRes->get_result();
@@ -247,7 +247,7 @@ function generateInvoiceNumber($mysqli, $clientKey, $clientName, array $settings
     }
     // Looked up by client_key rather than an invoice_number prefix match, so
     // this works regardless of what invoice_number_template produces.
-    $q = $mysqli->prepare("SELECT invoice_number FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0");
+    $q = $mysqli->prepare("SELECT invoice_number FROM enxure_invoices WHERE client_key = ? AND is_quote = 0");
     $q->bind_param("s", $clientKey);
     $q->execute();
     $res = $q->get_result();
@@ -296,7 +296,7 @@ function enxureLicenseSignatureOk($mysqli, array $settings): bool
     if (count($fields) !== 3) {
         return false;
     }
-    $owner = $mysqli->query("SELECT email FROM invoxa_users ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $owner = $mysqli->query("SELECT email FROM enxure_users ORDER BY id ASC LIMIT 1")->fetch_assoc();
     $ownerEmail = trim((string) ($owner['email'] ?? ''));
     if ($ownerEmail === '' || strcasecmp($ownerEmail, trim($fields[0])) !== 0) {
         return false;
@@ -415,7 +415,7 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
     }
 
     $status = $emailSent ? 'sent' : 'failed';
-    $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("ssssssdssss", $invNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $currencyCode, $status, $htmlContent, $relPath);
     $stmt->execute();
 
@@ -469,7 +469,7 @@ function notifyChannel($mysqli, array $settings, string $eventToggleKey, string 
 // distinguishes the two for the audit log and notification).
 function convertQuoteToInvoice($mysqli, array $settings, int $quoteId, string $source = 'admin'): array
 {
-    $row = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = " . (int) $quoteId . " AND is_quote = 1")->fetch_assoc();
+    $row = $mysqli->query("SELECT * FROM enxure_invoices WHERE id = " . (int) $quoteId . " AND is_quote = 1")->fetch_assoc();
     if (!$row) {
         return ['success' => false, 'error' => 'Quote not found'];
     }
@@ -483,7 +483,7 @@ function convertQuoteToInvoice($mysqli, array $settings, int $quoteId, string $s
     if (!is_dir($invoiceDir))
         @mkdir($invoiceDir, 0777, true);
     $prefix = strtoupper($clientKey);
-    $q2 = $mysqli->prepare("SELECT invoice_number FROM invoxa_invoices WHERE invoice_number LIKE CONCAT(?, '%') AND is_quote = 0");
+    $q2 = $mysqli->prepare("SELECT invoice_number FROM enxure_invoices WHERE invoice_number LIKE CONCAT(?, '%') AND is_quote = 0");
     $q2->bind_param("s", $prefix);
     $q2->execute();
     $res2 = $q2->get_result();
@@ -505,7 +505,7 @@ function convertQuoteToInvoice($mysqli, array $settings, int $quoteId, string $s
     $htmlFile = "$invoiceDir/$newNum.html";
     @file_put_contents($htmlFile, $htmlContent);
     $relPath = "invoices/$folderName/$newNum.html";
-    $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET is_quote = 0, invoice_number = ?, file_path = ?, html_content = ?, status = 'sent' WHERE id = ?");
+    $stmt = $mysqli->prepare("UPDATE enxure_invoices SET is_quote = 0, invoice_number = ?, file_path = ?, html_content = ?, status = 'sent' WHERE id = ?");
     $stmt->bind_param("sssi", $newNum, $relPath, $htmlContent, $quoteId);
     $stmt->execute();
 
@@ -656,13 +656,13 @@ function sendOverdueReminders($mysqli, array $settings, string $emailPassword): 
     $sent = 0;
     $errors = 0;
     $res = $mysqli->query(
-        "SELECT i.* FROM invoxa_invoices i
+        "SELECT i.* FROM enxure_invoices i
          WHERE i.is_quote = 0
            AND i.status IN ('sent', 'pending')
            AND i.due_date IS NOT NULL
            AND i.due_date <= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
            AND NOT EXISTS (
-               SELECT 1 FROM invoxa_actions a
+               SELECT 1 FROM enxure_actions a
                WHERE a.invoice_id = i.id AND a.action_type = 'reminder_sent'
            )"
     );
@@ -708,13 +708,13 @@ function applyLateFees($mysqli, array $settings, string $emailPassword): array
         return ['charged' => 0, 'errors' => 0];
 
     $stmt = $mysqli->prepare(
-        "SELECT i.* FROM invoxa_invoices i
+        "SELECT i.* FROM enxure_invoices i
          WHERE i.is_quote = 0
            AND i.status IN ('sent', 'pending')
            AND i.due_date IS NOT NULL
            AND i.due_date <= DATE_SUB(CURDATE(), INTERVAL ? DAY)
            AND NOT EXISTS (
-               SELECT 1 FROM invoxa_actions a
+               SELECT 1 FROM enxure_actions a
                WHERE a.invoice_id = i.id AND a.action_type = 'late_fee_charged'
            )"
     );
@@ -730,7 +730,7 @@ function applyLateFees($mysqli, array $settings, string $emailPassword): array
         if ($feeAmount <= 0)
             continue;
 
-        $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE client_key = '" . $mysqli->real_escape_string($inv['client_key']) . "'")->fetch_assoc();
+        $client = $mysqli->query("SELECT * FROM enxure_clients WHERE client_key = '" . $mysqli->real_escape_string($inv['client_key']) . "'")->fetch_assoc();
         if (!$client) {
             $errors++;
             continue;
@@ -774,7 +774,7 @@ function pruneAuditActions($mysqli, array $settings): int
     $days = (int) ($settings['audit_log_retention_days'] ?? 0);
     if ($days <= 0)
         return 0;
-    $stmt = $mysqli->prepare("DELETE FROM invoxa_actions WHERE performed_at < DATE_SUB(NOW(), INTERVAL ? DAY)");
+    $stmt = $mysqli->prepare("DELETE FROM enxure_actions WHERE performed_at < DATE_SUB(NOW(), INTERVAL ? DAY)");
     $stmt->bind_param("i", $days);
     $stmt->execute();
     $pruned = $stmt->affected_rows;
@@ -920,18 +920,18 @@ exit;
 function enxureImportInvoicesCsvRows($mysqli, $fh, array $settings): array
 {
 $clientsByName = [];
-$cRes = $mysqli->query("SELECT client_key, client_name, email, currency, payment_terms_days FROM invoxa_clients");
+$cRes = $mysqli->query("SELECT client_key, client_name, email, currency, payment_terms_days FROM enxure_clients");
 while ($cr = $cRes->fetch_assoc())
     $clientsByName[strtolower($cr['client_name'])] = $cr;
 
 $existingNumbers = [];
-$nRes = $mysqli->query("SELECT invoice_number FROM invoxa_invoices");
+$nRes = $mysqli->query("SELECT invoice_number FROM enxure_invoices");
 while ($nr = $nRes->fetch_assoc())
     $existingNumbers[$nr['invoice_number']] = true;
 
 $validStatuses = ['sent', 'failed', 'pending', 'draft', 'paid', 'void'];
-$insert = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-$paymentInsert = $mysqli->prepare("INSERT INTO invoxa_payments (invoice_id, amount, note, provider, paid_at) VALUES (?, ?, 'Imported from CSV', 'manual', ?)");
+$insert = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+$paymentInsert = $mysqli->prepare("INSERT INTO enxure_payments (invoice_id, amount, note, provider, paid_at) VALUES (?, ?, 'Imported from CSV', 'manual', ?)");
 
 $imported = 0;
 $skipped = 0;
@@ -1108,7 +1108,7 @@ $categoryByLabel = [];
 foreach ($categories as $catKey => $label)
     $categoryByLabel[strtolower($label)] = $catKey;
 
-$insert = $mysqli->prepare("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description) VALUES (?, ?, ?, ?, ?)");
+$insert = $mysqli->prepare("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description) VALUES (?, ?, ?, ?, ?)");
 $imported = 0;
 $skipped = 0;
 $rowNum = 0;
@@ -1150,7 +1150,7 @@ return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
 }
 
 // Recurring expense templates — the run_recurring cron action auto-logs one
-// invoxa_expenses row per active template each period (see run_recurring
+// enxure_expenses row per active template each period (see run_recurring
 // above). Same idea as renderExpenseRows(), just for the template list.
 function renderRecurringExpenseRows(array $recurringExpenses, bool $licenseValid): string
 {
@@ -1268,15 +1268,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             }
             $like = '%' . $q . '%';
-            $invStmt = $mysqli->prepare("SELECT id, invoice_number, client_name, amount, status, is_quote FROM invoxa_invoices WHERE invoice_number LIKE ? OR client_name LIKE ? ORDER BY invoice_date DESC LIMIT 6");
+            $invStmt = $mysqli->prepare("SELECT id, invoice_number, client_name, amount, status, is_quote FROM enxure_invoices WHERE invoice_number LIKE ? OR client_name LIKE ? ORDER BY invoice_date DESC LIMIT 6");
             $invStmt->bind_param("ss", $like, $like);
             $invStmt->execute();
             $invoices = $invStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-            $cliStmt = $mysqli->prepare("SELECT id, client_name, email FROM invoxa_clients WHERE client_name LIKE ? OR email LIKE ? ORDER BY client_name ASC LIMIT 6");
+            $cliStmt = $mysqli->prepare("SELECT id, client_name, email FROM enxure_clients WHERE client_name LIKE ? OR email LIKE ? ORDER BY client_name ASC LIMIT 6");
             $cliStmt->bind_param("ss", $like, $like);
             $cliStmt->execute();
             $searchClients = $cliStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-            $expStmt = $mysqli->prepare("SELECT id, expense_date, vendor, category, amount FROM invoxa_expenses WHERE vendor LIKE ? OR description LIKE ? ORDER BY expense_date DESC LIMIT 6");
+            $expStmt = $mysqli->prepare("SELECT id, expense_date, vendor, category, amount FROM enxure_expenses WHERE vendor LIKE ? OR description LIKE ? ORDER BY expense_date DESC LIMIT 6");
             $expStmt->bind_param("ss", $like, $like);
             $expStmt->execute();
             $searchExpenses = $expStmt->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -1304,11 +1304,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
 
             if ($id > 0) {
-                $stmt = $mysqli->prepare("UPDATE invoxa_expenses SET expense_date=?, vendor=?, category=?, amount=?, description=? WHERE id=?");
+                $stmt = $mysqli->prepare("UPDATE enxure_expenses SET expense_date=?, vendor=?, category=?, amount=?, description=? WHERE id=?");
                 $stmt->bind_param("sssdsi", $date, $vendor, $category, $amount, $description, $id);
                 $stmt->execute();
             } else {
-                $stmt = $mysqli->prepare("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description) VALUES (?, ?, ?, ?, ?)");
+                $stmt = $mysqli->prepare("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description) VALUES (?, ?, ?, ?, ?)");
                 $stmt->bind_param("sssds", $date, $vendor, $category, $amount, $description);
                 $stmt->execute();
                 $id = $mysqli->insert_id;
@@ -1318,16 +1318,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'delete_expense') {
             $id = (int) ($_POST['id'] ?? 0);
-            $row = $mysqli->query("SELECT receipt_path FROM invoxa_expenses WHERE id = " . $id)->fetch_assoc();
+            $row = $mysqli->query("SELECT receipt_path FROM enxure_expenses WHERE id = " . $id)->fetch_assoc();
             if ($row && !empty($row['receipt_path'])) {
                 @unlink(RECEIPTS_DIR . $row['receipt_path']);
             }
-            $recRes = $mysqli->query("SELECT stored_path FROM invoxa_expense_receipts WHERE expense_id = $id");
+            $recRes = $mysqli->query("SELECT stored_path FROM enxure_expense_receipts WHERE expense_id = $id");
             while ($recRow = $recRes->fetch_assoc())
                 @unlink(RECEIPTS_DIR . $recRow['stored_path']);
             @rmdir(RECEIPTS_DIR . $id);
-            $mysqli->query("DELETE FROM invoxa_expense_receipts WHERE expense_id = $id");
-            $stmt = $mysqli->prepare("DELETE FROM invoxa_expenses WHERE id=?");
+            $mysqli->query("DELETE FROM enxure_expense_receipts WHERE expense_id = $id");
+            $stmt = $mysqli->prepare("DELETE FROM enxure_expenses WHERE id=?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             echo json_encode(['success' => true]);
@@ -1335,7 +1335,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'get_expense_receipts') {
             $expenseId = (int) ($_POST['expense_id'] ?? 0);
-            $res = $mysqli->query("SELECT id, filename, stored_path, file_size, doc_type, uploaded_at FROM invoxa_expense_receipts WHERE expense_id = $expenseId ORDER BY uploaded_at DESC");
+            $res = $mysqli->query("SELECT id, filename, stored_path, file_size, doc_type, uploaded_at FROM enxure_expense_receipts WHERE expense_id = $expenseId ORDER BY uploaded_at DESC");
             $receipts = [];
             while ($r = $res->fetch_assoc()) {
                 $r['url'] = RECEIPTS_URL . implode('/', array_map('rawurlencode', explode('/', $r['stored_path'])));
@@ -1373,7 +1373,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'upload_expense_receipt') {
             $expenseId = (int) ($_POST['expense_id'] ?? 0);
-            $expExists = $mysqli->query("SELECT id FROM invoxa_expenses WHERE id = $expenseId")->num_rows > 0;
+            $expExists = $mysqli->query("SELECT id FROM enxure_expenses WHERE id = $expenseId")->num_rows > 0;
             if (!$expExists) {
                 echo json_encode(['success' => false, 'error' => 'Expense not found']);
                 exit;
@@ -1400,7 +1400,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $storedPath = "$expenseId/$storedName";
             $size = (int) $_FILES['file']['size'];
             $docType = ($_POST['doc_type'] ?? 'receipt') === 'invoice' ? 'invoice' : 'receipt';
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, ?, ?, ?, ?)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_expense_receipts (expense_id, filename, stored_path, file_size, doc_type) VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param("issis", $expenseId, $origName, $storedPath, $size, $docType);
             $stmt->execute();
             echo json_encode(['success' => true]);
@@ -1408,10 +1408,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'delete_expense_receipt') {
             $id = (int) ($_POST['id'] ?? 0);
-            $row = $mysqli->query("SELECT stored_path FROM invoxa_expense_receipts WHERE id = $id")->fetch_assoc();
+            $row = $mysqli->query("SELECT stored_path FROM enxure_expense_receipts WHERE id = $id")->fetch_assoc();
             if ($row) {
                 @unlink(RECEIPTS_DIR . $row['stored_path']);
-                $stmt = $mysqli->prepare("DELETE FROM invoxa_expense_receipts WHERE id = ?");
+                $stmt = $mysqli->prepare("DELETE FROM enxure_expense_receipts WHERE id = ?");
                 $stmt->bind_param("i", $id);
                 $stmt->execute();
             }
@@ -1424,7 +1424,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // at upload time.
             $id = (int) ($_POST['id'] ?? 0);
             $docType = ($_POST['doc_type'] ?? '') === 'invoice' ? 'invoice' : 'receipt';
-            $stmt = $mysqli->prepare("UPDATE invoxa_expense_receipts SET doc_type = ? WHERE id = ?");
+            $stmt = $mysqli->prepare("UPDATE enxure_expense_receipts SET doc_type = ? WHERE id = ?");
             $stmt->bind_param("si", $docType, $id);
             $stmt->execute();
             echo json_encode(['success' => true]);
@@ -1444,10 +1444,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 throw new Exception('Amount must be greater than 0.');
             }
             if ($id > 0) {
-                $stmt = $mysqli->prepare("UPDATE invoxa_recurring_expenses SET vendor=?, category=?, amount=?, description=?, frequency=? WHERE id=?");
+                $stmt = $mysqli->prepare("UPDATE enxure_recurring_expenses SET vendor=?, category=?, amount=?, description=?, frequency=? WHERE id=?");
                 $stmt->bind_param("sssdsi", $vendor, $category, $amount, $description, $frequency, $id);
             } else {
-                $stmt = $mysqli->prepare("INSERT INTO invoxa_recurring_expenses (vendor, category, amount, description, frequency) VALUES (?, ?, ?, ?, ?)");
+                $stmt = $mysqli->prepare("INSERT INTO enxure_recurring_expenses (vendor, category, amount, description, frequency) VALUES (?, ?, ?, ?, ?)");
                 $stmt->bind_param("sssds", $vendor, $category, $amount, $description, $frequency);
             }
             $stmt->execute();
@@ -1457,7 +1457,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'toggle_recurring_expense') {
             $id = (int) ($_POST['id'] ?? 0);
             $active = ($_POST['is_active'] ?? '1') === '1' ? 1 : 0;
-            $stmt = $mysqli->prepare("UPDATE invoxa_recurring_expenses SET is_active = ? WHERE id = ?");
+            $stmt = $mysqli->prepare("UPDATE enxure_recurring_expenses SET is_active = ? WHERE id = ?");
             $stmt->bind_param("ii", $active, $id);
             $stmt->execute();
             echo json_encode(['success' => true]);
@@ -1465,7 +1465,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'delete_recurring_expense') {
             $id = (int) ($_POST['id'] ?? 0);
-            $stmt = $mysqli->prepare("DELETE FROM invoxa_recurring_expenses WHERE id = ?");
+            $stmt = $mysqli->prepare("DELETE FROM enxure_recurring_expenses WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             echo json_encode(['success' => true]);
@@ -1476,7 +1476,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'import_expenses_csv') { enxureHandleImportExpensesCsv($mysqli); }
         if ($_POST['action'] === 'preview_adhoc') {
             $clientId = (int) $_POST['client_id'];
-            $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id=$clientId")->fetch_assoc();
+            $client = $mysqli->query("SELECT * FROM enxure_clients WHERE id=$clientId")->fetch_assoc();
             if (!$client)
                 throw new Exception("Client not found");
             $lineItems = json_decode($_POST['line_items'] ?? '[]', true);
@@ -1500,7 +1500,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'preview_adhoc_pdf') { enxureHandlePreviewAdhocPdf($mysqli, $settings, $licenseValid); }
         if ($_POST['action'] === 'generate_adhoc') {
             $clientId = (int) $_POST['client_id'];
-            $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id=$clientId")->fetch_assoc();
+            $client = $mysqli->query("SELECT * FROM enxure_clients WHERE id=$clientId")->fetch_assoc();
             if (!$client)
                 throw new Exception("Client not found");
             $lineItems = json_decode($_POST['line_items'] ?? '[]', true);
@@ -1516,7 +1516,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'save_quote') {
             $clientId = (int) $_POST['client_id'];
-            $client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id=$clientId")->fetch_assoc();
+            $client = $mysqli->query("SELECT * FROM enxure_clients WHERE id=$clientId")->fetch_assoc();
             if (!$client) {
                 echo json_encode(['success' => false, 'error' => 'Client not found']);
                 exit;
@@ -1536,7 +1536,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $quoteExpiresAt = validDateOverride($_POST['quote_expires_at'] ?? null);
             // Generate quote number: QUO-{CLIENT_KEY}-{seq}
             $prefix = 'Q' . strtoupper($client['client_key']);
-            $qNum = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE invoice_number LIKE '$prefix%' AND is_quote = 1")->fetch_assoc()['c'] ?? 0;
+            $qNum = $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE invoice_number LIKE '$prefix%' AND is_quote = 1")->fetch_assoc()['c'] ?? 0;
             $quoteNum = $prefix . str_pad($qNum + 1, 3, '0', STR_PAD_LEFT);
             global $settings;
             $brandColor = $settings['brand_color'] ?? '#4a90e2';
@@ -1576,7 +1576,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $htmlFile = "$invoiceDir/$quoteNum.html";
             @file_put_contents($htmlFile, $htmlContent);
             $relPath = "invoices/$folderName/$quoteNum.html";
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path, is_quote, quote_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 1, ?)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path, is_quote, quote_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 1, ?)");
             $stmt->bind_param("ssssssdssss", $quoteNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $currencyCode, $htmlContent, $relPath, $quoteExpiresAt);
             $stmt->execute();
             $memo = trim($_POST['memo'] ?? '');
@@ -1588,7 +1588,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         if ($_POST['action'] === 'run_recurring') {
-            $clients = $mysqli->query("SELECT * FROM invoxa_clients WHERE is_active=1 AND monthly_rate > 0");
+            $clients = $mysqli->query("SELECT * FROM enxure_clients WHERE is_active=1 AND monthly_rate > 0");
             $sent = 0;
             $errors = 0;
             $skipped = 0;
@@ -1596,10 +1596,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // this client was already billed in the current calendar period (not a
             // rolling N-day window).
             $alreadyBilledStmts = [
-                'weekly' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND YEARWEEK(invoice_date, 3) = YEARWEEK(CURDATE(), 3)"),
-                'monthly' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND MONTH(invoice_date) = MONTH(CURDATE()) AND YEAR(invoice_date) = YEAR(CURDATE())"),
-                'quarterly' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND QUARTER(invoice_date) = QUARTER(CURDATE()) AND YEAR(invoice_date) = YEAR(CURDATE())"),
-                'annually' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_invoices WHERE client_key = ? AND is_quote = 0 AND YEAR(invoice_date) = YEAR(CURDATE())"),
+                'weekly' => $mysqli->prepare("SELECT COUNT(*) as c FROM enxure_invoices WHERE client_key = ? AND is_quote = 0 AND YEARWEEK(invoice_date, 3) = YEARWEEK(CURDATE(), 3)"),
+                'monthly' => $mysqli->prepare("SELECT COUNT(*) as c FROM enxure_invoices WHERE client_key = ? AND is_quote = 0 AND MONTH(invoice_date) = MONTH(CURDATE()) AND YEAR(invoice_date) = YEAR(CURDATE())"),
+                'quarterly' => $mysqli->prepare("SELECT COUNT(*) as c FROM enxure_invoices WHERE client_key = ? AND is_quote = 0 AND QUARTER(invoice_date) = QUARTER(CURDATE()) AND YEAR(invoice_date) = YEAR(CURDATE())"),
+                'annually' => $mysqli->prepare("SELECT COUNT(*) as c FROM enxure_invoices WHERE client_key = ? AND is_quote = 0 AND YEAR(invoice_date) = YEAR(CURDATE())"),
             ];
             // Off by default. When on, skips the double-billing guard below entirely
             // (a client already billed this period gets billed again) — only useful
@@ -1638,13 +1638,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // Same guard-against-double-logging idea as the invoice loop above, keyed
             // on recurring_expense_id rather than client_key.
             $recurExpAlreadyStmts = [
-                'weekly' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_expenses WHERE recurring_expense_id = ? AND YEARWEEK(expense_date, 3) = YEARWEEK(CURDATE(), 3)"),
-                'monthly' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_expenses WHERE recurring_expense_id = ? AND MONTH(expense_date) = MONTH(CURDATE()) AND YEAR(expense_date) = YEAR(CURDATE())"),
-                'quarterly' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_expenses WHERE recurring_expense_id = ? AND QUARTER(expense_date) = QUARTER(CURDATE()) AND YEAR(expense_date) = YEAR(CURDATE())"),
-                'annually' => $mysqli->prepare("SELECT COUNT(*) as c FROM invoxa_expenses WHERE recurring_expense_id = ? AND YEAR(expense_date) = YEAR(CURDATE())"),
+                'weekly' => $mysqli->prepare("SELECT COUNT(*) as c FROM enxure_expenses WHERE recurring_expense_id = ? AND YEARWEEK(expense_date, 3) = YEARWEEK(CURDATE(), 3)"),
+                'monthly' => $mysqli->prepare("SELECT COUNT(*) as c FROM enxure_expenses WHERE recurring_expense_id = ? AND MONTH(expense_date) = MONTH(CURDATE()) AND YEAR(expense_date) = YEAR(CURDATE())"),
+                'quarterly' => $mysqli->prepare("SELECT COUNT(*) as c FROM enxure_expenses WHERE recurring_expense_id = ? AND QUARTER(expense_date) = QUARTER(CURDATE()) AND YEAR(expense_date) = YEAR(CURDATE())"),
+                'annually' => $mysqli->prepare("SELECT COUNT(*) as c FROM enxure_expenses WHERE recurring_expense_id = ? AND YEAR(expense_date) = YEAR(CURDATE())"),
             ];
-            $recurExpInsertStmt = $mysqli->prepare("INSERT INTO invoxa_expenses (expense_date, vendor, category, amount, description, recurring_expense_id) VALUES (CURDATE(), ?, ?, ?, ?, ?)");
-            $recurExpenses = $mysqli->query("SELECT * FROM invoxa_recurring_expenses WHERE is_active = 1");
+            $recurExpInsertStmt = $mysqli->prepare("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description, recurring_expense_id) VALUES (CURDATE(), ?, ?, ?, ?, ?)");
+            $recurExpenses = $mysqli->query("SELECT * FROM enxure_recurring_expenses WHERE is_active = 1");
             while ($re = $recurExpenses->fetch_assoc()) {
                 if (!$bypassGuard) {
                     $alreadyStmt = $recurExpAlreadyStmts[$re['frequency'] ?? 'monthly'] ?? $recurExpAlreadyStmts['monthly'];
@@ -1713,7 +1713,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // "status != 'void'" filters throughout the stats and export queries.
             $id = (int) ($_POST['id'] ?? 0);
             $reason = trim($_POST['reason'] ?? '');
-            $invRow = $mysqli->query("SELECT invoice_number, status FROM invoxa_invoices WHERE id = $id")->fetch_assoc();
+            $invRow = $mysqli->query("SELECT invoice_number, status FROM enxure_invoices WHERE id = $id")->fetch_assoc();
             if (!$invRow) {
                 echo json_encode(['success' => false, 'error' => 'Invoice not found']);
                 exit;
@@ -1722,7 +1722,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 echo json_encode(['success' => false, 'error' => 'A paid invoice can\'t be voided — mark it unpaid first if it was paid by mistake.']);
                 exit;
             }
-            $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = 'void' WHERE id = ?");
+            $stmt = $mysqli->prepare("UPDATE enxure_invoices SET status = 'void' WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             $notes = 'Voided' . ($reason !== '' ? ": $reason" : '');
@@ -1733,8 +1733,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'unvoid_invoice') {
             $id = (int) ($_POST['id'] ?? 0);
-            $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $id")->fetch_assoc()['invoice_number'] ?? '';
-            $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET status = 'sent' WHERE id = ? AND status = 'void'");
+            $invNum = $mysqli->query("SELECT invoice_number FROM enxure_invoices WHERE id = $id")->fetch_assoc()['invoice_number'] ?? '';
+            $stmt = $mysqli->prepare("UPDATE enxure_invoices SET status = 'sent' WHERE id = ? AND status = 'void'");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             enxureLogAction($mysqli, $id, $invNum, 'invoice_unvoided', 'Restored from void');
@@ -1743,7 +1743,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'resend_invoice_email') {
             $id = (int) ($_POST['id'] ?? 0);
-            $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $id")->fetch_assoc();
+            $inv = $mysqli->query("SELECT * FROM enxure_invoices WHERE id = $id")->fetch_assoc();
             if (!$inv || empty($inv['html_content'])) {
                 echo json_encode(['success' => false, 'error' => 'Invoice not found or has no stored content to resend.']);
                 exit;
@@ -1755,7 +1755,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // A successful resend clears a previously-failed status — it's been
             // sent now, same as if it had succeeded the first time.
             if ($result['sent'] && $inv['status'] === 'failed') {
-                $mysqli->query("UPDATE invoxa_invoices SET status = 'sent' WHERE id = $id");
+                $mysqli->query("UPDATE enxure_invoices SET status = 'sent' WHERE id = $id");
             }
             echo json_encode(['success' => $result['sent'], 'error' => $result['error']]);
             exit;
@@ -1766,7 +1766,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // the cron sweep. Logs 'reminder_sent' too, so a manual send also
             // satisfies the automatic sweep's idempotency guard.
             $id = (int) ($_POST['id'] ?? 0);
-            $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $id")->fetch_assoc();
+            $inv = $mysqli->query("SELECT * FROM enxure_invoices WHERE id = $id")->fetch_assoc();
             if (!$inv) {
                 echo json_encode(['success' => false, 'error' => 'Invoice not found.']);
                 exit;
@@ -1787,9 +1787,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'fix_paid_dates') {
             // Set paid_at to the last day of the invoice's own month for all paid invoices
-            $res = $mysqli->query("SELECT id, invoice_date FROM invoxa_invoices WHERE status = 'paid' AND paid_at IS NOT NULL AND is_quote = 0");
+            $res = $mysqli->query("SELECT id, invoice_date FROM enxure_invoices WHERE status = 'paid' AND paid_at IS NOT NULL AND is_quote = 0");
             $fixed = 0;
-            $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET paid_at = LAST_DAY(invoice_date) WHERE id = ?");
+            $stmt = $mysqli->prepare("UPDATE enxure_invoices SET paid_at = LAST_DAY(invoice_date) WHERE id = ?");
             while ($row = $res->fetch_assoc()) {
                 $stmt->bind_param("i", $row['id']);
                 $stmt->execute();
@@ -1799,12 +1799,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         if ($_POST['action'] === 'backfill_client_names') {
-            $mysqli->query("UPDATE invoxa_invoices i JOIN invoxa_clients c ON i.client_key = c.client_key SET i.client_name = c.client_name WHERE TRIM(i.client_name) = ''");
+            $mysqli->query("UPDATE enxure_invoices i JOIN enxure_clients c ON i.client_key = c.client_key SET i.client_name = c.client_name WHERE TRIM(i.client_name) = ''");
             echo json_encode(['success' => true, 'fixed' => $mysqli->affected_rows]);
             exit;
         }
         if ($_POST['action'] === 'dedupe_payments') {
-            $res = $mysqli->query("SELECT invoice_id, provider, amount, note, paid_at, COUNT(*) as c, GROUP_CONCAT(id ORDER BY id) as ids FROM invoxa_payments GROUP BY invoice_id, provider, amount, note, paid_at HAVING c > 1");
+            $res = $mysqli->query("SELECT invoice_id, provider, amount, note, paid_at, COUNT(*) as c, GROUP_CONCAT(id ORDER BY id) as ids FROM enxure_payments GROUP BY invoice_id, provider, amount, note, paid_at HAVING c > 1");
             $removed = 0;
             $affectedInvoiceIds = [];
             while ($row = $res->fetch_assoc()) {
@@ -1812,21 +1812,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 array_shift($ids);
                 if (!$ids)
                     continue;
-                $mysqli->query("DELETE FROM invoxa_payments WHERE id IN (" . implode(',', $ids) . ")");
+                $mysqli->query("DELETE FROM enxure_payments WHERE id IN (" . implode(',', $ids) . ")");
                 $removed += count($ids);
                 $affectedInvoiceIds[] = (int) $row['invoice_id'];
             }
             foreach (array_unique($affectedInvoiceIds) as $invId) {
-                $totalPaid = (float) ($mysqli->query("SELECT COALESCE(SUM(amount), 0) as t FROM invoxa_payments WHERE invoice_id = $invId")->fetch_assoc()['t'] ?? 0);
-                $mysqli->query("UPDATE invoxa_invoices SET paid_amount = $totalPaid WHERE id = $invId");
+                $totalPaid = (float) ($mysqli->query("SELECT COALESCE(SUM(amount), 0) as t FROM enxure_payments WHERE invoice_id = $invId")->fetch_assoc()['t'] ?? 0);
+                $mysqli->query("UPDATE enxure_invoices SET paid_amount = $totalPaid WHERE id = $invId");
             }
             echo json_encode(['success' => true, 'fixed' => $removed]);
             exit;
         }
         if ($_POST['action'] === 'reconcile_payment_totals') {
-            $res = $mysqli->query("SELECT i.id, i.amount, i.status, i.paid_amount, COALESCE(SUM(p.amount), 0) as total_paid FROM invoxa_invoices i LEFT JOIN invoxa_payments p ON p.invoice_id = i.id WHERE i.is_quote = 0 GROUP BY i.id HAVING ABS(total_paid - COALESCE(i.paid_amount, 0)) > 0.004");
+            $res = $mysqli->query("SELECT i.id, i.amount, i.status, i.paid_amount, COALESCE(SUM(p.amount), 0) as total_paid FROM enxure_invoices i LEFT JOIN enxure_payments p ON p.invoice_id = i.id WHERE i.is_quote = 0 GROUP BY i.id HAVING ABS(total_paid - COALESCE(i.paid_amount, 0)) > 0.004");
             $fixed = 0;
-            $stmt = $mysqli->prepare("UPDATE invoxa_invoices SET paid_amount = ?, status = ?, paid_at = CASE WHEN paid_at IS NULL AND ? = 'paid' THEN NOW() ELSE paid_at END WHERE id = ?");
+            $stmt = $mysqli->prepare("UPDATE enxure_invoices SET paid_amount = ?, status = ?, paid_at = CASE WHEN paid_at IS NULL AND ? = 'paid' THEN NOW() ELSE paid_at END WHERE id = ?");
             while ($row = $res->fetch_assoc()) {
                 $newStatus = $row['status'];
                 if ($row['status'] !== 'void' && (float) $row['total_paid'] >= (float) $row['amount'] && (float) $row['amount'] > 0) {
@@ -1843,14 +1843,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'add_note') {
             $id = (int) $_POST['id'];
             $note = $_POST['note'];
-            $invNum = $mysqli->query("SELECT invoice_number FROM invoxa_invoices WHERE id = $id")->fetch_assoc()['invoice_number'] ?? '';
+            $invNum = $mysqli->query("SELECT invoice_number FROM enxure_invoices WHERE id = $id")->fetch_assoc()['invoice_number'] ?? '';
             enxureLogAction($mysqli, $id, $invNum, 'note_added', $note);
             echo json_encode(['success' => true]);
             exit;
         }
         if ($_POST['action'] === 'get_notes') {
             $invNum = $mysqli->real_escape_string($_POST['invoice_number'] ?? '');
-            $res = $mysqli->query("SELECT id, notes, performed_at FROM invoxa_actions WHERE invoice_number = '$invNum' AND action_type = 'note_added' ORDER BY performed_at ASC");
+            $res = $mysqli->query("SELECT id, notes, performed_at FROM enxure_actions WHERE invoice_number = '$invNum' AND action_type = 'note_added' ORDER BY performed_at ASC");
             $notes = [];
             while ($r = $res->fetch_assoc())
                 $notes[] = $r;
@@ -1859,13 +1859,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'delete_note') {
             $noteId = (int) ($_POST['note_id'] ?? 0);
-            $mysqli->query("DELETE FROM invoxa_actions WHERE id = $noteId AND action_type = 'note_added'");
+            $mysqli->query("DELETE FROM enxure_actions WHERE id = $noteId AND action_type = 'note_added'");
             echo json_encode(['success' => true]);
             exit;
         }
         if ($_POST['action'] === 'delete_invoice') {
             $id = (int) $_POST['id'];
-            $inv = $mysqli->query("SELECT * FROM invoxa_invoices WHERE id = $id")->fetch_assoc();
+            $inv = $mysqli->query("SELECT * FROM enxure_invoices WHERE id = $id")->fetch_assoc();
             if ($inv) {
                 if ($inv['file_path']) {
                     $fullPath = "/usr/share/nginx/html/enxure-invoices/" . preg_replace('#^invoices/#', '', $inv['file_path']);
@@ -1875,21 +1875,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 // Attachments live on disk under ATTACHMENTS_DIR/<invoice_id>/ (see
                 // upload_invoice_attachment below) — remove them so deleting the
                 // invoice doesn't leave the folder orphaned.
-                $attRes = $mysqli->query("SELECT stored_path FROM invoxa_invoice_attachments WHERE invoice_id = $id");
+                $attRes = $mysqli->query("SELECT stored_path FROM enxure_invoice_attachments WHERE invoice_id = $id");
                 while ($attRow = $attRes->fetch_assoc())
                     @unlink(INVOICES_DIR . $attRow['stored_path']);
                 @rmdir(ATTACHMENTS_DIR . $id);
-                $mysqli->query("DELETE FROM invoxa_invoice_attachments WHERE invoice_id = $id");
-                $mysqli->query("DELETE FROM invoxa_payments WHERE invoice_id = $id");
-                $mysqli->query("DELETE FROM invoxa_actions WHERE invoice_id = $id");
-                $mysqli->query("DELETE FROM invoxa_invoices WHERE id = $id");
+                $mysqli->query("DELETE FROM enxure_invoice_attachments WHERE invoice_id = $id");
+                $mysqli->query("DELETE FROM enxure_payments WHERE invoice_id = $id");
+                $mysqli->query("DELETE FROM enxure_actions WHERE invoice_id = $id");
+                $mysqli->query("DELETE FROM enxure_invoices WHERE id = $id");
             }
             echo json_encode(['success' => true]);
             exit;
         }
         if ($_POST['action'] === 'get_invoice_attachments') {
             $invoiceId = (int) ($_POST['invoice_id'] ?? 0);
-            $res = $mysqli->query("SELECT id, filename, stored_path, file_size, uploaded_at FROM invoxa_invoice_attachments WHERE invoice_id = $invoiceId ORDER BY uploaded_at DESC");
+            $res = $mysqli->query("SELECT id, filename, stored_path, file_size, uploaded_at FROM enxure_invoice_attachments WHERE invoice_id = $invoiceId ORDER BY uploaded_at DESC");
             $attachments = [];
             while ($r = $res->fetch_assoc()) {
                 $r['url'] = ATTACHMENTS_URL . $invoiceId . '/' . rawurlencode(basename($r['stored_path']));
@@ -1900,7 +1900,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'upload_invoice_attachment') {
             $invoiceId = (int) ($_POST['invoice_id'] ?? 0);
-            $invExists = $mysqli->query("SELECT id FROM invoxa_invoices WHERE id = $invoiceId")->num_rows > 0;
+            $invExists = $mysqli->query("SELECT id FROM enxure_invoices WHERE id = $invoiceId")->num_rows > 0;
             if (!$invExists) {
                 echo json_encode(['success' => false, 'error' => 'Invoice not found']);
                 exit;
@@ -1924,7 +1924,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             $storedPath = "attachments/$invoiceId/$storedName";
             $size = (int) $_FILES['file']['size'];
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_invoice_attachments (invoice_id, filename, stored_path, file_size) VALUES (?, ?, ?, ?)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_invoice_attachments (invoice_id, filename, stored_path, file_size) VALUES (?, ?, ?, ?)");
             $stmt->bind_param("issi", $invoiceId, $origName, $storedPath, $size);
             $stmt->execute();
             echo json_encode(['success' => true]);
@@ -1932,10 +1932,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'delete_invoice_attachment') {
             $id = (int) ($_POST['id'] ?? 0);
-            $row = $mysqli->query("SELECT stored_path FROM invoxa_invoice_attachments WHERE id = $id")->fetch_assoc();
+            $row = $mysqli->query("SELECT stored_path FROM enxure_invoice_attachments WHERE id = $id")->fetch_assoc();
             if ($row) {
                 @unlink(INVOICES_DIR . $row['stored_path']);
-                $stmt = $mysqli->prepare("DELETE FROM invoxa_invoice_attachments WHERE id = ?");
+                $stmt = $mysqli->prepare("DELETE FROM enxure_invoice_attachments WHERE id = ?");
                 $stmt->bind_param("i", $id);
                 $stmt->execute();
             }
@@ -2008,7 +2008,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'toggle_auto_backup') {
             $enable = ($_POST['enabled'] ?? '1') === '1';
             $val = $enable ? '1' : '0';
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('auto_backup_enabled', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('auto_backup_enabled', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
             $stmt->bind_param("s", $val);
             $stmt->execute();
             echo json_encode(['success' => true, 'enabled' => $enable]);
@@ -2098,7 +2098,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'toggle_recurring_bypass_guard') {
             $enable = ($_POST['enabled'] ?? '1') === '1';
             $val = $enable ? '1' : '0';
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('recurring_bypass_guard', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('recurring_bypass_guard', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
             $stmt->bind_param("s", $val);
             $stmt->execute();
             echo json_encode(['success' => true, 'enabled' => $enable]);
@@ -2109,7 +2109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'toggle_reminders') {
             $enable = ($_POST['enabled'] ?? '1') === '1';
             $val = $enable ? '1' : '0';
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('reminders_enabled', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('reminders_enabled', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
             $stmt->bind_param("s", $val);
             $stmt->execute();
             echo json_encode(['success' => true, 'enabled' => $enable]);
@@ -2118,7 +2118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'toggle_late_fees') {
             $enable = ($_POST['enabled'] ?? '1') === '1';
             $val = $enable ? '1' : '0';
-            $stmt = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES ('late_fee_enabled', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('late_fee_enabled', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
             $stmt->bind_param("s", $val);
             $stmt->execute();
             echo json_encode(['success' => true, 'enabled' => $enable]);
@@ -2132,7 +2132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $graceDays = (int) ($_POST['late_fee_grace_days'] ?? 7);
             if ($graceDays < 0)
                 $graceDays = 0;
-            $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
             foreach ([
                 'late_fee_type' => $feeType,
                 'late_fee_value' => (string) $feeValue,
@@ -2197,19 +2197,19 @@ $autoBackupEnabled = ($settings['auto_backup_enabled'] ?? '0') === '1';
 $recurringBypassGuard = ($settings['recurring_bypass_guard'] ?? '0') === '1';
 
 $total_invoiced_by_ccy = [];
-$res = $mysqli->query("SELECT currency, SUM(amount) as s FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') $testFilter GROUP BY currency");
+$res = $mysqli->query("SELECT currency, SUM(amount) as s FROM enxure_invoices WHERE status NOT IN ('failed', 'void') $testFilter GROUP BY currency");
 while ($r = $res->fetch_assoc()) {
     $ccy = enxureResolveCurrency($r['currency'], $settings);
     $total_invoiced_by_ccy[$ccy] = ($total_invoiced_by_ccy[$ccy] ?? 0) + (float) $r['s'];
 }
 $total_paid_by_ccy = [];
-$res = $mysqli->query("SELECT currency, SUM(paid_amount) as s FROM invoxa_invoices WHERE paid_amount > 0 $testFilter GROUP BY currency");
+$res = $mysqli->query("SELECT currency, SUM(paid_amount) as s FROM enxure_invoices WHERE paid_amount > 0 $testFilter GROUP BY currency");
 while ($r = $res->fetch_assoc()) {
     $ccy = enxureResolveCurrency($r['currency'], $settings);
     $total_paid_by_ccy[$ccy] = ($total_paid_by_ccy[$ccy] ?? 0) + (float) $r['s'];
 }
 $total_monthly_by_ccy = [];
-$res = $mysqli->query("SELECT currency, SUM(amount) as s FROM invoxa_invoices WHERE status NOT IN ('failed', 'void') AND MONTH(invoice_date) = MONTH(CURRENT_DATE()) AND YEAR(invoice_date) = YEAR(CURRENT_DATE()) $testFilter GROUP BY currency");
+$res = $mysqli->query("SELECT currency, SUM(amount) as s FROM enxure_invoices WHERE status NOT IN ('failed', 'void') AND MONTH(invoice_date) = MONTH(CURRENT_DATE()) AND YEAR(invoice_date) = YEAR(CURRENT_DATE()) $testFilter GROUP BY currency");
 while ($r = $res->fetch_assoc()) {
     $ccy = enxureResolveCurrency($r['currency'], $settings);
     $total_monthly_by_ccy[$ccy] = ($total_monthly_by_ccy[$ccy] ?? 0) + (float) $r['s'];
@@ -2217,48 +2217,48 @@ while ($r = $res->fetch_assoc()) {
 $total_invoiced = array_sum($total_invoiced_by_ccy);
 $total_paid = array_sum($total_paid_by_ccy);
 $total_monthly = array_sum($total_monthly_by_ccy);
-$unpaid_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE status IN ('sent', 'pending') $testFilter")->fetch_assoc()['c'] ?? 0;
-$client_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly))->fetch_assoc()['c'] ?? 0;
-$quote_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE is_quote = 1")->fetch_assoc()['c'] ?? 0;
-$invoice_count = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_invoices WHERE is_quote = 0 $testFilter")->fetch_assoc()['c'] ?? 0;
+$unpaid_count = $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE status IN ('sent', 'pending') $testFilter")->fetch_assoc()['c'] ?? 0;
+$client_count = $mysqli->query("SELECT COUNT(*) as c FROM enxure_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly))->fetch_assoc()['c'] ?? 0;
+$quote_count = $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE is_quote = 1")->fetch_assoc()['c'] ?? 0;
+$invoice_count = $mysqli->query("SELECT COUNT(*) as c FROM enxure_invoices WHERE is_quote = 0 $testFilter")->fetch_assoc()['c'] ?? 0;
 
 $overdueInvoices = [];
-$res = $mysqli->query("SELECT * FROM invoxa_invoices WHERE status IN ('sent', 'pending') AND due_date < CURRENT_DATE() $testFilter ORDER BY due_date ASC");
+$res = $mysqli->query("SELECT * FROM enxure_invoices WHERE status IN ('sent', 'pending') AND due_date < CURRENT_DATE() $testFilter ORDER BY due_date ASC");
 while ($r = $res->fetch_assoc())
     $overdueInvoices[] = $r;
 
 $failedInvoices = [];
-$res = $mysqli->query("SELECT * FROM invoxa_invoices WHERE status = 'failed' $testFilter ORDER BY invoice_date DESC");
+$res = $mysqli->query("SELECT * FROM enxure_invoices WHERE status = 'failed' $testFilter ORDER BY invoice_date DESC");
 while ($r = $res->fetch_assoc())
     $failedInvoices[] = $r;
 $invoices = [];
-$res = $mysqli->query("SELECT i.*, c.is_test, (SELECT COUNT(*) FROM invoxa_actions a WHERE a.invoice_number = i.invoice_number AND a.action_type = 'note_added') as note_count FROM invoxa_invoices i LEFT JOIN invoxa_clients c ON i.client_key = c.client_key " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'WHERE', 'c.is_test') . " ORDER BY i.invoice_date DESC");
+$res = $mysqli->query("SELECT i.*, c.is_test, (SELECT COUNT(*) FROM enxure_actions a WHERE a.invoice_number = i.invoice_number AND a.action_type = 'note_added') as note_count FROM enxure_invoices i LEFT JOIN enxure_clients c ON i.client_key = c.client_key " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'WHERE', 'c.is_test') . " ORDER BY i.invoice_date DESC");
 while ($r = $res->fetch_assoc())
     $invoices[] = $r;
 $clients = [];
-$res = $mysqli->query("SELECT c.*, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM invoxa_clients c LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'WHERE', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
+$res = $mysqli->query("SELECT c.*, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM enxure_clients c LEFT JOIN enxure_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'WHERE', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
 while ($r = $res->fetch_assoc())
     $clients[] = $r;
 
 $expenses = [];
-$res = $mysqli->query("SELECT e.*, COUNT(r.id) as receipt_count FROM invoxa_expenses e LEFT JOIN invoxa_expense_receipts r ON r.expense_id = e.id GROUP BY e.id ORDER BY e.expense_date DESC, e.id DESC");
+$res = $mysqli->query("SELECT e.*, COUNT(r.id) as receipt_count FROM enxure_expenses e LEFT JOIN enxure_expense_receipts r ON r.expense_id = e.id GROUP BY e.id ORDER BY e.expense_date DESC, e.id DESC");
 while ($r = $res->fetch_assoc())
     $expenses[] = $r;
-$total_expenses = $mysqli->query("SELECT SUM(amount) as s FROM invoxa_expenses")->fetch_assoc()['s'] ?? 0;
+$total_expenses = $mysqli->query("SELECT SUM(amount) as s FROM enxure_expenses")->fetch_assoc()['s'] ?? 0;
 
 $recurringExpenses = [];
-$res = $mysqli->query("SELECT * FROM invoxa_recurring_expenses ORDER BY vendor ASC, id ASC");
+$res = $mysqli->query("SELECT * FROM enxure_recurring_expenses ORDER BY vendor ASC, id ASC");
 while ($r = $res->fetch_assoc())
     $recurringExpenses[] = $r;
 
 $actions = [];
-$res = $mysqli->query("SELECT a.*, i.client_name FROM invoxa_actions a LEFT JOIN invoxa_invoices i ON a.invoice_number = i.invoice_number ORDER BY a.performed_at DESC LIMIT 200");
+$res = $mysqli->query("SELECT a.*, i.client_name FROM enxure_actions a LEFT JOIN enxure_invoices i ON a.invoice_number = i.invoice_number ORDER BY a.performed_at DESC LIMIT 200");
 while ($r = $res->fetch_assoc())
     $actions[] = $r;
 
 $dbFiles = [];
 $dbFileData = [];
-$res = $mysqli->query("SELECT id, invoice_number, file_path, (html_content IS NOT NULL AND html_content != '') as has_content FROM invoxa_invoices WHERE file_path IS NOT NULL AND is_quote = 0");
+$res = $mysqli->query("SELECT id, invoice_number, file_path, (html_content IS NOT NULL AND html_content != '') as has_content FROM enxure_invoices WHERE file_path IS NOT NULL AND is_quote = 0");
 while ($r = $res->fetch_assoc()) {
     // Normalise: strip any absolute prefix so we always compare relative paths like invoices/folder/file.html
     $fp = $r['file_path'];
@@ -2298,7 +2298,7 @@ $stats_mrr = 0;
 $stats_default_ccy = enxureResolveCurrency('', $settings);
 $stats_default_ccy_esc = $mysqli->real_escape_string($stats_default_ccy);
 $stats_other_currencies = [];
-$res_other_ccy = $mysqli->query("SELECT DISTINCT currency FROM invoxa_invoices WHERE currency != '' AND currency != '$stats_default_ccy_esc'");
+$res_other_ccy = $mysqli->query("SELECT DISTINCT currency FROM enxure_invoices WHERE currency != '' AND currency != '$stats_default_ccy_esc'");
 while ($r = $res_other_ccy->fetch_assoc()) {
     $stats_other_currencies[] = $r['currency'];
 }
@@ -2315,17 +2315,17 @@ $stats_fx_unconverted_currencies = $stats_has_other_currency
     ? array_values(array_diff($stats_other_currencies, array_keys($stats_fx_rates)))
     : [];
 
-$res_rev_all = $mysqli->query("SELECT currency, SUM(amount - COALESCE(paid_amount, 0)) as s FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND is_quote = 0 $testFilter GROUP BY currency");
+$res_rev_all = $mysqli->query("SELECT currency, SUM(amount - COALESCE(paid_amount, 0)) as s FROM enxure_invoices WHERE status NOT IN ('paid', 'void') AND is_quote = 0 $testFilter GROUP BY currency");
 $rows_rev_all = [];
 while ($r = $res_rev_all->fetch_assoc())
     $rows_rev_all[] = $r;
 $stats_outstanding_revenue_by_ccy = enxureGroupAmountsByCurrency($rows_rev_all, 's', $settings);
 $stats_outstanding_revenue = enxureSumByCcyConverted($stats_outstanding_revenue_by_ccy, $stats_default_ccy, $stats_fx_rates);
 
-$res_overdue = $mysqli->query("SELECT COUNT(*) as cnt FROM invoxa_invoices WHERE status NOT IN ('paid', 'void') AND due_date < CURDATE() AND is_quote = 0 $testFilter");
+$res_overdue = $mysqli->query("SELECT COUNT(*) as cnt FROM enxure_invoices WHERE status NOT IN ('paid', 'void') AND due_date < CURDATE() AND is_quote = 0 $testFilter");
 $stats_overdue_count = $res_overdue->fetch_assoc()['cnt'] ?? 0;
 
-$res_paid_all = $mysqli->query("SELECT currency, SUM(paid_amount) as paid, COUNT(*) as cnt FROM invoxa_invoices WHERE paid_amount > 0 AND is_quote = 0 $testFilter GROUP BY currency");
+$res_paid_all = $mysqli->query("SELECT currency, SUM(paid_amount) as paid, COUNT(*) as cnt FROM enxure_invoices WHERE paid_amount > 0 AND is_quote = 0 $testFilter GROUP BY currency");
 $rows_paid_all = [];
 while ($r = $res_paid_all->fetch_assoc())
     $rows_paid_all[] = $r;
@@ -2347,7 +2347,7 @@ $res_ty_all = $mysqli->query("
            SUM(amount) as total_invoiced,
            SUM(COALESCE(paid_amount, 0)) as total_paid,
            SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding
-    FROM invoxa_invoices
+    FROM enxure_invoices
     WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter
     GROUP BY currency
 ");
@@ -2362,7 +2362,7 @@ $stats_ty_invoiced = enxureSumByCcyConverted($stats_ty_invoiced_by_ccy, $stats_d
 $stats_ty_paid = enxureSumByCcyConverted($stats_ty_paid_by_ccy, $stats_default_ccy, $stats_fx_rates);
 $stats_ty_outstanding = enxureSumByCcyConverted($stats_ty_outstanding_by_ccy, $stats_default_ccy, $stats_fx_rates);
 
-$res_mrr_all = $mysqli->query("SELECT currency, SUM(monthly_rate) as s FROM invoxa_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly) . " GROUP BY currency");
+$res_mrr_all = $mysqli->query("SELECT currency, SUM(monthly_rate) as s FROM enxure_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly) . " GROUP BY currency");
 $rows_mrr_all = [];
 while ($r = $res_mrr_all->fetch_assoc())
     $rows_mrr_all[] = $r;
@@ -2378,8 +2378,8 @@ $top_clients = [];
 $topClientsAgg = [];
 $res_top = $mysqli->query("
     SELECT c.client_name, i.currency, SUM(i.paid_amount) as total_revenue
-    FROM invoxa_invoices i
-    JOIN invoxa_clients c ON i.client_key = c.client_key
+    FROM enxure_invoices i
+    JOIN enxure_clients c ON i.client_key = c.client_key
     WHERE i.paid_amount > 0 AND i.is_quote = 0 " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
     GROUP BY c.client_name, i.currency
 ");
@@ -2403,7 +2403,7 @@ $top_clients = array_slice(array_values($topClientsAgg), 0, 5);
 // Payment Velocity (last 3 months only)
 $res_vel = $mysqli->query("
     SELECT AVG(DATEDIFF(paid_at, invoice_date)) as avg_days
-    FROM invoxa_invoices
+    FROM enxure_invoices
     WHERE status = 'paid' AND paid_at IS NOT NULL AND is_quote = 0
       AND paid_at >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)
       $testFilter
@@ -2411,7 +2411,7 @@ $res_vel = $mysqli->query("
 $stats_avg_days = round($res_vel->fetch_assoc()['avg_days'] ?? 0, 1);
 
 // Client Health
-$res_health = $mysqli->query("SELECT SUM(is_active=1) as active, SUM(is_active=0) as inactive FROM invoxa_clients " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'WHERE'));
+$res_health = $mysqli->query("SELECT SUM(is_active=1) as active, SUM(is_active=0) as inactive FROM enxure_clients " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'WHERE'));
 $row_health = $res_health->fetch_assoc();
 $stats_active_clients = $row_health['active'] ?? 0;
 $stats_inactive_clients = $row_health['inactive'] ?? 0;
@@ -2421,7 +2421,7 @@ $stats_client_ratio = ($stats_inactive_clients > 0) ? round($stats_active_client
 // via the void status (see computeInvoiceTotals()/status filters above).
 // Grouped by currency rather than filtered to the default one, so a voided
 // invoice in another currency still counts and shows in its own bucket.
-$res_void = $mysqli->query("SELECT currency, COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE status = 'void' AND is_quote = 0 $testFilter GROUP BY currency");
+$res_void = $mysqli->query("SELECT currency, COUNT(*) as c, SUM(amount) as total FROM enxure_invoices WHERE status = 'void' AND is_quote = 0 $testFilter GROUP BY currency");
 $rows_void = [];
 while ($r = $res_void->fetch_assoc())
     $rows_void[] = $r;
@@ -2431,7 +2431,7 @@ $stats_void_amount_by_ccy = array_map(fn($g) => $g['total'], $voidGrouped);
 
 // Quote Pipeline — quotes still open (not yet converted, not voided). Once a
 // quote converts, is_quote flips to 0 and it drops out of this count.
-$res_pipeline = $mysqli->query("SELECT currency, COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 1 AND status != 'void' $testFilter GROUP BY currency");
+$res_pipeline = $mysqli->query("SELECT currency, COUNT(*) as c, SUM(amount) as total FROM enxure_invoices WHERE is_quote = 1 AND status != 'void' $testFilter GROUP BY currency");
 $rows_pipeline = [];
 while ($r = $res_pipeline->fetch_assoc())
     $rows_pipeline[] = $r;
@@ -2454,7 +2454,7 @@ $res_aging = $mysqli->query("
         SUM(CASE WHEN due_date < DATE_SUB(CURDATE(), INTERVAL 60 DAY) AND due_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN amount - COALESCE(paid_amount, 0) ELSE 0 END) as a_61_90,
         SUM(CASE WHEN due_date < DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) as c_90_plus,
         SUM(CASE WHEN due_date < DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN amount - COALESCE(paid_amount, 0) ELSE 0 END) as a_90_plus
-    FROM invoxa_invoices
+    FROM enxure_invoices
     WHERE is_quote = 0 AND status NOT IN ('paid', 'void') $testFilter
     GROUP BY currency
 ");
@@ -2477,9 +2477,9 @@ $stats_aging = [
 ];
 
 // Client Growth & Mix
-$stats_new_clients_month = $mysqli->query("SELECT COUNT(*) as c FROM invoxa_clients WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') " . enxureTestViewClientFilter($hideTest, $showTestOnly))->fetch_assoc()['c'] ?? 0;
+$stats_new_clients_month = $mysqli->query("SELECT COUNT(*) as c FROM enxure_clients WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') " . enxureTestViewClientFilter($hideTest, $showTestOnly))->fetch_assoc()['c'] ?? 0;
 $stats_billing_freq = [];
-$res_freq = $mysqli->query("SELECT billing_frequency, COUNT(*) as c FROM invoxa_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly) . " GROUP BY billing_frequency");
+$res_freq = $mysqli->query("SELECT billing_frequency, COUNT(*) as c FROM enxure_clients WHERE is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly) . " GROUP BY billing_frequency");
 while ($r = $res_freq->fetch_assoc())
     $stats_billing_freq[$r['billing_frequency']] = (int) $r['c'];
 
@@ -2488,8 +2488,8 @@ while ($r = $res_freq->fetch_assoc())
 $clients_needing_attention = [];
 $res_attn = $mysqli->query("
     SELECT c.client_name, MAX(i.invoice_date) as last_invoice
-    FROM invoxa_clients c
-    LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.is_quote = 0
+    FROM enxure_clients c
+    LEFT JOIN enxure_invoices i ON c.client_key = i.client_key AND i.is_quote = 0
     WHERE c.is_active = 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
     GROUP BY c.id
     HAVING last_invoice IS NULL OR last_invoice < DATE_SUB(NOW(), INTERVAL 60 DAY)
@@ -2506,7 +2506,7 @@ if ($res_attn) {
 $res_email = $mysqli->query("SELECT
         SUM(CASE WHEN action_type = 'email_sent' THEN 1 ELSE 0 END) as sent,
         SUM(CASE WHEN action_type = 'email_failed' THEN 1 ELSE 0 END) as failed
-    FROM invoxa_actions WHERE action_type IN ('email_sent', 'email_failed')");
+    FROM enxure_actions WHERE action_type IN ('email_sent', 'email_failed')");
 $row_email = $res_email->fetch_assoc();
 $stats_email_sent = (int) ($row_email['sent'] ?? 0);
 $stats_email_failed = (int) ($row_email['failed'] ?? 0);
@@ -2525,7 +2525,7 @@ $res_ty_monthly_all = $mysqli->query("
            SUM(COALESCE(paid_amount, 0)) as total_paid,
            SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding,
            SUM(CASE WHEN status NOT IN ('paid') THEN 1 ELSE 0 END) as unpaid_count
-    FROM invoxa_invoices
+    FROM enxure_invoices
     WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter
     GROUP BY DATE_FORMAT(invoice_date, '%Y-%m'), currency
 ");
@@ -2565,15 +2565,15 @@ $stats_tax_year_progress_pct = round($stats_tax_year_days_elapsed / $stats_tax_y
 
 // Activity — recurring billing / reminders / late fees, and invoice volume by
 // client rather than by revenue (complements the Top 5 by Paid Revenue table).
-$res_last_run = $mysqli->query("SELECT notes, performed_at FROM invoxa_actions WHERE action_type = 'recurring_run' ORDER BY performed_at DESC LIMIT 1");
+$res_last_run = $mysqli->query("SELECT notes, performed_at FROM enxure_actions WHERE action_type = 'recurring_run' ORDER BY performed_at DESC LIMIT 1");
 $stats_last_recurring_run = $res_last_run ? $res_last_run->fetch_assoc() : null;
 
-$stats_late_fees_charged = (int) ($mysqli->query("SELECT COUNT(*) as c FROM invoxa_actions WHERE action_type = 'late_fee_charged'")->fetch_assoc()['c'] ?? 0);
+$stats_late_fees_charged = (int) ($mysqli->query("SELECT COUNT(*) as c FROM enxure_actions WHERE action_type = 'late_fee_charged'")->fetch_assoc()['c'] ?? 0);
 
 $res_reminders = $mysqli->query("SELECT
         SUM(CASE WHEN action_type = 'reminder_sent' THEN 1 ELSE 0 END) as sent,
         SUM(CASE WHEN action_type = 'reminder_failed' THEN 1 ELSE 0 END) as failed
-    FROM invoxa_actions WHERE action_type IN ('reminder_sent', 'reminder_failed')");
+    FROM enxure_actions WHERE action_type IN ('reminder_sent', 'reminder_failed')");
 $row_reminders = $res_reminders->fetch_assoc();
 $stats_reminders_sent = (int) ($row_reminders['sent'] ?? 0);
 $stats_reminders_failed = (int) ($row_reminders['failed'] ?? 0);
@@ -2581,8 +2581,8 @@ $stats_reminders_failed = (int) ($row_reminders['failed'] ?? 0);
 $most_active_clients = [];
 $res_active = $mysqli->query("
     SELECT c.client_name, COUNT(i.id) as invoice_count
-    FROM invoxa_invoices i
-    JOIN invoxa_clients c ON i.client_key = c.client_key
+    FROM enxure_invoices i
+    JOIN enxure_clients c ON i.client_key = c.client_key
     WHERE i.is_quote = 0 AND i.status != 'void' " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . "
     GROUP BY c.client_name
     ORDER BY invoice_count DESC
@@ -2596,7 +2596,7 @@ if ($res_active) {
 $stats_invoice_status = [];
 $statusLabels = ['paid' => 'Paid', 'sent' => 'Sent', 'pending' => 'Pending', 'draft' => 'Draft', 'failed' => 'Failed', 'void' => 'Void'];
 $statusColors = ['paid' => '#10b981', 'sent' => '#3b82f6', 'pending' => '#f59e0b', 'draft' => '#94a3b8', 'failed' => '#ef4444', 'void' => '#6b7280'];
-$res_status = $mysqli->query("SELECT status, currency, COUNT(*) as c, SUM(amount) as total FROM invoxa_invoices WHERE is_quote = 0 $testFilter GROUP BY status, currency");
+$res_status = $mysqli->query("SELECT status, currency, COUNT(*) as c, SUM(amount) as total FROM enxure_invoices WHERE is_quote = 0 $testFilter GROUP BY status, currency");
 $statusCounts = [];
 if ($res_status) {
     while ($r = $res_status->fetch_assoc()) {
@@ -2619,7 +2619,7 @@ $res_trend = $mysqli->query("
     SELECT DATE_FORMAT(invoice_date, '%Y-%m') as month, currency,
            SUM(amount) as total_invoiced,
            SUM(COALESCE(paid_amount, 0)) as total_paid
-    FROM invoxa_invoices
+    FROM enxure_invoices
     WHERE is_quote = 0 AND status != 'void' AND invoice_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH) $testFilter
     GROUP BY DATE_FORMAT(invoice_date, '%Y-%m'), currency
 ");
@@ -2645,12 +2645,12 @@ for ($m = 11; $m >= 0; $m--) {
     ];
 }
 
-$stats_expense_ty_total = (float) ($mysqli->query("SELECT SUM(amount) as t FROM invoxa_expenses WHERE expense_date >= '$startStr'")->fetch_assoc()['t'] ?? 0);
+$stats_expense_ty_total = (float) ($mysqli->query("SELECT SUM(amount) as t FROM enxure_expenses WHERE expense_date >= '$startStr'")->fetch_assoc()['t'] ?? 0);
 $stats_net_income_ty = $stats_ty_paid - $stats_expense_ty_total;
 
 $expenseCatLabels = expenseCategories();
 $stats_expense_categories = [];
-$res_expcat = $mysqli->query("SELECT category, SUM(amount) as total FROM invoxa_expenses WHERE expense_date >= '$startStr' GROUP BY category ORDER BY total DESC");
+$res_expcat = $mysqli->query("SELECT category, SUM(amount) as total FROM enxure_expenses WHERE expense_date >= '$startStr' GROUP BY category ORDER BY total DESC");
 if ($res_expcat) {
     while ($r = $res_expcat->fetch_assoc()) {
         $stats_expense_categories[] = ['category' => $r['category'], 'label' => $expenseCatLabels[$r['category']] ?? ucfirst($r['category']), 'total' => (float) $r['total']];
@@ -2660,7 +2660,7 @@ if ($res_expcat) {
 $stats_expense_monthly = [];
 $res_expmonthly = $mysqli->query("
     SELECT DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(amount) as total
-    FROM invoxa_expenses
+    FROM enxure_expenses
     WHERE expense_date >= '$startStr'
     GROUP BY DATE_FORMAT(expense_date, '%Y-%m')
     ORDER BY month ASC
@@ -2702,8 +2702,8 @@ $stats_db_size_bytes = (int) ($mysqli->query("SELECT SUM(data_length + index_len
 $stats_invoices_dir_size_bytes = enxureDirSize(INVOICES_DIR);
 $stats_backups_dir_size_bytes = enxureDirSize($backup_dir);
 
-$stats_webhook_unmatched_total = (int) ($mysqli->query("SELECT COUNT(*) as c FROM invoxa_actions WHERE action_type = 'webhook_unmatched'")->fetch_assoc()['c'] ?? 0);
-$stats_webhook_unmatched_30d = (int) ($mysqli->query("SELECT COUNT(*) as c FROM invoxa_actions WHERE action_type = 'webhook_unmatched' AND performed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetch_assoc()['c'] ?? 0);
+$stats_webhook_unmatched_total = (int) ($mysqli->query("SELECT COUNT(*) as c FROM enxure_actions WHERE action_type = 'webhook_unmatched'")->fetch_assoc()['c'] ?? 0);
+$stats_webhook_unmatched_30d = (int) ($mysqli->query("SELECT COUNT(*) as c FROM enxure_actions WHERE action_type = 'webhook_unmatched' AND performed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetch_assoc()['c'] ?? 0);
 
 $stats_php_version = PHP_VERSION;
 $stats_mysql_version = $mysqli->server_info;
@@ -2732,7 +2732,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'table_html') {
     } elseif ($which === 'clients') {
         echo renderClientRows($clients);
     } elseif ($which === 'quotes') {
-        $qRes = $mysqli->query("SELECT * FROM invoxa_invoices WHERE is_quote = 1 ORDER BY invoice_date DESC");
+        $qRes = $mysqli->query("SELECT * FROM enxure_invoices WHERE is_quote = 1 ORDER BY invoice_date DESC");
         echo renderQuoteRows($qRes);
     } elseif ($which === 'expenses') {
         echo renderExpenseRows($expenses);

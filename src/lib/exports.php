@@ -26,7 +26,7 @@ function buildAccountingJournal($mysqli, array $settings, string $startDate, str
         return $ccy === $defaultCcy ? $account : "$account ($ccy)";
     };
 
-    $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, amount, currency FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startDate' $testFilter ORDER BY invoice_date ASC");
+    $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, amount, currency FROM enxure_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startDate' $testFilter ORDER BY invoice_date ASC");
     while ($r = $res->fetch_assoc()) {
         $date = substr($r['invoice_date'], 0, 10);
         $memo = "Invoice {$r['invoice_number']} — {$r['client_name']}";
@@ -36,7 +36,7 @@ function buildAccountingJournal($mysqli, array $settings, string $startDate, str
         $rows[] = ['date' => $date, 'account' => $ccyAccount('Sales Income', $r['currency']), 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => $r['invoice_number'], 'currency' => $ccy];
     }
 
-    $res = $mysqli->query("SELECT invoice_number, client_name, paid_at, paid_amount, currency FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND paid_amount > 0 AND paid_at >= '$startDate' $testFilter ORDER BY paid_at ASC");
+    $res = $mysqli->query("SELECT invoice_number, client_name, paid_at, paid_amount, currency FROM enxure_invoices WHERE is_quote = 0 AND status != 'void' AND paid_amount > 0 AND paid_at >= '$startDate' $testFilter ORDER BY paid_at ASC");
     while ($r = $res->fetch_assoc()) {
         $date = substr($r['paid_at'], 0, 10);
         $memo = "Payment received for invoice {$r['invoice_number']} — {$r['client_name']}";
@@ -46,7 +46,7 @@ function buildAccountingJournal($mysqli, array $settings, string $startDate, str
         $rows[] = ['date' => $date, 'account' => $ccyAccount('Accounts Receivable', $r['currency']), 'debit' => 0, 'credit' => $amount, 'memo' => $memo, 'ref' => $r['invoice_number'], 'currency' => $ccy];
     }
 
-    $res = $mysqli->query("SELECT id, expense_date, vendor, category, amount FROM invoxa_expenses WHERE expense_date >= '$startDate' ORDER BY expense_date ASC");
+    $res = $mysqli->query("SELECT id, expense_date, vendor, category, amount FROM enxure_expenses WHERE expense_date >= '$startDate' ORDER BY expense_date ASC");
     while ($r = $res->fetch_assoc()) {
         $date = substr($r['expense_date'], 0, 10);
         $account = ($categories[$r['category']] ?? ucfirst($r['category'])) . ' Expense';
@@ -63,11 +63,11 @@ function buildAccountingJournal($mysqli, array $settings, string $startDate, str
 function enxureHandlePreviewAdhocPdf($mysqli, array $settings, bool $licenseValid): void
 {
 // Same as preview_adhoc but renders straight to PDF, for previewing an
-// invoice that hasn't been saved yet (no invoxa_invoices row to look up
+// invoice that hasn't been saved yet (no enxure_invoices row to look up
 // via ?export=invoice_pdf&id=). Recomputes HTML server-side from trusted
 // inputs rather than accepting client-rendered HTML.
 $clientId = (int) $_POST['client_id'];
-$client = $mysqli->query("SELECT * FROM invoxa_clients WHERE id=$clientId")->fetch_assoc();
+$client = $mysqli->query("SELECT * FROM enxure_clients WHERE id=$clientId")->fetch_assoc();
 if (!$client) {
     http_response_code(404);
     exit('Client not found');
@@ -108,7 +108,7 @@ function enxureHandleInvoicePdfExport($mysqli): void
     // the old client-side html2pdf.js screenshot hack, which couldn't produce
     // anything attachable to an email.
     $id = (int) ($_GET['id'] ?? 0);
-    $row = $mysqli->query("SELECT invoice_number, html_content, is_quote FROM invoxa_invoices WHERE id = $id")->fetch_assoc();
+    $row = $mysqli->query("SELECT invoice_number, html_content, is_quote FROM enxure_invoices WHERE id = $id")->fetch_assoc();
     if (!$row || empty($row['html_content'])) {
         http_response_code(404);
         exit('Invoice not found or has no stored content to render.');
@@ -129,10 +129,10 @@ function enxureHandleInvoicePdfExport($mysqli): void
 
 function enxureHandleExportRoutes($mysqli, array $settings): void
 {
-    $mysqli->query("CREATE TABLE IF NOT EXISTS invoxa_settings (setting_key VARCHAR(50) PRIMARY KEY, setting_value TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-    $hideTestRes = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'hide_test'");
+    $mysqli->query("CREATE TABLE IF NOT EXISTS enxure_settings (setting_key VARCHAR(50) PRIMARY KEY, setting_value TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    $hideTestRes = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'hide_test'");
     $hideTest = ($hideTestRes && $hideTestRes->num_rows > 0) ? ($hideTestRes->fetch_assoc()['setting_value'] === '1') : true;
-    $showTestOnlyRes = $mysqli->query("SELECT setting_value FROM invoxa_settings WHERE setting_key = 'show_test_only'");
+    $showTestOnlyRes = $mysqli->query("SELECT setting_value FROM enxure_settings WHERE setting_key = 'show_test_only'");
     $showTestOnly = ($showTestOnlyRes && $showTestOnlyRes->num_rows > 0) ? ($showTestOnlyRes->fetch_assoc()['setting_value'] === '1') : false;
     $testFilter = enxureTestViewFilter($hideTest, $showTestOnly);
     if ($_GET['export'] === 'invoices') {
@@ -140,7 +140,7 @@ function enxureHandleExportRoutes($mysqli, array $settings): void
         header('Content-Disposition: attachment; filename="invoices_export_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
         fputcsv($out, ['Invoice Number', 'Client Name', 'Email', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE 1 $testFilter ORDER BY invoice_date DESC");
+        $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM enxure_invoices WHERE 1 $testFilter ORDER BY invoice_date DESC");
         while ($r = $res->fetch_assoc()) {
             $r['currency'] = enxureResolveCurrency($r['currency'], $settings);
             fputcsv($out, $r, ',', '"', "\\");
@@ -158,7 +158,7 @@ function enxureHandleExportRoutes($mysqli, array $settings): void
             http_response_code(500);
             exit('PHP\'s zip extension isn\'t available in this container — rebuild the php service (docker compose build php) to pick up the Dockerfile change that adds it, then try again.');
         }
-        $res = $mysqli->query("SELECT id, invoice_number, is_quote, html_content FROM invoxa_invoices WHERE html_content IS NOT NULL AND html_content != '' $testFilter ORDER BY invoice_date DESC");
+        $res = $mysqli->query("SELECT id, invoice_number, is_quote, html_content FROM enxure_invoices WHERE html_content IS NOT NULL AND html_content != '' $testFilter ORDER BY invoice_date DESC");
         $tmpZip = tempnam(sys_get_temp_dir(), 'enxure_pdf_export_');
         $zip = new ZipArchive();
         if ($zip->open($tmpZip, ZipArchive::OVERWRITE) !== true) {
@@ -211,7 +211,7 @@ function enxureHandleExportRoutes($mysqli, array $settings): void
         header('Content-Disposition: attachment; filename="invoices_tax_year_' . $taxYearLabel . '_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
         fputcsv($out, ['Invoice Number', 'Client Name', 'Invoice Date', 'Due Date', 'Amount', 'Currency', 'Status', 'Paid Amount', 'Paid Date'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM invoxa_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter ORDER BY invoice_date ASC");
+        $res = $mysqli->query("SELECT invoice_number, client_name, invoice_date, due_date, amount, currency, status, paid_amount, paid_at FROM enxure_invoices WHERE is_quote = 0 AND status != 'void' AND invoice_date >= '$startStr' $testFilter ORDER BY invoice_date ASC");
         while ($r = $res->fetch_assoc()) {
             $r['currency'] = enxureResolveCurrency($r['currency'], $settings);
             fputcsv($out, $r, ',', '"', "\\");
@@ -240,7 +240,7 @@ function enxureHandleExportRoutes($mysqli, array $settings): void
                 SUM(COALESCE(paid_amount, 0)) as total_paid,
                 SUM(amount) - SUM(COALESCE(paid_amount, 0)) as outstanding,
                 SUM(CASE WHEN status NOT IN ('paid') THEN 1 ELSE 0 END) as unpaid_count
-            FROM invoxa_invoices
+            FROM enxure_invoices
             WHERE is_quote = 0
               AND status != 'void'
               AND invoice_date >= '$startStr'
@@ -263,7 +263,7 @@ function enxureHandleExportRoutes($mysqli, array $settings): void
         // Expenses have no currency field, so they're only meaningful (and only
         // subtracted into Net Income) against the default-currency row for that month.
         $expensesByMonthCsv = [];
-        $expResCsv = $mysqli->query("SELECT DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(amount) as total FROM invoxa_expenses WHERE expense_date >= '$startStr' GROUP BY DATE_FORMAT(expense_date, '%Y-%m')");
+        $expResCsv = $mysqli->query("SELECT DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(amount) as total FROM enxure_expenses WHERE expense_date >= '$startStr' GROUP BY DATE_FORMAT(expense_date, '%Y-%m')");
         while ($er = $expResCsv->fetch_assoc())
             $expensesByMonthCsv[$er['month']] = (float) $er['total'];
         foreach ($rowsByMonthCcy as $r) {
@@ -298,7 +298,7 @@ function enxureHandleExportRoutes($mysqli, array $settings): void
         header('Content-Disposition: attachment; filename="clients_export_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
         fputcsv($out, ['Client Name', 'Email', 'Phone', 'Address', 'Rate', 'Currency', 'Billing Frequency', 'Invoices', 'Total Billed', 'Total Paid', 'Outstanding'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT c.client_name, c.email, c.phone, c.address, c.monthly_rate, c.currency, c.billing_frequency, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM invoxa_clients c LEFT JOIN invoxa_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') WHERE 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
+        $res = $mysqli->query("SELECT c.client_name, c.email, c.phone, c.address, c.monthly_rate, c.currency, c.billing_frequency, COUNT(i.id) as inv_count, SUM(i.amount) as total_billed, SUM(i.paid_amount) as total_paid FROM enxure_clients c LEFT JOIN enxure_invoices i ON c.client_key = i.client_key AND i.status NOT IN ('failed', 'void') WHERE 1 " . enxureTestViewClientFilter($hideTest, $showTestOnly, 'AND', 'c.is_test') . " GROUP BY c.id ORDER BY c.client_name ASC");
         while ($r = $res->fetch_assoc()) {
             $r['currency'] = enxureResolveCurrency($r['currency'], $settings);
             $r['outstanding'] = max(0, $r['total_billed'] - $r['total_paid']);
@@ -313,7 +313,7 @@ function enxureHandleExportRoutes($mysqli, array $settings): void
         $out = fopen('php://output', 'w');
         fputcsv($out, ['Date', 'Vendor', 'Category', 'Amount', 'Description'], ',', '"', "\\");
         $categories = expenseCategories();
-        $res = $mysqli->query("SELECT * FROM invoxa_expenses ORDER BY expense_date ASC, id ASC");
+        $res = $mysqli->query("SELECT * FROM enxure_expenses ORDER BY expense_date ASC, id ASC");
         while ($r = $res->fetch_assoc()) {
             fputcsv($out, [
                 substr($r['expense_date'], 0, 10),
@@ -331,7 +331,7 @@ function enxureHandleExportRoutes($mysqli, array $settings): void
         header('Content-Disposition: attachment; filename="quotes_export_' . date('Ymd') . '.csv"');
         $out = fopen('php://output', 'w');
         fputcsv($out, ['Quote Number', 'Client Name', 'Email', 'Quote Date', 'Amount', 'Currency', 'Expires'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, amount, currency, quote_expires_at FROM invoxa_invoices WHERE is_quote = 1 $testFilter ORDER BY invoice_date DESC");
+        $res = $mysqli->query("SELECT invoice_number, client_name, recipient_email, invoice_date, amount, currency, quote_expires_at FROM enxure_invoices WHERE is_quote = 1 $testFilter ORDER BY invoice_date DESC");
         while ($r = $res->fetch_assoc()) {
             $r['currency'] = enxureResolveCurrency($r['currency'], $settings);
             fputcsv($out, $r, ',', '"', "\\");

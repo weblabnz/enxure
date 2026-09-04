@@ -2,7 +2,7 @@
 // ── FX Rate Conversion ──────────────────────────────────────────────────────
 // Backs "blend other-currency invoices into one converted total" in
 // Statistics, Forecasting, and AR Aging (see enxure.php's Data Fetching
-// section). Rates are cached in invoxa_settings (fx_rates_json/fx_rates_base/
+// section). Rates are cached in enxure_settings (fx_rates_json/fx_rates_base/
 // fx_rates_fetched_at) and refreshed at most once every 24 hours. A failed
 // fetch falls back to the last cached rates if any exist, or an empty rate
 // set otherwise — enxureSumByCcyConverted() already treats "no rate for this
@@ -76,7 +76,7 @@ function enxureGetFxRates($mysqli, array $settings, string $baseCcy, array $symb
         return is_array($cached) ? $cached : [];
     }
 
-    $upsert = $mysqli->prepare("INSERT INTO invoxa_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'fx_rates_json' => json_encode($fresh),
         'fx_rates_base' => $baseCcy,
