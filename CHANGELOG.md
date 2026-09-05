@@ -2,6 +2,12 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.6] - 2026-09-05
+
+### Changed
+- Docs/Settings sub-nav items (`.subnav-item`, e.g. Quick Start under Getting Started) now stretch to fill the full 220px nav column width instead of shrinking to their text content, so hover/active backgrounds span the whole row rather than just the label.
+
+
 ## [3.0.5] - 2026-09-05
 
 ### Changed

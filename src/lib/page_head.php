@@ -983,6 +983,8 @@
             display: flex;
             align-items: center;
             gap: 0.65rem;
+            width: 100%;
+            box-sizing: border-box;
             padding: 0.65rem 0.9rem;
             border-radius: var(--radius-lg);
             border: 1px solid transparent;
