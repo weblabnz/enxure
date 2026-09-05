@@ -2,6 +2,12 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.7] - 2026-09-05
+
+### Changed
+- Updated the Polar license purchase link (README.md, public/index.html) to the correct checkout URL, and moved `LICENSE_PURCHASE_URL` in `enxure.php` into a single shared file (`src/lib/license_purchase_url.php`) so the in-app Settings > License button reads from one canonical source instead of a hardcoded string.
+
+
 ## [3.0.6] - 2026-09-05
 
 ### Changed
