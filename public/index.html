@@ -21,12 +21,14 @@
             --text-secondary: #90a0bb;
             --accent: #4f7cff;
             --accent-hover: #3d63e0;
+            --accent-2: #7dd3fc;
             --accent-soft: rgba(79, 124, 255, 0.12);
             --border: rgba(255, 255, 255, 0.08);
             --radius-sm: 8px;
             --radius-md: 12px;
             --radius-lg: 16px;
             --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.45);
+            --shadow-glow: 0 30px 70px -30px rgba(79, 124, 255, 0.45);
         }
 
         * {
@@ -38,15 +40,37 @@
         }
 
         body {
+            position: relative;
+            z-index: 0;
             margin: 0;
             background: var(--bg-color);
             color: var(--text-primary);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
             line-height: 1.55;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            z-index: -1;
+            inset: -10%;
+            pointer-events: none;
+            background:
+                radial-gradient(560px circle at 12% 6%, rgba(79, 124, 255, 0.18), transparent 60%),
+                radial-gradient(480px circle at 88% 16%, rgba(125, 211, 252, 0.13), transparent 60%),
+                radial-gradient(640px circle at 50% 105%, rgba(79, 124, 255, 0.10), transparent 60%);
         }
 
         a {
             color: var(--accent);
+        }
+
+        a:focus-visible,
+        .btn:focus-visible {
+            outline: 2px solid var(--accent-2);
+            outline-offset: 2px;
+            border-radius: 2px;
         }
 
         .wrap {
@@ -87,6 +111,7 @@
             text-decoration: none;
             font-size: 0.92rem;
             font-weight: 500;
+            transition: color 0.15s ease;
         }
 
         .site-nav nav a:hover {
@@ -108,15 +133,19 @@
             text-decoration: none;
             border: 1px solid transparent;
             cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
         }
 
         .btn-primary {
             background: var(--accent);
             color: #fff;
+            box-shadow: 0 10px 24px -12px rgba(79, 124, 255, 0.75);
         }
 
         .btn-primary:hover {
             background: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 16px 32px -12px rgba(79, 124, 255, 0.85);
         }
 
         .btn-ghost {
@@ -127,14 +156,22 @@
 
         .btn-ghost:hover {
             background: var(--surface-hover);
+            transform: translateY(-1px);
         }
 
         section {
             padding: 5rem 0;
+            position: relative;
         }
 
         section.tight {
             padding: 3rem 0;
+        }
+
+        section.band {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0));
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
         }
 
         .eyebrow {
@@ -151,6 +188,13 @@
             line-height: 1.15;
             margin: 0 0 1.25rem;
             letter-spacing: -0.02em;
+        }
+
+        h1 .accent-text {
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
         }
 
         h2 {
@@ -179,6 +223,39 @@
         .section-head .sub {
             max-width: none;
             margin: 0 auto;
+        }
+
+        /* Scroll reveal (progressive enhancement — content is fully visible without JS or with reduced motion) */
+        .js .reveal {
+            opacity: 0;
+            transform: translateY(16px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .js .reveal.in-view {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .why-grid .why-card:nth-child(1) { transition-delay: 0s; }
+        .why-grid .why-card:nth-child(2) { transition-delay: 0.06s; }
+        .why-grid .why-card:nth-child(3) { transition-delay: 0.12s; }
+        .why-grid .why-card:nth-child(4) { transition-delay: 0.18s; }
+
+        .feature-cards-grid .feature-card:nth-child(1) { transition-delay: 0s; }
+        .feature-cards-grid .feature-card:nth-child(2) { transition-delay: 0.05s; }
+        .feature-cards-grid .feature-card:nth-child(3) { transition-delay: 0.1s; }
+        .feature-cards-grid .feature-card:nth-child(4) { transition-delay: 0.15s; }
+
+        .shot-grid .shot-card:nth-child(odd) { transition-delay: 0s; }
+        .shot-grid .shot-card:nth-child(even) { transition-delay: 0.08s; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .reveal {
+                opacity: 1 !important;
+                transform: none !important;
+                transition: none !important;
+            }
         }
 
         /* Hero */
@@ -229,7 +306,7 @@
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: #7dd3fc;
+            background: var(--accent-2);
             box-shadow: 0 0 6px rgba(125, 211, 252, 0.9);
         }
 
@@ -245,7 +322,7 @@
             border-radius: var(--radius-lg);
             overflow: hidden;
             border: 1px solid var(--border);
-            box-shadow: var(--shadow-md);
+            box-shadow: var(--shadow-glow), var(--shadow-md);
             max-width: 920px;
         }
 
@@ -253,6 +330,29 @@
             display: block;
             width: 100%;
             height: auto;
+        }
+
+        .window-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0.65rem 0.9rem;
+            background: var(--surface-2);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .window-bar .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--border);
+        }
+
+        .window-bar .window-label {
+            margin-left: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: "SF Mono", Menlo, Consolas, monospace;
         }
 
         /* Why cards */
@@ -267,6 +367,29 @@
             border: 1px solid var(--border);
             border-radius: var(--radius-md);
             padding: 1.5rem 1.6rem;
+            transition: border-color 0.15s ease, transform 0.15s ease;
+        }
+
+        .why-card:hover {
+            border-color: rgba(79, 124, 255, 0.35);
+            transform: translateY(-2px);
+        }
+
+        .why-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: var(--accent-soft);
+            color: var(--accent-2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.9rem;
+        }
+
+        .why-icon svg {
+            width: 18px;
+            height: 18px;
         }
 
         .why-card p {
@@ -293,6 +416,17 @@
             border-bottom: 1px solid var(--border);
             padding-bottom: 0.6rem;
             margin-bottom: 1.1rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .feature-group-title::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+            margin-right: 0.6rem;
         }
 
         .feature-cards-grid {
@@ -306,6 +440,7 @@
             border: 1px solid var(--border);
             border-radius: var(--radius-md);
             padding: 1.1rem 1.2rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
             transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
         }
 
@@ -346,6 +481,13 @@
             border: 1px solid var(--border);
             border-radius: var(--radius-md);
             overflow: hidden;
+            transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .shot-card:hover {
+            border-color: rgba(79, 124, 255, 0.35);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
         }
 
         .shot-card img {
@@ -410,9 +552,10 @@
         }
 
         .license-buy {
-            background: var(--surface-2);
-            border: 1px solid var(--border);
+            background: linear-gradient(160deg, rgba(79, 124, 255, 0.16), rgba(125, 211, 252, 0.06));
+            border: 1px solid rgba(125, 211, 252, 0.35);
             border-radius: var(--radius-md);
+            box-shadow: 0 25px 55px -30px rgba(79, 124, 255, 0.55);
             padding: 1.75rem;
             text-align: center;
         }
@@ -431,10 +574,16 @@
             align-items: center;
         }
 
-        pre.code {
-            background: #05070f;
+        .code-window {
             border: 1px solid var(--border);
             border-radius: var(--radius-md);
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+        }
+
+        pre.code {
+            background: #05070f;
+            margin: 0;
             padding: 1.25rem 1.5rem;
             font-family: "SF Mono", Menlo, Consolas, monospace;
             font-size: 0.92rem;
@@ -457,6 +606,18 @@
             justify-content: space-between;
             flex-wrap: wrap;
             gap: 1.5rem;
+        }
+
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.9rem;
+        }
+
+        .footer-brand img {
+            height: 20px;
+            display: block;
         }
 
         footer .foot-col h4 {
@@ -482,6 +643,7 @@
         footer .copyright {
             color: var(--text-secondary);
             font-size: 0.85rem;
+            margin: 0;
         }
 
         @media (max-width: 760px) {
@@ -529,7 +691,7 @@
     <section class="hero">
         <div class="wrap">
             <p class="eyebrow">Self-hosted &middot; Free &amp; open source</p>
-            <h1>Invoicing &amp; recurring billing you actually own.</h1>
+            <h1>Invoicing &amp; recurring billing you actually <span class="accent-text">own</span>.</h1>
             <p class="sub">Manage your clients, send quotes that convert straight into invoices, get paid online or manually, and let recurring billing run itself on each client's own schedule &mdash; all in one <code>docker compose up</code>, on your own server.</p>
             <div class="badges">
                 <span class="badge">AGPL-3.0 Licensed</span>
@@ -542,31 +704,44 @@
                 <a class="btn btn-ghost" href="https://gitlab.com/weblabnz/enxure" target="_blank" rel="noopener">View Source on GitLab</a>
             </div>
             <div class="hero-shot">
+                <div class="window-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
                 <img src="assets/screenshots/enxure-dashboard.webp" alt="enXure dashboard showing revenue, outstanding, and overdue totals">
             </div>
         </div>
     </section>
 
-    <section class="tight" id="why">
+    <section class="tight band" id="why">
         <div class="wrap">
-            <div class="section-head">
+            <div class="section-head reveal">
                 <h2>Why enXure</h2>
                 <p class="sub">Built for agencies and freelancers who want an invoicing tool, not a subscription.</p>
             </div>
             <div class="why-grid">
-                <div class="why-card">
+                <div class="why-card reveal">
+                    <div class="why-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>
+                    </div>
                     <h3>You own the data.</h3>
                     <p>Everything lives in your own MySQL database and your own Docker volumes. Export it, back it up, move it to another server whenever you want &mdash; there's a guided path for all three.</p>
                 </div>
-                <div class="why-card">
+                <div class="why-card reveal">
+                    <div class="why-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.65-1.6"/></svg>
+                    </div>
                     <h3>It doesn't get in your way for free.</h3>
                     <p>Every core workflow &mdash; invoices, quotes, clients, manual payments, PDF export, backups, two-factor auth &mdash; works fully with no license key. A license only unlocks seven specific extras.</p>
                 </div>
-                <div class="why-card">
+                <div class="why-card reveal">
+                    <div class="why-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.6 1.5-1.4 0-.4-.15-.7-.4-1-.25-.3-.4-.6-.4-1 0-.8.6-1.4 1.4-1.4H16a4 4 0 0 0 4-4c0-5-3.6-9-8-9Z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="11" cy="7.5" r="1"/><circle cx="15" cy="8.5" r="1"/></svg>
+                    </div>
                     <h3>It looks like your business, not like enXure.</h3>
                     <p>Logo, brand color, GST/VAT number, footer/payment instructions, and a small template language to write your own invoice HTML from scratch, with a live preview before you commit to it.</p>
                 </div>
-                <div class="why-card">
+                <div class="why-card reveal">
+                    <div class="why-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8v8l9 5 9-5V8Z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></svg>
+                    </div>
                     <h3>It's one container stack, not a platform.</h3>
                     <p>PHP + MySQL + nginx, no Node build step, no external services required to get a first invoice out the door.</p>
                 </div>
@@ -576,12 +751,12 @@
 
     <section id="features">
         <div class="wrap">
-            <div class="section-head">
+            <div class="section-head reveal">
                 <h2>Features</h2>
                 <p class="sub">Every main area of enXure, at a glance. Cards marked <span class="badge license" style="margin-left:0.15rem;">License</span> need a paid license key to unlock &mdash; everything else is free with a self-hosted install.</p>
             </div>
 
-            <div class="feature-group">
+            <div class="feature-group reveal">
                 <div class="feature-group-title">Invoicing &amp; Quotes</div>
                 <div class="feature-cards-grid">
                     <div class="feature-card">
@@ -599,7 +774,7 @@
                 </div>
             </div>
 
-            <div class="feature-group">
+            <div class="feature-group reveal">
                 <div class="feature-group-title">Recurring Billing</div>
                 <div class="feature-cards-grid">
                     <div class="feature-card">
@@ -615,7 +790,7 @@
                 </div>
             </div>
 
-            <div class="feature-group">
+            <div class="feature-group reveal">
                 <div class="feature-group-title">Payments</div>
                 <div class="feature-cards-grid">
                     <div class="feature-card">
@@ -634,7 +809,7 @@
                 </div>
             </div>
 
-            <div class="feature-group">
+            <div class="feature-group reveal">
                 <div class="feature-group-title">Clients &amp; Portal</div>
                 <div class="feature-cards-grid">
                     <div class="feature-card">
@@ -649,7 +824,7 @@
                 </div>
             </div>
 
-            <div class="feature-group">
+            <div class="feature-group reveal">
                 <div class="feature-group-title">Security</div>
                 <div class="feature-cards-grid">
                     <div class="feature-card">
@@ -664,7 +839,7 @@
                 </div>
             </div>
 
-            <div class="feature-group">
+            <div class="feature-group reveal">
                 <div class="feature-group-title">External API</div>
                 <div class="feature-cards-grid">
                     <div class="feature-card">
@@ -675,7 +850,7 @@
                 </div>
             </div>
 
-            <div class="feature-group">
+            <div class="feature-group reveal">
                 <div class="feature-group-title">Reporting</div>
                 <div class="feature-cards-grid">
                     <div class="feature-card">
@@ -694,7 +869,7 @@
                 </div>
             </div>
 
-            <div class="feature-group">
+            <div class="feature-group reveal">
                 <div class="feature-group-title">Data Management</div>
                 <div class="feature-cards-grid">
                     <div class="feature-card">
@@ -716,7 +891,7 @@
                 </div>
             </div>
 
-            <div class="feature-group">
+            <div class="feature-group reveal">
                 <div class="feature-group-title">Notifications &amp; Shortcuts</div>
                 <div class="feature-cards-grid">
                     <div class="feature-card">
@@ -732,56 +907,56 @@
         </div>
     </section>
 
-    <section id="screenshots">
+    <section class="band" id="screenshots">
         <div class="wrap">
-            <div class="section-head">
+            <div class="section-head reveal">
                 <h2>Screenshots</h2>
                 <p class="sub">A look at the actual app, not mockups.</p>
             </div>
             <div class="shot-grid">
-                <div class="shot-card">
+                <div class="shot-card reveal">
                     <img src="assets/screenshots/enxure-invoices.webp" alt="Invoices list view">
                     <div class="shot-card-body">
                         <strong>Invoices</strong>
                         <span>Every invoice and quote in one sortable, filterable table: status badges, saved views, per-row preview/comment/send/void/delete actions, and CSV export.</span>
                     </div>
                 </div>
-                <div class="shot-card">
+                <div class="shot-card reveal">
                     <img src="assets/screenshots/enxure-adhoc.webp" alt="Ad hoc invoice builder">
                     <div class="shot-card-body">
                         <strong>Ad Hoc Invoice</strong>
                         <span>Build a one-off invoice or quote in seconds: line items, discount/tax, an optional due-date override, preview before sending, and Save as Quote instead of Generate &amp; Send.</span>
                     </div>
                 </div>
-                <div class="shot-card">
+                <div class="shot-card reveal">
                     <img src="assets/screenshots/enxure-clients.webp" alt="Clients list view">
                     <div class="shot-card-body">
                         <strong>Clients</strong>
                         <span>Every client's rate, billing frequency, invoice count, and running total billed/paid/outstanding, with CSV export/import for bulk management.</span>
                     </div>
                 </div>
-                <div class="shot-card">
+                <div class="shot-card reveal">
                     <img src="assets/screenshots/enxure-settings.webp" alt="Settings page">
                     <div class="shot-card-body">
                         <strong>Settings</strong>
                         <span>General preferences, branding, email, billing, payments, API access, notifications, and license in one place, with paid features clearly marked instead of just disappearing.</span>
                     </div>
                 </div>
-                <div class="shot-card">
+                <div class="shot-card reveal">
                     <img src="assets/screenshots/enxure-datamanagement.webp" alt="Data management page">
                     <div class="shot-card-body">
                         <strong>Data Management</strong>
                         <span>Pick which tables to back up, set local retention, push offsite, dry-run a restore, or follow the guided server-migration path.</span>
                     </div>
                 </div>
-                <div class="shot-card">
+                <div class="shot-card reveal">
                     <img src="assets/screenshots/enxure-auditlog.webp" alt="Audit log page">
                     <div class="shot-card-body">
                         <strong>Audit Log</strong>
                         <span>Every invoice action, timestamped and searchable, so you can always answer "what happened to this invoice."</span>
                     </div>
                 </div>
-                <div class="shot-card">
+                <div class="shot-card reveal">
                     <img src="assets/screenshots/enxure-documentation.webp" alt="Built-in documentation">
                     <div class="shot-card-body">
                         <strong>Built-in Documentation</strong>
@@ -794,7 +969,7 @@
 
     <section id="licensing">
         <div class="wrap">
-            <div class="license-panel">
+            <div class="license-panel reveal">
                 <div>
                     <h2>Free and open source. A license only unlocks extras.</h2>
                     <p class="sub">enXure is AGPL-3.0 &mdash; self-host it, read every line, modify your own copy. A paid license is an optional unlock for seven specific extras, nothing else in the app is gated.</p>
@@ -816,19 +991,22 @@
         </div>
     </section>
 
-    <section id="get-started">
+    <section class="band" id="get-started">
         <div class="wrap">
-            <div class="quickstart-panel">
+            <div class="quickstart-panel reveal">
                 <div>
                     <h2>Get started</h2>
                     <p class="sub">One container stack, no Node build step, no external services required to get a first invoice out the door.</p>
                     <p class="sub" style="margin-top:1rem;">See <a href="https://gitlab.com/weblabnz/enxure/-/blob/main/INSTALL.md" target="_blank" rel="noopener">INSTALL.md</a> on GitLab for full setup, including SMTP configuration for sending real invoice emails.</p>
                 </div>
-                <pre class="code"><span class="cmt"># clone, then from the project root:</span>
+                <div class="code-window">
+                    <div class="window-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="window-label">bash</span></div>
+                    <pre class="code"><span class="cmt"># clone, then from the project root:</span>
 docker compose up -d --build
 
 <span class="cmt"># open http://&lt;this-server&gt;:8090
 # and create your admin account on first run</span></pre>
+                </div>
             </div>
         </div>
     </section>
@@ -836,6 +1014,10 @@ docker compose up -d --build
     <footer>
         <div class="wrap">
             <div class="foot-col">
+                <div class="footer-brand">
+                    <img src="assets/img/enxure-mark.svg" alt="">
+                    <strong>enXure</strong>
+                </div>
                 <h4>Product</h4>
                 <a href="#features">Features</a>
                 <a href="#screenshots">Screenshots</a>
@@ -856,6 +1038,24 @@ docker compose up -d --build
             </div>
         </div>
     </footer>
+
+    <script>
+        (function () {
+            document.documentElement.classList.add('js');
+            if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            var items = document.querySelectorAll('.reveal');
+            if (!('IntersectionObserver' in window) || !items.length) return;
+            var io = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('in-view');
+                        io.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+            items.forEach(function (el) { io.observe(el); });
+        })();
+    </script>
 
 </body>
 
