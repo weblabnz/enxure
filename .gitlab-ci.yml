@@ -1,0 +1,10 @@
+pages:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - echo "Nothing to build — public/ is already the static site."
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

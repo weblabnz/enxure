@@ -1,0 +1,20 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b8cff"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#g)"/>
+  <!-- Stylised "X" monogram (from InvoXa): two faceted, tapered blades crossing at
+       center — each blade flares wide toward its outer tips and pinches thin
+       through the middle, rather than a uniform letter-stroke X, so it reads as a
+       designed mark rather than an icon-font glyph. The two blades are layered
+       (light-blue behind, white in front) for a touch of depth at the crossing. -->
+  <g transform="translate(128,128)">
+    <polygon transform="rotate(-45)" fill="#bfd3ff"
+      points="-80,4 -47,19 -15,7 0,5 15,7 47,19 80,4 80,-4 47,-19 15,-7 0,-5 -15,-7 -47,-19 -80,-4"/>
+    <polygon transform="rotate(45)" fill="#ffffff"
+      points="-80,4 -47,19 -15,7 0,5 15,7 47,19 80,4 80,-4 47,-19 15,-7 0,-5 -15,-7 -47,-19 -80,-4"/>
+  </g>
+</svg>

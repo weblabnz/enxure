@@ -1,0 +1,21 @@
+<svg width="220" height="56" viewBox="0 0 220 56" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wmGrad" x1="0" y1="0" x2="220" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6d9bff"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <!-- Wordmark set with a forced textLength so it always renders at a known,
+       predictable width regardless of which system font resolves first —
+       lets the faceted accent ribbon below sit at exact, reliable
+       coordinates instead of guessing at font metrics. -->
+  <text x="0" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif"
+    font-weight="800" font-size="38" letter-spacing="-1.6" textLength="178" lengthAdjust="spacingAndGlyphs"
+    fill="url(#wmGrad)">en<tspan fill="#7dd3fc">X</tspan>ure</text>
+  <!-- Faceted accent ribbon underneath, echoing the crossed-blade motif of
+       enxure-mark.svg (same double-taper silhouette, flattened into a single
+       strip) so the wordmark and icon read as one designed identity rather
+       than an icon plus unrelated text next to it. -->
+  <polygon points="0,47 62,44.5 96,52 130,44.5 178,47 178,50.5 130,53 96,46.5 62,53 0,50.5" fill="url(#wmGrad)"
+    opacity="0.9"/>
+</svg>

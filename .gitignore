@@ -8,6 +8,7 @@ CI.md
 docker-compose.traefik.yml
 docker-compose.test.yml
 docker-compose.db-expose.yml
+docker-compose.site.yml
 
 # Generated invoices/quotes and database backups: real client data, never
 # committed.

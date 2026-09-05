@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>enXure — Self-Hosted Invoicing &amp; Recurring Billing</title>
+    <meta name="description"
+        content="Self-hosted invoicing and recurring billing for agencies and freelancers. Free and open source (AGPL-3.0), one docker compose up to run.">
+    <link rel="icon" type="image/svg+xml" href="assets/img/enxure-mark.svg" />
+    <link rel="alternate icon" href="assets/img/favicon.ico" />
+    <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0a0f1c" />
+    <style>
+        :root {
+            --bg-color: #0a0f1c;
+            --surface: #131b2e;
+            --surface-2: #1a2439;
+            --surface-hover: #212d47;
+            --text-primary: #f7f9fc;
+            --text-secondary: #90a0bb;
+            --accent: #4f7cff;
+            --accent-hover: #3d63e0;
+            --accent-soft: rgba(79, 124, 255, 0.12);
+            --border: rgba(255, 255, 255, 0.08);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.45);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg-color);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+            line-height: 1.55;
+        }
+
+        a {
+            color: var(--accent);
+        }
+
+        .wrap {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        header.site-nav {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: rgba(10, 15, 28, 0.85);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .site-nav .wrap {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+        }
+
+        .site-nav img.wordmark {
+            height: 26px;
+            display: block;
+        }
+
+        .site-nav nav {
+            display: flex;
+            gap: 1.75rem;
+            align-items: center;
+        }
+
+        .site-nav nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.92rem;
+            font-weight: 500;
+        }
+
+        .site-nav nav a:hover {
+            color: var(--text-primary);
+        }
+
+        .site-nav .btn {
+            margin-left: 0.25rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.65rem 1.25rem;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 0.92rem;
+            text-decoration: none;
+            border: 1px solid transparent;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border-color: var(--border);
+            color: var(--text-primary);
+        }
+
+        .btn-ghost:hover {
+            background: var(--surface-hover);
+        }
+
+        section {
+            padding: 5rem 0;
+        }
+
+        section.tight {
+            padding: 3rem 0;
+        }
+
+        .eyebrow {
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin: 0 0 0.75rem;
+        }
+
+        h1 {
+            font-size: 2.75rem;
+            line-height: 1.15;
+            margin: 0 0 1.25rem;
+            letter-spacing: -0.02em;
+        }
+
+        h2 {
+            font-size: 1.9rem;
+            margin: 0 0 0.75rem;
+            letter-spacing: -0.01em;
+        }
+
+        h3 {
+            font-size: 1.15rem;
+            margin: 0 0 0.4rem;
+        }
+
+        .sub {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            max-width: 640px;
+        }
+
+        .section-head {
+            max-width: 680px;
+            margin: 0 auto 2.5rem;
+            text-align: center;
+        }
+
+        .section-head .sub {
+            max-width: none;
+            margin: 0 auto;
+        }
+
+        /* Hero */
+        .hero {
+            padding: 5.5rem 0 4rem;
+            text-align: center;
+        }
+
+        .hero .wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .badges {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 1.75rem 0 2.25rem;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.3rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .badge.license {
+            background: linear-gradient(135deg, rgba(79, 124, 255, 0.22), rgba(125, 211, 252, 0.14));
+            border-color: rgba(125, 211, 252, 0.4);
+            color: #cfe0ff;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-size: 0.68rem;
+            padding: 0.22rem 0.6rem;
+            gap: 0.3rem;
+        }
+
+        .badge.license::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #7dd3fc;
+            box-shadow: 0 0 6px rgba(125, 211, 252, 0.9);
+        }
+
+        .cta-row {
+            display: flex;
+            gap: 0.9rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .hero-shot {
+            margin-top: 3.5rem;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-md);
+            max-width: 920px;
+        }
+
+        .hero-shot img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        /* Why cards */
+        .why-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.25rem;
+        }
+
+        .why-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem 1.6rem;
+        }
+
+        .why-card p {
+            color: var(--text-secondary);
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        /* Feature groups */
+        .feature-group {
+            margin-bottom: 2.75rem;
+        }
+
+        .feature-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .feature-group-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.6rem;
+            margin-bottom: 1.1rem;
+        }
+
+        .feature-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .feature-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.1rem 1.2rem;
+            transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(79, 124, 255, 0.4);
+            background: var(--surface-hover);
+            box-shadow: var(--shadow-md);
+        }
+
+        .feature-card-top {
+            display: flex;
+            justify-content: flex-end;
+            min-height: 1.4rem;
+        }
+
+        .feature-card-title {
+            font-weight: 700;
+            font-size: 0.98rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .feature-card-desc {
+            color: var(--text-secondary);
+            font-size: 0.87rem;
+            margin: 0;
+        }
+
+        /* Screenshots */
+        .shot-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.25rem;
+        }
+
+        .shot-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .shot-card img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .shot-card-body {
+            padding: 1rem 1.2rem 1.2rem;
+        }
+
+        .shot-card-body strong {
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .shot-card-body span {
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+        }
+
+        /* Licensing */
+        .license-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem;
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 2.5rem;
+            align-items: center;
+        }
+
+        .license-panel .sub {
+            max-width: none;
+        }
+
+        .license-list {
+            margin: 1rem 0 0;
+            padding: 0;
+            list-style: none;
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+        }
+
+        .license-list li {
+            padding: 0.35rem 0 0.35rem 1.2rem;
+            position: relative;
+        }
+
+        .license-list li::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0.75rem;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .license-buy {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.75rem;
+            text-align: center;
+        }
+
+        .license-buy .price-note {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 0.75rem;
+        }
+
+        /* Quick start */
+        .quickstart-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2.5rem;
+            align-items: center;
+        }
+
+        pre.code {
+            background: #05070f;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            font-family: "SF Mono", Menlo, Consolas, monospace;
+            font-size: 0.92rem;
+            color: #c9d3e6;
+            overflow-x: auto;
+        }
+
+        pre.code .cmt {
+            color: var(--text-secondary);
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 3rem 0;
+        }
+
+        footer .wrap {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        footer .foot-col h4 {
+            margin: 0 0 0.6rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        footer .foot-col a {
+            display: block;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 0.92rem;
+            margin-bottom: 0.4rem;
+        }
+
+        footer .foot-col a:hover {
+            color: var(--accent);
+        }
+
+        footer .copyright {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 760px) {
+            h1 {
+                font-size: 2.1rem;
+            }
+
+            .why-grid,
+            .shot-grid,
+            .quickstart-panel {
+                grid-template-columns: 1fr;
+            }
+
+            .feature-cards-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .license-panel {
+                grid-template-columns: 1fr;
+                padding: 1.75rem;
+            }
+
+            .site-nav nav a:not(.btn) {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header class="site-nav">
+        <div class="wrap">
+            <img class="wordmark" src="assets/img/enxure-wordmark.svg" alt="enXure">
+            <nav>
+                <a href="#features">Features</a>
+                <a href="#screenshots">Screenshots</a>
+                <a href="#licensing">Licensing</a>
+                <a href="#get-started">Get Started</a>
+                <a class="btn btn-ghost" href="https://gitlab.com/weblabnz/enxure" target="_blank" rel="noopener">Source</a>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="wrap">
+            <p class="eyebrow">Self-hosted &middot; Free &amp; open source</p>
+            <h1>Invoicing &amp; recurring billing you actually own.</h1>
+            <p class="sub">Manage your clients, send quotes that convert straight into invoices, get paid online or manually, and let recurring billing run itself on each client's own schedule &mdash; all in one <code>docker compose up</code>, on your own server.</p>
+            <div class="badges">
+                <span class="badge">AGPL-3.0 Licensed</span>
+                <span class="badge">Self-Hosted</span>
+                <span class="badge">Docker Compose</span>
+                <span class="badge">No Node build step</span>
+            </div>
+            <div class="cta-row">
+                <a class="btn btn-primary" href="#get-started">Get Started</a>
+                <a class="btn btn-ghost" href="https://gitlab.com/weblabnz/enxure" target="_blank" rel="noopener">View Source on GitLab</a>
+            </div>
+            <div class="hero-shot">
+                <img src="assets/screenshots/enxure-dashboard.webp" alt="enXure dashboard showing revenue, outstanding, and overdue totals">
+            </div>
+        </div>
+    </section>
+
+    <section class="tight" id="why">
+        <div class="wrap">
+            <div class="section-head">
+                <h2>Why enXure</h2>
+                <p class="sub">Built for agencies and freelancers who want an invoicing tool, not a subscription.</p>
+            </div>
+            <div class="why-grid">
+                <div class="why-card">
+                    <h3>You own the data.</h3>
+                    <p>Everything lives in your own MySQL database and your own Docker volumes. Export it, back it up, move it to another server whenever you want &mdash; there's a guided path for all three.</p>
+                </div>
+                <div class="why-card">
+                    <h3>It doesn't get in your way for free.</h3>
+                    <p>Every core workflow &mdash; invoices, quotes, clients, manual payments, PDF export, backups, two-factor auth &mdash; works fully with no license key. A license only unlocks seven specific extras.</p>
+                </div>
+                <div class="why-card">
+                    <h3>It looks like your business, not like enXure.</h3>
+                    <p>Logo, brand color, GST/VAT number, footer/payment instructions, and a small template language to write your own invoice HTML from scratch, with a live preview before you commit to it.</p>
+                </div>
+                <div class="why-card">
+                    <h3>It's one container stack, not a platform.</h3>
+                    <p>PHP + MySQL + nginx, no Node build step, no external services required to get a first invoice out the door.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features">
+        <div class="wrap">
+            <div class="section-head">
+                <h2>Features</h2>
+                <p class="sub">Every main area of enXure, at a glance. Cards marked <span class="badge license" style="margin-left:0.15rem;">License</span> need a paid license key to unlock &mdash; everything else is free with a self-hosted install.</p>
+            </div>
+
+            <div class="feature-group">
+                <div class="feature-group-title">Invoicing &amp; Quotes</div>
+                <div class="feature-cards-grid">
+                    <div class="feature-card">
+                        <div class="feature-card-title">Ad Hoc Invoicing</div>
+                        <p class="feature-card-desc">Line-item invoices with optional discount/tax breakdown and a live PDF.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-title">Quotes &amp; Conversion</div>
+                        <p class="feature-card-desc">Build quotes with the same line-item tool, then convert to a real invoice on acceptance.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-title">Void &amp; Unvoid</div>
+                        <p class="feature-card-desc">Pull a mistaken invoice out of every total without losing its history.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-group">
+                <div class="feature-group-title">Recurring Billing</div>
+                <div class="feature-cards-grid">
+                    <div class="feature-card">
+                        <div class="feature-card-top"><span class="badge license">License</span></div>
+                        <div class="feature-card-title">Recurring Billing</div>
+                        <p class="feature-card-desc">Per-client billing schedule with a double-billing guard, cron-driven.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-top"><span class="badge license">License</span></div>
+                        <div class="feature-card-title">Late Fees &amp; Reminders</div>
+                        <p class="feature-card-desc">Automatic overdue fees and payment reminder emails.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-group">
+                <div class="feature-group-title">Payments</div>
+                <div class="feature-cards-grid">
+                    <div class="feature-card">
+                        <div class="feature-card-title">Payment Ledger</div>
+                        <p class="feature-card-desc">Every payment its own row, so partial payments keep an honest history.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-top"><span class="badge license">License</span></div>
+                        <div class="feature-card-title">Stripe &amp; PayPal</div>
+                        <p class="feature-card-desc">Hosted checkout with webhook-verified Pay Now links.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-title">Refunds</div>
+                        <p class="feature-card-desc">Gateway refunds automatically reopen and adjust the invoice.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-group">
+                <div class="feature-group-title">Clients &amp; Portal</div>
+                <div class="feature-cards-grid">
+                    <div class="feature-card">
+                        <div class="feature-card-title">Clients &amp; CRM Notes</div>
+                        <p class="feature-card-desc">Per-client billing defaults plus free-text CRM notes.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-top"><span class="badge license">License</span></div>
+                        <div class="feature-card-title">Client Portal</div>
+                        <p class="feature-card-desc">Token-gated, login-free page for a client's own invoices and quotes.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-group">
+                <div class="feature-group-title">Security</div>
+                <div class="feature-cards-grid">
+                    <div class="feature-card">
+                        <div class="feature-card-title">Two-Factor Authentication</div>
+                        <p class="feature-card-desc">TOTP login with one-time backup codes.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-top"><span class="badge license">License</span></div>
+                        <div class="feature-card-title">Users &amp; Roles</div>
+                        <p class="feature-card-desc">Admin and Member accounts, least-privilege by default.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-group">
+                <div class="feature-group-title">External API</div>
+                <div class="feature-cards-grid">
+                    <div class="feature-card">
+                        <div class="feature-card-top"><span class="badge license">License</span></div>
+                        <div class="feature-card-title">External API</div>
+                        <p class="feature-card-desc">Token-authenticated read/write endpoints for scripts and other tools.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-group">
+                <div class="feature-group-title">Reporting</div>
+                <div class="feature-cards-grid">
+                    <div class="feature-card">
+                        <div class="feature-card-title">Dashboard</div>
+                        <p class="feature-card-desc">At-a-glance revenue, outstanding, and overdue totals.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-top"><span class="badge license">License</span></div>
+                        <div class="feature-card-title">Statistics</div>
+                        <p class="feature-card-desc">Six focused tabs &mdash; Revenue, Forecasting, Tax &amp; Compliance, and more.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-title">Audit Log</div>
+                        <p class="feature-card-desc">Every send, payment, refund, and security event, timestamped.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-group">
+                <div class="feature-group-title">Data Management</div>
+                <div class="feature-cards-grid">
+                    <div class="feature-card">
+                        <div class="feature-card-title">Backup &amp; Restore</div>
+                        <p class="feature-card-desc">Scoped backups with a dry-run restore before anything changes.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-title">Demo Data</div>
+                        <p class="feature-card-desc">Seed sample clients and invoices to preview charts safely.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-title">Test Suite</div>
+                        <p class="feature-card-desc">In-app correctness checks for invoice math, TOTP, and webhooks.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-title">Data Repair</div>
+                        <p class="feature-card-desc">Four narrow fixes for drifted paid dates, totals, and duplicates.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-group">
+                <div class="feature-group-title">Notifications &amp; Shortcuts</div>
+                <div class="feature-cards-grid">
+                    <div class="feature-card">
+                        <div class="feature-card-title">Notifications</div>
+                        <p class="feature-card-desc">Slack, Telegram, or a generic webhook, independent of email.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card-title">Keyboard Shortcuts</div>
+                        <p class="feature-card-desc">Press ? anywhere for the full shortcuts overlay.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="screenshots">
+        <div class="wrap">
+            <div class="section-head">
+                <h2>Screenshots</h2>
+                <p class="sub">A look at the actual app, not mockups.</p>
+            </div>
+            <div class="shot-grid">
+                <div class="shot-card">
+                    <img src="assets/screenshots/enxure-invoices.webp" alt="Invoices list view">
+                    <div class="shot-card-body">
+                        <strong>Invoices</strong>
+                        <span>Every invoice and quote in one sortable, filterable table: status badges, saved views, per-row preview/comment/send/void/delete actions, and CSV export.</span>
+                    </div>
+                </div>
+                <div class="shot-card">
+                    <img src="assets/screenshots/enxure-adhoc.webp" alt="Ad hoc invoice builder">
+                    <div class="shot-card-body">
+                        <strong>Ad Hoc Invoice</strong>
+                        <span>Build a one-off invoice or quote in seconds: line items, discount/tax, an optional due-date override, preview before sending, and Save as Quote instead of Generate &amp; Send.</span>
+                    </div>
+                </div>
+                <div class="shot-card">
+                    <img src="assets/screenshots/enxure-clients.webp" alt="Clients list view">
+                    <div class="shot-card-body">
+                        <strong>Clients</strong>
+                        <span>Every client's rate, billing frequency, invoice count, and running total billed/paid/outstanding, with CSV export/import for bulk management.</span>
+                    </div>
+                </div>
+                <div class="shot-card">
+                    <img src="assets/screenshots/enxure-settings.webp" alt="Settings page">
+                    <div class="shot-card-body">
+                        <strong>Settings</strong>
+                        <span>General preferences, branding, email, billing, payments, API access, notifications, and license in one place, with paid features clearly marked instead of just disappearing.</span>
+                    </div>
+                </div>
+                <div class="shot-card">
+                    <img src="assets/screenshots/enxure-datamanagement.webp" alt="Data management page">
+                    <div class="shot-card-body">
+                        <strong>Data Management</strong>
+                        <span>Pick which tables to back up, set local retention, push offsite, dry-run a restore, or follow the guided server-migration path.</span>
+                    </div>
+                </div>
+                <div class="shot-card">
+                    <img src="assets/screenshots/enxure-auditlog.webp" alt="Audit log page">
+                    <div class="shot-card-body">
+                        <strong>Audit Log</strong>
+                        <span>Every invoice action, timestamped and searchable, so you can always answer "what happened to this invoice."</span>
+                    </div>
+                </div>
+                <div class="shot-card">
+                    <img src="assets/screenshots/enxure-documentation.webp" alt="Built-in documentation">
+                    <div class="shot-card-body">
+                        <strong>Built-in Documentation</strong>
+                        <span>A full docs site ships inside the app itself &mdash; searchable, covering setup, every feature above in more depth, and the external API reference.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="licensing">
+        <div class="wrap">
+            <div class="license-panel">
+                <div>
+                    <h2>Free and open source. A license only unlocks extras.</h2>
+                    <p class="sub">enXure is AGPL-3.0 &mdash; self-host it, read every line, modify your own copy. A paid license is an optional unlock for seven specific extras, nothing else in the app is gated.</p>
+                    <ul class="license-list">
+                        <li>Stripe / PayPal payment collection</li>
+                        <li>Recurring billing automation</li>
+                        <li>The Client Portal</li>
+                        <li>The external API</li>
+                        <li>Adding teammates beyond your own account</li>
+                        <li>Reporting &amp; Statistics</li>
+                        <li>Removing the "Powered by enXure" credit</li>
+                    </ul>
+                </div>
+                <div class="license-buy">
+                    <a class="btn btn-primary" style="width:100%; justify-content:center;" href="https://buy.polar.sh/polar_cl_l17jacgCGmUFH6VhRN4lg0UeZ70Uj2XBj3N7L1WXKw2" target="_blank" rel="noopener">Buy a License</a>
+                    <p class="price-note">Add the key under Settings &gt; License once purchased. The rest of the app is unaffected either way.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="get-started">
+        <div class="wrap">
+            <div class="quickstart-panel">
+                <div>
+                    <h2>Get started</h2>
+                    <p class="sub">One container stack, no Node build step, no external services required to get a first invoice out the door.</p>
+                    <p class="sub" style="margin-top:1rem;">See <a href="https://gitlab.com/weblabnz/enxure/-/blob/main/INSTALL.md" target="_blank" rel="noopener">INSTALL.md</a> on GitLab for full setup, including SMTP configuration for sending real invoice emails.</p>
+                </div>
+                <pre class="code"><span class="cmt"># clone, then from the project root:</span>
+docker compose up -d --build
+
+<span class="cmt"># open http://&lt;this-server&gt;:8090
+# and create your admin account on first run</span></pre>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="wrap">
+            <div class="foot-col">
+                <h4>Product</h4>
+                <a href="#features">Features</a>
+                <a href="#screenshots">Screenshots</a>
+                <a href="#licensing">Licensing</a>
+            </div>
+            <div class="foot-col">
+                <h4>Source &amp; Support</h4>
+                <a href="https://gitlab.com/weblabnz/enxure" target="_blank" rel="noopener">GitLab Repository</a>
+                <a href="https://gitlab.com/weblabnz/enxure/-/issues" target="_blank" rel="noopener">Report an Issue</a>
+                <a href="mailto:contact-project+weblabnz-enxure-inv@incoming.gitlab.com">Contact</a>
+            </div>
+            <div class="foot-col">
+                <h4>Legal</h4>
+                <a href="https://gitlab.com/weblabnz/enxure/-/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0 License</a>
+            </div>
+            <div class="foot-col" style="align-self:flex-end;">
+                <p class="copyright">&copy; enXure. Development happens on GitLab &mdash; the GitHub mirror is read-only.</p>
+            </div>
+        </div>
+    </footer>
+
+</body>
+
+</html>
