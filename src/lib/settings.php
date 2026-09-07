@@ -561,6 +561,9 @@ function enxureHandleSaveEmailTemplates($mysqli): void
 function enxureHandleSaveInvoiceNumbering($mysqli): void
 {
     $template = trim($_POST['invoice_number_template'] ?? '') ?: '{key}{seq}';
+    if (!str_contains($template, '{seq}')) {
+        throw new Exception('Invoice number template must include {seq}, or every invoice in a period gets the same number.');
+    }
     $padding = (int) ($_POST['invoice_number_padding'] ?? 3);
     if ($padding < 1 || $padding > 10)
         $padding = 3;

@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', require __DIR__ . '/lib/license_purchase_url.php');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.7');
+define('APP_VERSION', '3.0.8');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
@@ -65,6 +65,7 @@ require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/clients.php';
 require_once __DIR__ . '/lib/stats.php';
 require_once __DIR__ . '/lib/exports.php';
+require_once __DIR__ . '/lib/tax_email.php';
 require_once __DIR__ . '/lib/payments.php';
 require_once __DIR__ . '/lib/backup.php';
 require_once __DIR__ . '/lib/settings.php';
@@ -260,6 +261,12 @@ function generateInvoiceNumber($mysqli, $clientKey, $clientName, array $settings
     if ($padding < 1)
         $padding = 3;
     $template = trim($settings['invoice_number_template'] ?? '') ?: '{key}{seq}';
+    // A template without {seq} produces the same number for every invoice in
+    // a period regardless of how it got saved — append it rather than trust
+    // the stored setting.
+    if (!str_contains($template, '{seq}')) {
+        $template .= '{seq}';
+    }
     $seq = str_pad((string) ($highestNumber + 1), $padding, '0', STR_PAD_LEFT);
     return strtr($template, [
         '{key}' => strtoupper($clientKey),
@@ -1252,7 +1259,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // not on this list). $isCron requests bypass this the same way they
         // bypass the $isAuth gate above — a cron-triggered run has no user at
         // all, and CRON_SECRET is its own, separate authorization.
-        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_all_untracked_files', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'fx_convert_preview', 'get_db_stats', 'import_backup', 'import_clients_csv', 'import_expenses_csv', 'import_invoices_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
+        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_all_untracked_files', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'fx_convert_preview', 'get_db_stats', 'import_backup', 'import_clients_csv', 'import_expenses_csv', 'import_invoices_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'send_tax_email', 'preview_tax_email', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
         if (!$isCron && !$isAdmin && in_array($_POST['action'], $__adminOnlyActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This requires an admin account — see Settings > Users.']);
             exit;
@@ -1303,22 +1310,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 throw new Exception('Amount must be greater than 0.');
             }
 
+            $categoryLabel = expenseCategories()[$category] ?? ucfirst($category);
             if ($id > 0) {
                 $stmt = $mysqli->prepare("UPDATE enxure_expenses SET expense_date=?, vendor=?, category=?, amount=?, description=? WHERE id=?");
                 $stmt->bind_param("sssdsi", $date, $vendor, $category, $amount, $description, $id);
                 $stmt->execute();
+                enxureLogAction($mysqli, null, '', 'expense_updated', "{$vendor} — {$categoryLabel} — " . number_format($amount, 2));
             } else {
                 $stmt = $mysqli->prepare("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description) VALUES (?, ?, ?, ?, ?)");
                 $stmt->bind_param("sssds", $date, $vendor, $category, $amount, $description);
                 $stmt->execute();
                 $id = $mysqli->insert_id;
+                enxureLogAction($mysqli, null, '', 'expense_added', "{$vendor} — {$categoryLabel} — " . number_format($amount, 2));
             }
             echo json_encode(['success' => true, 'id' => $id]);
             exit;
         }
         if ($_POST['action'] === 'delete_expense') {
             $id = (int) ($_POST['id'] ?? 0);
-            $row = $mysqli->query("SELECT receipt_path FROM enxure_expenses WHERE id = " . $id)->fetch_assoc();
+            $row = $mysqli->query("SELECT vendor, amount, receipt_path FROM enxure_expenses WHERE id = " . $id)->fetch_assoc();
             if ($row && !empty($row['receipt_path'])) {
                 @unlink(RECEIPTS_DIR . $row['receipt_path']);
             }
@@ -1330,6 +1340,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $mysqli->prepare("DELETE FROM enxure_expenses WHERE id=?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
+            if ($row) {
+                enxureLogAction($mysqli, null, '', 'expense_deleted', "{$row['vendor']} — " . number_format((float) $row['amount'], 2));
+            }
             echo json_encode(['success' => true]);
             exit;
         }
@@ -1443,14 +1456,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($amount <= 0) {
                 throw new Exception('Amount must be greater than 0.');
             }
+            $recurNotes = "{$vendor} — " . number_format($amount, 2) . " — {$frequency}";
             if ($id > 0) {
                 $stmt = $mysqli->prepare("UPDATE enxure_recurring_expenses SET vendor=?, category=?, amount=?, description=?, frequency=? WHERE id=?");
                 $stmt->bind_param("sssdsi", $vendor, $category, $amount, $description, $frequency, $id);
+                $stmt->execute();
+                enxureLogAction($mysqli, null, '', 'recurring_expense_updated', $recurNotes);
             } else {
                 $stmt = $mysqli->prepare("INSERT INTO enxure_recurring_expenses (vendor, category, amount, description, frequency) VALUES (?, ?, ?, ?, ?)");
                 $stmt->bind_param("sssds", $vendor, $category, $amount, $description, $frequency);
+                $stmt->execute();
+                enxureLogAction($mysqli, null, '', 'recurring_expense_created', $recurNotes);
             }
-            $stmt->execute();
             echo json_encode(['success' => true]);
             exit;
         }
@@ -1460,14 +1477,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $mysqli->prepare("UPDATE enxure_recurring_expenses SET is_active = ? WHERE id = ?");
             $stmt->bind_param("ii", $active, $id);
             $stmt->execute();
+            $reRow = $mysqli->query("SELECT vendor FROM enxure_recurring_expenses WHERE id = " . $id)->fetch_assoc();
+            if ($reRow) {
+                enxureLogAction($mysqli, null, '', $active ? 'recurring_expense_enabled' : 'recurring_expense_disabled', $reRow['vendor']);
+            }
             echo json_encode(['success' => true]);
             exit;
         }
         if ($_POST['action'] === 'delete_recurring_expense') {
             $id = (int) ($_POST['id'] ?? 0);
+            $reRow = $mysqli->query("SELECT vendor, amount FROM enxure_recurring_expenses WHERE id = " . $id)->fetch_assoc();
             $stmt = $mysqli->prepare("DELETE FROM enxure_recurring_expenses WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
+            if ($reRow) {
+                enxureLogAction($mysqli, null, '', 'recurring_expense_deleted', "{$reRow['vendor']} — " . number_format((float) $reRow['amount'], 2));
+            }
             echo json_encode(['success' => true]);
             exit;
         }
@@ -1658,10 +1683,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
                 $reAmount = (float) $re['amount'];
                 $recurExpInsertStmt->bind_param("ssdsi", $re['vendor'], $re['category'], $reAmount, $re['description'], $re['id']);
-                if ($recurExpInsertStmt->execute())
+                if ($recurExpInsertStmt->execute()) {
                     $recurExpSent++;
-                else
+                    enxureLogAction($mysqli, null, '', 'expense_added', "{$re['vendor']} — " . number_format($reAmount, 2) . " (auto-logged from recurring template)");
+                } else {
                     $recurExpErrors++;
+                }
             }
             $remindersSent = 0;
             $reminderErrors = 0;
@@ -2152,6 +2179,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'delete_single_db_entry') { enxureHandleDeleteSingleDbEntry($mysqli); }
         if ($_POST['action'] === 'preview_tax_year') { enxureHandlePreviewTaxYear($mysqli, $settings); }
         if ($_POST['action'] === 'preview_tax_year_monthly') { enxureHandlePreviewTaxYearMonthly($mysqli, $settings); }
+        if ($_POST['action'] === 'preview_tax_email') { enxureHandlePreviewTaxEmail($mysqli, $settings, $currentUserId); }
+        if ($_POST['action'] === 'send_tax_email') { enxureHandleSendTaxEmail($mysqli, $settings, $emailPassword, $currentUserId); }
         if ($_POST['action'] === 'save_screenshot') { enxureHandleSaveScreenshot(); }
     } catch (Exception $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);

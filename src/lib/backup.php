@@ -14,13 +14,13 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
         <div class="card" style="margin-bottom: 0;">
             <div class="card-header">
-                <h3 style="margin:0; font-size: 1rem;">Untracked HTML Invoices</h3>
+                <h3 style="margin:0; font-size: 1rem;">Missing in DB</h3>
                 <?php if (count($missingFiles) > 0): ?>
                     <div style="display:flex; gap:0.5rem;">
                         <button class="btn primary" id="syncBtn" onclick="syncFiles()"><i
-                                class="fa-solid fa-download"></i> Import All</button>
+                                class="fa-solid fa-download"></i> Import</button>
                         <button class="btn danger" id="deleteAllUntrackedBtn" onclick="deleteAllUntrackedFiles()"><i
-                                class="fa-solid fa-trash"></i> Delete All</button>
+                                class="fa-solid fa-trash"></i> Delete</button>
                     </div>
                 <?php endif; ?>
             </div>
@@ -61,20 +61,20 @@ function renderSyncSection(array $missingFiles, array $knownClientFolders, array
 
         <div class="card" style="margin-bottom: 0;">
             <div class="card-header">
-                <h3 style="margin:0; font-size: 1rem;">Missing HTML Files (In DB, missing on disk)</h3>
+                <h3 style="margin:0; font-size: 1rem;">Missing on File</h3>
                 <?php if (count($missingDiskData) > 0): ?>
                     <div style="display:flex; gap:0.5rem;">
-                        <button class="btn danger" id="delDbBtn" onclick="deleteMissingDb()"><i
-                                class="fa-solid fa-trash"></i> Delete All</button>
                         <button class="btn primary" id="restoreBtn" onclick="restoreMissingFiles()"><i
-                                class="fa-solid fa-file-export"></i> Rebuild HTML Files</button>
+                                class="fa-solid fa-file-export"></i> Rebuild</button>
+                        <button class="btn danger" id="delDbBtn" onclick="deleteMissingDb()"><i
+                                class="fa-solid fa-trash"></i> Delete</button>
                     </div>
                 <?php endif; ?>
             </div>
             <table class="datatable-table">
                 <thead>
                     <tr>
-                        <th>Invoice #</th>
+                        <th>Invoice</th>
                         <th>Expected File Path</th>
                         <th style="width:150px;">Rebuildable?</th>
                         <th style="width:50px;"></th>
@@ -153,7 +153,7 @@ function enxureHandleSaveScreenshot(): void
 // client-side state worth preserving across a refresh).
 function enxureAuditIcons(): array
 {
-    return ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban', 'quote_accepted' => 'fa-file-circle-check', 'quote_converted' => 'fa-file-invoice', 'user_created' => 'fa-user-plus', 'user_role_changed' => 'fa-user-gear', 'user_password_reset' => 'fa-key', 'user_deleted' => 'fa-user-xmark', 'backup_created' => 'fa-database', 'backup_failed' => 'fa-circle-xmark'];
+    return ['email_sent' => 'fa-envelope', 'email_failed' => 'fa-circle-xmark', 'mark_paid' => 'fa-check', 'manual_send' => 'fa-paper-plane', 'note_added' => 'fa-comment', 'synced' => 'fa-rotate', 'smtp_test' => 'fa-vial', 'reminder_sent' => 'fa-bell', 'reminder_failed' => 'fa-bell-slash', 'late_fee_charged' => 'fa-triangle-exclamation', 'recurring_run' => 'fa-arrows-rotate', 'audit_log_pruned' => 'fa-broom', 'invoice_voided' => 'fa-ban', 'invoice_unvoided' => 'fa-rotate-left', 'notification_test' => 'fa-paper-plane', 'notification_failed' => 'fa-circle-xmark', 'totp_enabled' => 'fa-shield-halved', 'totp_disabled' => 'fa-shield', 'refund_issued' => 'fa-rotate-left', 'webhook_unmatched' => 'fa-triangle-exclamation', 'api_token_created' => 'fa-key', 'api_token_revoked' => 'fa-ban', 'quote_accepted' => 'fa-file-circle-check', 'quote_converted' => 'fa-file-invoice', 'user_created' => 'fa-user-plus', 'user_role_changed' => 'fa-user-gear', 'user_password_reset' => 'fa-key', 'user_deleted' => 'fa-user-xmark', 'backup_created' => 'fa-database', 'backup_failed' => 'fa-circle-xmark', 'expense_added' => 'fa-receipt', 'expense_updated' => 'fa-pen', 'expense_deleted' => 'fa-trash', 'recurring_expense_created' => 'fa-repeat', 'recurring_expense_updated' => 'fa-pen', 'recurring_expense_enabled' => 'fa-toggle-on', 'recurring_expense_disabled' => 'fa-toggle-off', 'recurring_expense_deleted' => 'fa-trash', 'tax_email_sent' => 'fa-file-invoice-dollar', 'tax_email_failed' => 'fa-circle-xmark'];
 }
 
 // Short category tag for the Type column — every action type gets one,
@@ -192,6 +192,16 @@ function enxureAuditTypeLabel(string $actionType): string
         'user_deleted' => 'USR',
         'backup_created' => 'SYS',
         'backup_failed' => 'SYS',
+        'expense_added' => 'EXP',
+        'expense_updated' => 'EXP',
+        'expense_deleted' => 'EXP',
+        'recurring_expense_created' => 'EXP',
+        'recurring_expense_updated' => 'EXP',
+        'recurring_expense_enabled' => 'EXP',
+        'recurring_expense_disabled' => 'EXP',
+        'recurring_expense_deleted' => 'EXP',
+        'tax_email_sent' => 'TAX',
+        'tax_email_failed' => 'TAX',
     ];
     return $types[$actionType] ?? 'SYS';
 }

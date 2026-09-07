@@ -462,11 +462,14 @@
                     }
                 }
             }
+            let _taxEmailData = null;
+            let _taxEmailLoaded = false;
             function navStats(target) {
                 document.querySelectorAll('#sec-stats .subnav-item, .nav-subnav-slot[data-for="stats"] .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.statsTarget === target));
                 document.querySelectorAll('#sec-stats .subnav-pane').forEach(el => el.classList.toggle('active', el.id === 'stats-pane-' + target));
                 localStorage.setItem('statsSubTab', target);
                 initStatsChartsFor(target);
+                if (target === 'tax-email' && !_taxEmailLoaded) loadTaxEmailPane();
             }
             // Card order/width (applyStatsLayouts) is applied before the pane is
             // first shown, so there's no flash of the default order/width.
@@ -2737,7 +2740,7 @@
                     setTimeout(() => window.location.reload(), skipped > 0 ? 3000 : 1500);
                 } else {
                     showToast(json.error, true);
-                    btn.innerHTML = '<i class="fa-solid fa-download"></i> Import All';
+                    btn.innerHTML = '<i class="fa-solid fa-download"></i> Import';
                     btn.disabled = false;
                 }
             }
@@ -2764,7 +2767,7 @@
                     setTimeout(() => window.location.reload(), json.errors > 0 ? 3000 : 1500);
                 } else {
                     showToast(json.error, true);
-                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete All';
+                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete';
                     btn.disabled = false;
                 }
             }
@@ -2787,7 +2790,7 @@
                     showToast(msg, json.restored === 0 && hasIssue);
                     setTimeout(() => window.location.reload(), hasIssue ? 4000 : 1500);
                 }
-                else { showToast(json.error, true); btn.innerHTML = '<i class="fa-solid fa-file-export"></i> Rebuild HTML Files'; btn.disabled = false; }
+                else { showToast(json.error, true); btn.innerHTML = '<i class="fa-solid fa-file-export"></i> Rebuild'; btn.disabled = false; }
             }
             async function deleteMissingDb() {
                 if (!confirm('WARNING: This will permanently DELETE ' + missingDiskIds.length + ' invoice records from the database that do not have matching HTML files. This cannot be undone! Proceed?')) return;
@@ -2795,7 +2798,7 @@
                 const data = new URLSearchParams({ action: 'delete_missing_db', ids: JSON.stringify(missingDiskIds) });
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                 if (json.success) { showToast(`Deleted ${json.deleted} records!`); setTimeout(() => window.location.reload(), 1500); }
-                else { showToast(json.error, true); btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete All'; btn.disabled = false; }
+                else { showToast(json.error, true); btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete'; btn.disabled = false; }
             }
 
             async function initChart(force = false) {
@@ -3804,6 +3807,210 @@
                 } catch (e) {
                     showToast('Failed to load preview: ' + e.message, true);
                     closeModal('csvPreviewModal');
+                }
+            }
+            // ── Tax Email (Statistics > Tax Email) ─────────────────────────────
+            async function loadTaxEmailPane() {
+                document.getElementById('taxEmailLoading').style.display = 'block';
+                document.getElementById('taxEmailData').style.display = 'none';
+                const startDate = document.getElementById('taxEmailStartDate').value;
+                const endDate = document.getElementById('taxEmailEndDate').value;
+
+                try {
+                    const params = { action: 'preview_tax_email' };
+                    if (startDate) params.start_date = startDate;
+                    if (endDate) params.end_date = endDate;
+                    const res = await fetch('', { method: 'POST', body: new URLSearchParams(params) });
+                    const data = await res.json();
+                    if (!data.success) { showToast(data.error || 'Failed to load preview', true); return; }
+                    _taxEmailData = data;
+                    document.getElementById('taxEmailStartDate').value = data.start_date;
+                    document.getElementById('taxEmailEndDate').value = data.end_date;
+
+                    document.getElementById('taxEmailInvoicesList').innerHTML = data.invoices.map(inv => `
+                        <label style="display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.75rem; border-bottom:1px solid var(--border); font-size:0.85rem; cursor:pointer;">
+                            <input type="checkbox" class="tax-email-cb" data-kind="invoice" data-group="${inv.currency}" data-amount="${inv.amount}" value="${inv.id}" checked onchange="updateTaxEmailSummary()">
+                            <span style="font-family:monospace; min-width:100px;">${inv.invoice_number}</span>
+                            <span style="flex:1;">${inv.client_name}</span>
+                            <span style="color:var(--text-secondary);">${inv.invoice_date.substring(0, 10)}</span>
+                            <span style="min-width:100px; text-align:right;">${parseFloat(inv.amount).toFixed(2)} ${inv.currency}</span>
+                        </label>`).join('') || '<p style="padding:0.75rem; margin:0; color:var(--text-secondary);">No invoices in this date range.</p>';
+
+                    document.getElementById('taxEmailExpensesList').innerHTML = data.expenses.map(exp => `
+                        <label style="display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.75rem; border-bottom:1px solid var(--border); font-size:0.85rem; cursor:pointer;">
+                            <input type="checkbox" class="tax-email-cb" data-kind="expense" data-group="${exp.category}" data-amount="${exp.amount}" value="${exp.id}" checked onchange="updateTaxEmailSummary()">
+                            <span style="flex:1;">${exp.vendor}${exp.recurring_expense_id ? ' <i class="fa-solid fa-rotate" style="color:var(--text-secondary); font-size:0.75rem;" title="Auto-logged from a recurring expense"></i>' : ''}</span>
+                            <span style="color:var(--text-secondary);">${exp.category_label}</span>
+                            <span style="color:var(--text-secondary);">${exp.expense_date.substring(0, 10)}</span>
+                            ${exp.receipt_count > 0 ? `<i class="fa-solid fa-paperclip" style="color:var(--text-secondary);" title="${exp.receipt_count} attachment(s)"></i>` : ''}
+                            <span style="min-width:90px; text-align:right;">${parseFloat(exp.amount).toFixed(2)}</span>
+                        </label>`).join('') || '<p style="padding:0.75rem; margin:0; color:var(--text-secondary);">No expenses in this date range.</p>';
+
+                    document.getElementById('taxEmailRecurringList').innerHTML = data.recurring_expenses.map(re => `
+                        <label style="display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.75rem; border-bottom:1px solid var(--border); font-size:0.85rem; cursor:pointer;">
+                            <input type="checkbox" class="tax-email-cb" data-kind="recurring" value="${re.id}" checked onchange="updateTaxEmailSummary()">
+                            <span style="flex:1;">${re.vendor}${re.is_active == 0 ? ' <span style="color:var(--text-secondary); font-size:0.75rem;">(paused)</span>' : ''}</span>
+                            <span style="color:var(--text-secondary);">${re.category_label}</span>
+                            <span style="color:var(--text-secondary); text-transform:capitalize;">${re.frequency}</span>
+                            <span style="min-width:90px; text-align:right;">${parseFloat(re.amount).toFixed(2)}</span>
+                        </label>`).join('') || '<p style="padding:0.75rem; margin:0; color:var(--text-secondary);">No recurring expense templates set up.</p>';
+
+                    const chipStyle = 'padding:0.25rem 0.6rem; border-radius:999px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-secondary); font-size:0.75rem; cursor:pointer;';
+                    const currencies = [...new Set(data.invoices.map(inv => inv.currency))];
+                    document.getElementById('taxEmailCurrencyFilters').innerHTML = currencies.map(ccy =>
+                        `<span style="${chipStyle}" onclick="toggleTaxEmailFilterGroup('invoice', '${ccy}')">${ccy}</span>`).join('');
+                    const categories = [...new Map(data.expenses.map(exp => [exp.category, exp.category_label])).entries()];
+                    document.getElementById('taxEmailCategoryFilters').innerHTML = categories.map(([cat, label]) =>
+                        `<span style="${chipStyle}" onclick="toggleTaxEmailFilterGroup('expense', '${cat}')">${label}</span>`).join('');
+
+                    document.getElementById('taxEmailInvoicesAll').checked = data.invoices.length > 0;
+                    document.getElementById('taxEmailExpensesAll').checked = data.expenses.length > 0;
+                    document.getElementById('taxEmailRecurringAll').checked = data.recurring_expenses.length > 0;
+                    document.getElementById('taxEmailLoading').style.display = 'none';
+                    document.getElementById('taxEmailData').style.display = 'block';
+                    _taxEmailLoaded = true;
+                    updateTaxEmailSummary();
+                } catch (e) {
+                    showToast('Failed to load tax email data: ' + e.message, true);
+                }
+            }
+            function toggleTaxEmailGroup(kind, checked) {
+                document.querySelectorAll(`.tax-email-cb[data-kind="${kind}"]`).forEach(cb => cb.checked = checked);
+                updateTaxEmailSummary();
+            }
+            function toggleTaxEmailFilterGroup(kind, group) {
+                const boxes = document.querySelectorAll(`.tax-email-cb[data-kind="${kind}"][data-group="${group}"]`);
+                const allChecked = Array.from(boxes).every(cb => cb.checked);
+                boxes.forEach(cb => cb.checked = !allChecked);
+                updateTaxEmailSummary();
+            }
+            function taxEmailRecurringOccurrenceDates(frequency, startStr, endStr) {
+                const step = { weekly: [0, 0, 7], quarterly: [0, 3, 0], annually: [1, 0, 0] }[frequency] || [0, 1, 0];
+                const end = new Date(endStr + 'T00:00:00');
+                let cursor = new Date(startStr + 'T00:00:00');
+                const dates = [];
+                while (cursor <= end) {
+                    dates.push(cursor.toISOString().slice(0, 10));
+                    cursor = new Date(cursor.getFullYear() + step[0], cursor.getMonth() + step[1], cursor.getDate() + step[2]);
+                }
+                return dates;
+            }
+            function updateTaxEmailSummary() {
+                const boxes = Array.from(document.querySelectorAll('.tax-email-cb'));
+                const invBoxes = boxes.filter(cb => cb.dataset.kind === 'invoice');
+                const expBoxes = boxes.filter(cb => cb.dataset.kind === 'expense');
+                const recBoxes = boxes.filter(cb => cb.dataset.kind === 'recurring');
+                const invChecked = invBoxes.filter(cb => cb.checked);
+                const expChecked = expBoxes.filter(cb => cb.checked);
+                const recChecked = recBoxes.filter(cb => cb.checked);
+                const invByCcy = {};
+                invChecked.forEach(cb => {
+                    const inv = _taxEmailData.invoices.find(i => String(i.id) === cb.value);
+                    if (inv) invByCcy[inv.currency] = (invByCcy[inv.currency] || 0) + parseFloat(inv.amount);
+                });
+                let recurringOccurrenceCount = 0;
+                let recurringOccurrenceTotal = 0;
+                recChecked.forEach(cb => {
+                    const re = _taxEmailData.recurring_expenses.find(r => String(r.id) === cb.value);
+                    if (!re) return;
+                    const occurrences = taxEmailRecurringOccurrenceDates(re.frequency, _taxEmailData.start_date, _taxEmailData.end_date);
+                    recurringOccurrenceCount += occurrences.length;
+                    recurringOccurrenceTotal += occurrences.length * parseFloat(re.amount);
+                });
+                const expTotal = expChecked.reduce((s, cb) => s + parseFloat(cb.dataset.amount), 0) + recurringOccurrenceTotal;
+                const expCount = expChecked.length + recurringOccurrenceCount;
+                const fmtMoney = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const invTotalsText = Object.keys(invByCcy).map(ccy => `${fmtMoney(invByCcy[ccy])} ${ccy}`).join(', ');
+
+                document.getElementById('taxEmailSummary').textContent =
+                    `${invChecked.length} of ${invBoxes.length} invoices, ${expChecked.length} of ${expBoxes.length} expenses, ${recChecked.length} of ${recBoxes.length} recurring templates selected`;
+                document.getElementById('taxEmailInvoicesAll').checked = invBoxes.length > 0 && invChecked.length === invBoxes.length;
+                document.getElementById('taxEmailExpensesAll').checked = expBoxes.length > 0 && expChecked.length === expBoxes.length;
+                document.getElementById('taxEmailRecurringAll').checked = recBoxes.length > 0 && recChecked.length === recBoxes.length;
+
+                const recipientInput = document.getElementById('taxEmailRecipient');
+                const recipient = recipientInput.value.trim();
+                const recipientValid = recipient !== '' && recipientInput.checkValidity();
+                recipientInput.classList.toggle('invalid', recipient !== '' && !recipientValid);
+                document.getElementById('taxEmailSendBtn').disabled = !recipientValid;
+                const businessName = (_taxEmailData && _taxEmailData.business_name) || 'enXure';
+                const label = (_taxEmailData && _taxEmailData.label) || '';
+                document.getElementById('taxEmailPreviewTo').textContent = recipient || '(enter a recipient above)';
+                document.getElementById('taxEmailPreviewSubject').textContent = `Tax Documents - ${businessName} (${label})`;
+
+                const includePdfs = document.getElementById('taxEmailIncludePdfs').checked;
+                const includeReceipts = document.getElementById('taxEmailIncludeReceipts').checked;
+                const lines = [];
+                if (invChecked.length > 0) {
+                    lines.push(`${invChecked.length} invoice(s) totalling ${invTotalsText}`);
+                    if (includePdfs) lines.push('Invoice PDFs attached');
+                }
+                if (expCount > 0) {
+                    lines.push(`${expCount} expense(s) totalling ${fmtMoney(expTotal)}`);
+                    if (includeReceipts && expChecked.length > 0) lines.push('Expense receipts attached');
+                }
+                if (recChecked.length > 0) lines.push(`${recChecked.length} recurring expense template(s) (schedule attached)`);
+                const bulletList = lines.map(l => `- ${l}`).join('\n');
+
+                const senderEmail = _taxEmailData && _taxEmailData.sender_email;
+                const bccWrap = document.getElementById('taxEmailPreviewBccWrap');
+                if (senderEmail && senderEmail.toLowerCase() !== recipient.toLowerCase()) {
+                    document.getElementById('taxEmailPreviewBcc').textContent = senderEmail;
+                    bccWrap.style.display = 'block';
+                } else {
+                    bccWrap.style.display = 'none';
+                }
+
+                const recipientName = document.getElementById('taxEmailRecipientName').value.trim();
+                let body = `Hi ${recipientName || 'there'},\n\nAttached are the tax documents for ${businessName}, ${label}.\n\nIncluded in this email:\n${bulletList}`;
+                const message = document.getElementById('taxEmailMessage').value.trim();
+                if (message) body += `\n\n${message}`;
+                body += `\n\nThanks,\n${businessName}`;
+                document.getElementById('taxEmailPreviewBody').textContent = body;
+                const startDate = document.getElementById('taxEmailStartDate').value || (_taxEmailData && _taxEmailData.start_date) || '';
+                const endDate = document.getElementById('taxEmailEndDate').value || (_taxEmailData && _taxEmailData.end_date) || '';
+                const parts = ['invoices.csv', 'expenses.csv', 'recurring_expenses.csv'];
+                if (includePdfs) parts.push('invoice PDFs');
+                if (includeReceipts) parts.push('expense receipts');
+                document.getElementById('taxEmailPreviewAttachment').textContent =
+                    `Tax_Documents_${startDate}_to_${endDate}.zip — ${parts.join(', ')} (for whatever's checked above)`;
+            }
+            async function sendTaxEmail() {
+                const recipient = document.getElementById('taxEmailRecipient').value.trim();
+                if (!recipient) { showToast('Enter the tax preparer\'s email address', true); return; }
+                const invoiceIds = Array.from(document.querySelectorAll('.tax-email-cb[data-kind="invoice"]:checked')).map(cb => cb.value);
+                const expenseIds = Array.from(document.querySelectorAll('.tax-email-cb[data-kind="expense"]:checked')).map(cb => cb.value);
+                const recurringExpenseIds = Array.from(document.querySelectorAll('.tax-email-cb[data-kind="recurring"]:checked')).map(cb => cb.value);
+                if (invoiceIds.length === 0 && expenseIds.length === 0 && recurringExpenseIds.length === 0) { showToast('Select at least one invoice, expense, or recurring template', true); return; }
+                const btn = document.getElementById('taxEmailSendBtn');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
+                try {
+                    const data = new URLSearchParams({
+                        action: 'send_tax_email',
+                        recipient_email: recipient,
+                        recipient_name: document.getElementById('taxEmailRecipientName').value,
+                        message: document.getElementById('taxEmailMessage').value,
+                        invoice_ids: JSON.stringify(invoiceIds),
+                        expense_ids: JSON.stringify(expenseIds),
+                        recurring_expense_ids: JSON.stringify(recurringExpenseIds),
+                        include_pdfs: document.getElementById('taxEmailIncludePdfs').checked ? '1' : '0',
+                        include_receipts: document.getElementById('taxEmailIncludeReceipts').checked ? '1' : '0',
+                        start_date: document.getElementById('taxEmailStartDate').value,
+                        end_date: document.getElementById('taxEmailEndDate').value
+                    });
+                    const res = await fetch('', { method: 'POST', body: data });
+                    const json = await res.json();
+                    if (json.success) {
+                        showToast('Tax email sent to ' + recipient);
+                    } else {
+                        showToast(json.error || 'Failed to send tax email', true);
+                    }
+                } catch (e) {
+                    showToast('Failed to send tax email: ' + e.message, true);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send';
                 }
             }
             // ── Global fixed tooltip (avoids stacking-context clipping from transform animations) ──

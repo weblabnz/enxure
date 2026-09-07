@@ -2,6 +2,19 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.8] - 2026-09-08
+
+### Added
+- Statistics > Tax Email: send a tax-document ZIP (invoices with PDFs, expenses with receipts, recurring expense schedule) to an accountant for a chosen date range, with a live preview of the recipient, subject, and summary before sending.
+
+### Fixed
+- The tax email's invoice totals now resolve a blank/missing invoice currency the same way the rest of the app does (`enxureResolveCurrency()`), instead of silently defaulting to USD — so the sent email's per-currency totals match the preview.
+- Recurring expense templates included in a tax email now expand into individual dated line items across the selected period (e.g. one row per month) and count toward the expense total, rather than appearing only as a single reference row.
+- `generateInvoiceNumber()` now guarantees the numbering template contains `{seq}`, appending it if missing, and Settings > Branding rejects a saved template without `{seq}`. A template lacking it previously let every invoice in a billing period collapse onto the same number.
+
+### Changed
+- Backup & Restore > Sync panel labels shortened: "Untracked HTML Invoices" to "Missing in DB", "Missing HTML Files (In DB, missing on disk)" to "Missing on File", "Import All"/"Delete All"/"Rebuild HTML Files" buttons to "Import"/"Delete"/"Rebuild", and the "Invoice #" column header to "Invoice". The Delete button is now the rightmost action in both panels.
+
 ## [3.0.7] - 2026-09-05
 
 ### Changed

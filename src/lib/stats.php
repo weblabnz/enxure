@@ -270,6 +270,8 @@ function renderStatsSection(): string
                 onclick="navStats('expenses')"><i class="fa-solid fa-receipt"></i> Expenses</button>
             <button type="button" class="subnav-item" data-stats-target="tax"
                 onclick="navStats('tax')"><i class="fa-solid fa-file-invoice-dollar"></i> Tax &amp; Compliance</button>
+            <button type="button" class="subnav-item" data-stats-target="tax-email"
+                onclick="navStats('tax-email')"><i class="fa-solid fa-paper-plane"></i> Tax Email</button>
             <button type="button" class="subnav-item" data-stats-target="activity"
                 onclick="navStats('activity')"><i class="fa-solid fa-bolt"></i> Activity</button>
             <button type="button" class="subnav-item" data-stats-target="system"
@@ -767,6 +769,109 @@ function renderStatsSection(): string
                             </tbody>
                         </table>
                     </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tax Email -->
+            <div class="subnav-pane" id="stats-pane-tax-email">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Date Range</h3>
+                    </div>
+                    <div class="card-body" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+                        <div class="form-group" style="margin:0;"><label class="form-label">Start Date</label>
+                            <input type="date" id="taxEmailStartDate" class="form-control"></div>
+                        <div class="form-group" style="margin:0;"><label class="form-label">End Date</label>
+                            <input type="date" id="taxEmailEndDate" class="form-control"></div>
+                        <button type="button" class="btn" onclick="loadTaxEmailPane()"><i class="fa-solid fa-rotate"></i> Reload</button>
+                        <span style="color:var(--text-secondary); font-size:0.8rem;">Defaults to the current tax year (Settings &gt; Finance).</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Recipient &amp; Options</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                            <div class="form-group" style="flex:1; min-width:180px;"><label class="form-label">Recipient Name <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
+                                <input type="text" id="taxEmailRecipientName" class="form-control" placeholder="Jane" oninput="updateTaxEmailSummary()"></div>
+                            <div class="form-group" style="flex:1; min-width:220px;"><label class="form-label">Tax Preparer's Email</label>
+                                <input type="email" id="taxEmailRecipient" class="form-control" placeholder="accountant@example.com" oninput="updateTaxEmailSummary()"></div>
+                        </div>
+                        <div class="form-group"><label class="form-label">Message <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
+                            <textarea id="taxEmailMessage" class="form-control" rows="2" placeholder="Anything you want to add above the attachment summary" oninput="updateTaxEmailSummary()"></textarea>
+                        </div>
+                        <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.9rem;"><input type="checkbox" id="taxEmailIncludePdfs" checked onchange="updateTaxEmailSummary()"> Attach invoice PDFs</label>
+                            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.9rem;"><input type="checkbox" id="taxEmailIncludeReceipts" checked onchange="updateTaxEmailSummary()"> Attach expense receipts</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="taxEmailLoading" class="card">
+                    <div class="card-body" style="text-align:center; padding:2rem; color:var(--text-secondary);">
+                        <i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem; margin-bottom:0.5rem;"></i>
+                        <p style="margin:0;">Loading invoices &amp; expenses&hellip;</p>
+                    </div>
+                </div>
+
+                <div id="taxEmailData" style="display:none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Invoices</h3>
+                            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                                <span id="taxEmailCurrencyFilters" style="display:flex; gap:0.35rem;"></span>
+                                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; cursor:pointer;"><input type="checkbox" id="taxEmailInvoicesAll" onchange="toggleTaxEmailGroup('invoice', this.checked)"> All</label>
+                            </div>
+                        </div>
+                        <div class="card-body" style="padding:0;">
+                            <div id="taxEmailInvoicesList" style="max-height:320px; overflow-y:auto;"></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Expenses</h3>
+                            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                                <span id="taxEmailCategoryFilters" style="display:flex; gap:0.35rem;"></span>
+                                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; cursor:pointer;"><input type="checkbox" id="taxEmailExpensesAll" onchange="toggleTaxEmailGroup('expense', this.checked)"> All</label>
+                            </div>
+                        </div>
+                        <div class="card-body" style="padding:0;">
+                            <div id="taxEmailExpensesList" style="max-height:320px; overflow-y:auto;"></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Recurring Expense Templates</h3>
+                            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; cursor:pointer;"><input type="checkbox" id="taxEmailRecurringAll" onchange="toggleTaxEmailGroup('recurring', this.checked)"> All</label>
+                        </div>
+                        <div class="card-body" style="padding:0;">
+                            <div id="taxEmailRecurringList" style="max-height:260px; overflow-y:auto;"></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Email Preview</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="margin-bottom:0.4rem;"><strong>To:</strong> <span id="taxEmailPreviewTo">—</span></div>
+                            <div id="taxEmailPreviewBccWrap" style="display:none; margin-bottom:0.4rem;"><strong>Bcc:</strong> <span id="taxEmailPreviewBcc"></span></div>
+                            <div style="margin-bottom:0.6rem;"><strong>Subject:</strong> <span id="taxEmailPreviewSubject"></span></div>
+                            <div id="taxEmailPreviewBody" style="white-space:pre-line; color:var(--text-secondary);"></div>
+                            <div style="margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--border); color:var(--text-secondary);"><i class="fa-solid fa-paperclip"></i> <span id="taxEmailPreviewAttachment"></span></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+                            <span id="taxEmailSummary" style="color:var(--text-secondary); font-size:0.85rem;"></span>
+                            <button id="taxEmailSendBtn" class="btn primary" onclick="sendTaxEmail()" disabled><i class="fa-solid fa-paper-plane"></i> Send</button>
+                        </div>
                     </div>
                 </div>
             </div>

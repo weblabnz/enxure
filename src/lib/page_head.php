@@ -1457,6 +1457,14 @@
             cursor: not-allowed;
         }
 
+        .form-control.invalid {
+            border-color: var(--danger);
+        }
+
+        .form-control.invalid:focus {
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+        }
+
         .li-amount::-webkit-outer-spin-button,
         .li-amount::-webkit-inner-spin-button {
             -webkit-appearance: none;
