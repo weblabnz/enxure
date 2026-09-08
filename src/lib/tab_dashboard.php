@@ -27,9 +27,9 @@
                         <table class="datatable-table" style="width: 100%; border: none;">
                             <thead>
                                 <tr>
-                                    <th style="text-align:left;">Time</th>
+                                    <th style="text-align:left; width:14%;">Time</th>
                                     <th style="text-align:left;">Action</th>
-                                    <th style="text-align:left;">Client</th>
+                                    <th style="text-align:left; width:20%;">Client</th>
                                 </tr>
                             </thead>
                             <tbody id="activityTbody">

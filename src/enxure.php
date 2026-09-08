@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', require __DIR__ . '/lib/license_purchase_url.php');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.8');
+define('APP_VERSION', '3.0.9');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
@@ -323,7 +323,7 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
     $showPoweredBy = !($__unlocked && ($settings['hide_powered_by'] ?? '0') === '1');
     $date = date("Y-m-d");
     $termsDays = (int) ($client['payment_terms_days'] ?? 21);
-    $dueDate = $dueDateOverride ?: date("Y-m-d", strtotime("+{$termsDays} days"));
+    $dueDate = $dueDateOverride ?: enxureRollToBusinessDay(date("Y-m-d", strtotime("+{$termsDays} days")));
     $invNum = generateInvoiceNumber($mysqli, $client['client_key'], $client['client_name'], $settings);
     if ($lineItems === null) {
         $lineItems = [['code' => 'WEB01', 'desc' => $description, 'amount' => number_format($amount, 2)]];
@@ -974,7 +974,7 @@ while (($row = fgetcsv($fh, 0, ',', '"', "\\")) !== false) {
     $invoiceDate = $invoiceDateTs ? date('Y-m-d H:i:s', $invoiceDateTs) : date('Y-m-d H:i:s');
     $dueDateTs = strtotime(trim($row[4] ?? ''));
     $termsDays = (int) ($client['payment_terms_days'] ?? 21);
-    $dueDate = $dueDateTs ? date('Y-m-d', $dueDateTs) : date('Y-m-d', strtotime("$invoiceDate +{$termsDays} days"));
+    $dueDate = $dueDateTs ? date('Y-m-d', $dueDateTs) : enxureRollToBusinessDay(date('Y-m-d', strtotime("$invoiceDate +{$termsDays} days")));
     $amount = enxureParseAmount($row[5] ?? '0');
     $currency = enxureNormalizeCurrencyCode(trim($row[6] ?? '')) ?: ($client['currency'] ?? '');
     $status = strtolower(trim($row[7] ?? ''));
@@ -1246,7 +1246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // - Adding a teammate beyond the original account (create_user; editing
         //   or removing one — update_user/delete_user — stays free, same pattern
         //   as the others above).
-        $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense', 'create_user'];
+        $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'save_recurring_nth_weekday', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense', 'create_user'];
         if (!enxureLicenseSignatureOk($mysqli, $settings) && in_array($_POST['action'], $__licensePaidActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This needs a license — add a key under Settings > License, or see Docs for what a license unlocks.']);
             exit;
@@ -1259,7 +1259,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // not on this list). $isCron requests bypass this the same way they
         // bypass the $isAuth gate above — a cron-triggered run has no user at
         // all, and CRON_SECRET is its own, separate authorization.
-        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_all_untracked_files', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'fx_convert_preview', 'get_db_stats', 'import_backup', 'import_clients_csv', 'import_expenses_csv', 'import_invoices_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'send_tax_email', 'preview_tax_email', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
+        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_all_untracked_files', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'fx_convert_preview', 'get_db_stats', 'import_backup', 'import_clients_csv', 'import_expenses_csv', 'import_invoices_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'send_tax_email', 'preview_tax_email', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'save_recurring_nth_weekday', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
         if (!$isCron && !$isAdmin && in_array($_POST['action'], $__adminOnlyActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This requires an admin account — see Settings > Users.']);
             exit;
@@ -1613,6 +1613,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         if ($_POST['action'] === 'run_recurring') {
+            // Only the actual cron-triggered hit respects the "Nth weekday of month"
+            // schedule — the crontab line itself fires every matching weekday (that's
+            // as narrow as cron syntax gets), so this filters down to the configured
+            // occurrence. The manual "Run Monthly Billing" button in Settings posts
+            // this same action without cron_key, so $isCron is false there and it
+            // always runs immediately regardless of the schedule.
+            if ($isCron && ($settings['recurring_nth_weekday_enabled'] ?? '0') === '1') {
+                $nth = (int) ($settings['recurring_nth'] ?? 1);
+                $weekday = (int) ($settings['recurring_weekday'] ?? 1);
+                if (!enxureIsNthWeekdayOfMonth($nth, $weekday)) {
+                    echo json_encode(['success' => true, 'skipped' => true, 'reason' => 'not_scheduled_day']);
+                    exit;
+                }
+            }
             $clients = $mysqli->query("SELECT * FROM enxure_clients WHERE is_active=1 AND monthly_rate > 0");
             $sent = 0;
             $errors = 0;
@@ -2092,6 +2106,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // cron/entrypoint.sh) — nudge it so the change takes effect on the
             // next ~60s poll instead of waiting for the hourly rescan.
             @touch(dirname($cronFile));
+            // Switching back to a raw cron expression leaves "Nth weekday of month"
+            // mode behind — otherwise the run_recurring guard above would keep
+            // filtering by the old nth/weekday against a schedule the user can no
+            // longer see or edit.
+            $mysqli->query("INSERT INTO enxure_settings (setting_key, setting_value) VALUES ('recurring_nth_weekday_enabled', '0') ON DUPLICATE KEY UPDATE setting_value = '0'");
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'save_recurring_nth_weekday') {
+            $nth = (int) ($_POST['nth'] ?? 1);
+            $weekday = (int) ($_POST['weekday'] ?? 1);
+            $time = trim($_POST['time'] ?? '');
+            if (!in_array($nth, [1, 2, 3, 4, -1], true) || $weekday < 1 || $weekday > 7 || !preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $time, $m)) {
+                echo json_encode(['success' => false, 'error' => 'Invalid schedule — pick an occurrence, a weekday, and a valid time.']);
+                exit;
+            }
+            $cronFile = CRONTAB_PATH;
+            if (!file_exists($cronFile) || !is_writable($cronFile)) {
+                echo json_encode(['success' => false, 'error' => 'Crontab file not writable. Check the crontab-data volume mount.']);
+                exit;
+            }
+            // Cron syntax has no "nth weekday of month" of its own, so the crontab
+            // line fires every week on the chosen weekday — the run_recurring guard
+            // (above) then filters that down to just the configured occurrence.
+            // Cron's day-of-week is 0=Sunday..6=Saturday; ISO's is 1=Monday..7=Sunday.
+            $cronDow = $weekday % 7;
+            $cronExpr = "{$m[2]} {$m[1]} * * {$cronDow}";
+            $cronLine = $cronExpr . ' curl -s -S -X POST -d "action=run_recurring&cron_key=' . CRON_SECRET . '" http://nginx/enxure.php >> /var/log/enxure-cron.log 2>&1';
+            $lines = file($cronFile, FILE_IGNORE_NEW_LINES);
+            $found = false;
+            foreach ($lines as &$line) {
+                if (strpos($line, 'run_recurring') !== false) {
+                    $wasDisabled = (bool) preg_match('/^\s*#/', $line);
+                    $line = $wasDisabled ? '# ' . $cronLine : $cronLine;
+                    $found = true;
+                }
+            }
+            unset($line);
+            if (!$found)
+                $lines[] = $cronLine;
+            file_put_contents($cronFile, implode("\n", $lines) . "\n");
+            @touch(dirname($cronFile));
+            $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            foreach (['recurring_nth_weekday_enabled' => '1', 'recurring_nth' => (string) $nth, 'recurring_weekday' => (string) $weekday] as $key => $value) {
+                $upsert->bind_param("ss", $key, $value);
+                $upsert->execute();
+            }
             echo json_encode(['success' => true]);
             exit;
         }
@@ -2224,6 +2285,9 @@ $remindersEnabled = ($settings['reminders_enabled'] ?? '0') === '1';
 $lateFeesEnabled = ($settings['late_fee_enabled'] ?? '0') === '1';
 $autoBackupEnabled = ($settings['auto_backup_enabled'] ?? '0') === '1';
 $recurringBypassGuard = ($settings['recurring_bypass_guard'] ?? '0') === '1';
+$recurringNthWeekdayEnabled = ($settings['recurring_nth_weekday_enabled'] ?? '0') === '1';
+$recurringNth = (int) ($settings['recurring_nth'] ?? 1);
+$recurringWeekday = (int) ($settings['recurring_weekday'] ?? 1);
 
 $total_invoiced_by_ccy = [];
 $res = $mysqli->query("SELECT currency, SUM(amount) as s FROM enxure_invoices WHERE status NOT IN ('failed', 'void') $testFilter GROUP BY currency");

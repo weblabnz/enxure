@@ -608,6 +608,36 @@ function validDateOverride(?string $str): ?string
     return ($d && $d->format('Y-m-d') === $str) ? $str : null;
 }
 
+// Pushes a Y-m-d date forward to the following Monday if it lands on a
+// Saturday or Sunday. Only meant for auto-computed due dates (invoice_date +
+// payment_terms_days) — an explicit due-date override from a form or CSV
+// import is left exactly as entered.
+function enxureRollToBusinessDay(string $date): string
+{
+    $ts = strtotime($date);
+    $dow = (int) date('N', $ts); // 1=Monday .. 7=Sunday
+    if ($dow === 6)
+        $ts = strtotime('+2 days', $ts);
+    elseif ($dow === 7)
+        $ts = strtotime('+1 day', $ts);
+    return date('Y-m-d', $ts);
+}
+
+// True if today is the $nth occurrence of ISO weekday $isoWeekday (1=Monday..7=Sunday)
+// in the current month — $nth is 1-4, or -1 for "last". Backs the "Nth weekday of
+// month" recurring billing schedule (e.g. "first Monday"), which plain cron syntax
+// can't express on its own (busybox crond has no '#'/'L' nth-weekday extension).
+function enxureIsNthWeekdayOfMonth(int $nth, int $isoWeekday, ?string $today = null): bool
+{
+    $ts = $today ? strtotime($today) : time();
+    if ((int) date('N', $ts) !== $isoWeekday)
+        return false;
+    $day = (int) date('j', $ts);
+    if ($nth === -1)
+        return $day > ((int) date('t', $ts)) - 7;
+    return $day > ($nth - 1) * 7 && $day <= $nth * 7;
+}
+
 // Substitutes plain {token} placeholders in editable email templates (Settings >
 // Email Templates) — deliberately not full templating (no conditionals/loops),
 // just a straight key/value swap so client-facing text stays simple to edit.

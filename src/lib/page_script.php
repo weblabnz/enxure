@@ -2373,33 +2373,67 @@
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Save'; btn.disabled = false;
             }
 
+            function setCronMode(mode) {
+                document.getElementById('cronCustomFields').style.display = mode === 'custom' ? '' : 'none';
+                document.getElementById('cronNthWeekdayFields').style.display = mode === 'nth_weekday' ? '' : 'none';
+                updateCronHuman();
+            }
+            async function saveRecurringNthWeekday() {
+                const btn = document.getElementById('saveCronNthBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true;
+                try {
+                    const data = new URLSearchParams({
+                        action: 'save_recurring_nth_weekday',
+                        nth: document.getElementById('cronNth').value,
+                        weekday: document.getElementById('cronWeekday').value,
+                        time: document.getElementById('cronTime').value,
+                    });
+                    const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
+                    if (json.success) { showToast('Schedule updated!'); updateCronHuman(); } else showToast(json.error, true);
+                } catch (e) { showToast('Error: ' + e.message, true); }
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Save'; btn.disabled = false;
+            }
+
             function updateCronHuman() {
-                const val = document.getElementById('cronInput').value.trim();
                 const el = document.getElementById('cronHuman');
                 const dashEl = document.getElementById('nextCronRunDashboard');
                 const toggle = document.getElementById('cronEnabledToggle');
                 const isEnabled = !toggle || toggle.checked;
-                if (!val) {
-                    if (el) el.textContent = '';
-                    if (dashEl) dashEl.textContent = 'Not set';
-                    return;
+                const modeSelect = document.getElementById('cronModeSelect');
+                const mode = modeSelect ? modeSelect.value : 'custom';
+                let desc;
+                if (mode === 'nth_weekday') {
+                    const nthLabels = { '1': 'first', '2': 'second', '3': 'third', '4': 'fourth', '-1': 'last' };
+                    const nthSelect = document.getElementById('cronNth');
+                    const weekdaySelect = document.getElementById('cronWeekday');
+                    const nth = nthLabels[nthSelect.value] || '';
+                    const weekday = weekdaySelect.selectedOptions[0].textContent;
+                    const time = document.getElementById('cronTime').value || '00:00';
+                    desc = `Runs the ${nth} ${weekday} of every month at ${time}`;
+                } else {
+                    const val = document.getElementById('cronInput').value.trim();
+                    if (!val) {
+                        if (el) el.textContent = '';
+                        if (dashEl) dashEl.textContent = 'Not set';
+                        return;
+                    }
+                    try {
+                        desc = window.cronstrue.toString(val);
+                    } catch (e) {
+                        if (el) {
+                            el.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Invalid cron expression';
+                            el.style.color = "var(--danger)";
+                        }
+                        if (dashEl) dashEl.textContent = 'Invalid';
+                        return;
+                    }
                 }
-                try {
-                    const desc = window.cronstrue.toString(val);
-                    const pausedPrefix = isEnabled ? '' : '<i class="fa-solid fa-pause"></i> Paused — would run: ';
-                    if (el) {
-                        el.innerHTML = isEnabled ? `<strong>Schedule:</strong> ${desc}` : `${pausedPrefix}${desc}`;
-                        el.style.color = isEnabled ? "var(--success)" : "var(--text-secondary)";
-                    }
-                    if (dashEl) {
-                        dashEl.textContent = isEnabled ? desc : 'Paused (' + desc + ')';
-                    }
-                } catch (e) {
-                    if (el) {
-                        el.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Invalid cron expression';
-                        el.style.color = "var(--danger)";
-                    }
-                    if (dashEl) dashEl.textContent = 'Invalid';
+                const pausedPrefix = isEnabled ? '' : '<i class="fa-solid fa-pause"></i> Paused — would run: ';
+                if (el) {
+                    el.innerHTML = isEnabled ? `<strong>Schedule:</strong> ${desc}` : `${pausedPrefix}${desc}`;
+                    el.style.color = isEnabled ? "var(--success)" : "var(--text-secondary)";
+                }
+                if (dashEl) {
+                    dashEl.textContent = isEnabled ? desc : 'Paused (' + desc + ')';
                 }
             }
             async function toggleCronEnabled(enabled) {
@@ -2687,6 +2721,9 @@
                 btn.innerHTML = '<i class="fa-solid fa-save"></i> Save Numbering Format'; btn.disabled = false;
             }
             document.getElementById('cronInput').addEventListener('input', updateCronHuman);
+            document.getElementById('cronNth').addEventListener('change', updateCronHuman);
+            document.getElementById('cronWeekday').addEventListener('change', updateCronHuman);
+            document.getElementById('cronTime').addEventListener('input', updateCronHuman);
             // Init on load
             document.addEventListener('DOMContentLoaded', updateCronHuman);
 

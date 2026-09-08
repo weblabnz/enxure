@@ -2,6 +2,15 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.9] - 2026-09-08
+
+### Added
+- Settings > Recurring Billing Schedule: a new "Nth Weekday of Month" schedule type (e.g. first Monday, last Friday) alongside the existing raw cron expression — picks an occurrence, a weekday, and a time. Cron syntax has no way to express "nth weekday of month" on its own, so the crontab line fires every matching weekday and a new `enxureIsNthWeekdayOfMonth()` guard in `run_recurring` filters that down to the configured occurrence; the manual "Run Monthly Billing" button always runs immediately regardless of the schedule.
+
+### Changed
+- Auto-computed due dates (`invoice_date` + a client's Payment Terms Days) now roll forward to the following Monday if the calculated date lands on a Saturday or Sunday, via a new `enxureRollToBusinessDay()` helper — applies to ad hoc invoices, recurring billing, and CSV invoice import's fallback due date. An explicitly entered or overridden due date is never adjusted.
+- Dashboard > Recent Activity: widened the Time and Client columns slightly.
+
 ## [3.0.8] - 2026-09-08
 
 ### Added

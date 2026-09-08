@@ -378,6 +378,17 @@
                                     own <strong>Billing Frequency</strong> (set per client, defaults to Monthly) —
                                     this schedule just controls how often that gets checked.</p>
                                 <div class="form-group">
+                                    <label class="form-label">Schedule type</label>
+                                    <select id="cronModeSelect" class="form-control" style="max-width:280px;"
+                                        onchange="setCronMode(this.value)">
+                                        <option value="custom" <?= !$recurringNthWeekdayEnabled ? 'selected' : '' ?>>
+                                            Exact cron schedule</option>
+                                        <option value="nth_weekday" <?= $recurringNthWeekdayEnabled ? 'selected' : '' ?>>
+                                            Nth Weekday of Month</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" id="cronCustomFields"
+                                    style="<?= $recurringNthWeekdayEnabled ? 'display:none;' : '' ?>">
                                     <label class="form-label">Cron Expression (e.g., <code>15 7 3 * *</code> for 3rd of
                                         month at 7:15 AM)</label>
                                     <div style="display: flex; gap: 0.5rem; align-items:center;">
@@ -386,9 +397,33 @@
                                         <button class="btn success" id="saveCronBtn" onclick="saveCron()"><i
                                                 class="fa-solid fa-check"></i> Save</button>
                                     </div>
-                                    <p id="cronHuman"
-                                        style="margin-top:0.5rem; font-size:0.85rem; color:var(--text-secondary);"></p>
                                 </div>
+                                <div class="form-group" id="cronNthWeekdayFields"
+                                    style="<?= $recurringNthWeekdayEnabled ? '' : 'display:none;' ?>">
+                                    <label class="form-label">Run on the</label>
+                                    <div style="display: flex; gap: 0.5rem; align-items:center; flex-wrap:wrap;">
+                                        <select id="cronNth" class="form-control" style="max-width:130px;">
+                                            <?php foreach ([1 => 'First', 2 => 'Second', 3 => 'Third', 4 => 'Fourth', -1 => 'Last'] as $nthVal => $nthLabel): ?>
+                                                <option value="<?= $nthVal ?>" <?= $recurringNth === $nthVal ? 'selected' : '' ?>><?= $nthLabel ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <select id="cronWeekday" class="form-control" style="max-width:160px;">
+                                            <?php foreach ([1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'] as $dowVal => $dowLabel): ?>
+                                                <option value="<?= $dowVal ?>" <?= $recurringWeekday === $dowVal ? 'selected' : '' ?>><?= $dowLabel ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <span style="color:var(--text-secondary); font-size:0.85rem;">of the month at</span>
+                                        <input type="time" id="cronTime" class="form-control" style="max-width:130px;"
+                                            value="<?= htmlspecialchars(sprintf('%02d:%02d', (int) explode(' ', $currentCron)[1], (int) explode(' ', $currentCron)[0])) ?>">
+                                        <button class="btn success" id="saveCronNthBtn" onclick="saveRecurringNthWeekday()"><i
+                                                class="fa-solid fa-check"></i> Save</button>
+                                    </div>
+                                    <p style="margin-top:0.5rem; font-size:0.8rem; color:var(--text-secondary);">Handles
+                                        "first Monday of the month" style rules directly — cron itself has no way to
+                                        express an nth-occurrence-of-a-weekday, so a plain cron expression can't do this.</p>
+                                </div>
+                                <p id="cronHuman"
+                                    style="margin-top:0.5rem; font-size:0.85rem; color:var(--text-secondary);"></p>
                                 <div class="form-group" style="margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);">
                                     <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; color:var(--warning); font-weight:500;">
                                         <input type="checkbox" id="recurringBypassGuardToggle" <?= $recurringBypassGuard ? 'checked' : '' ?>
