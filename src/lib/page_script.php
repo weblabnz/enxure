@@ -1061,6 +1061,7 @@
                     // window.__*Data isn't refreshed — charts re-created here show stale
                     // data, which is fine for a background poll no one is watching live.
                     __statsChartsInit = {};
+                    _taxEmailLoaded = false;
                     // The fresh markup defaults to its first sub-tab — reapply the last-selected one.
                     const stored = localStorage.getItem('statsSubTab');
                     if (stored && document.getElementById('stats-pane-' + stored)) navStats(stored);

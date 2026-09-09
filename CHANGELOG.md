@@ -2,6 +2,11 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.10] - 2026-09-09
+
+### Fixed
+- Statistics > Tax Email now loads correctly the first time you navigate into Statistics in a session, not only after a hard page refresh. Clicking into Statistics swaps in the whole section's markup fresh from the server via `refreshStatsSection()`, which resets the Tax Email pane back to its "Loading invoices & expenses…" placeholder — but the JS flag tracking whether that pane's data had already been fetched (`_taxEmailLoaded`) wasn't reset along with it, so `navStats()` skipped re-fetching and the placeholder never resolved. Now reset alongside the equivalent Chart.js state reset just above it.
+
 ## [3.0.9] - 2026-09-08
 
 ### Added
