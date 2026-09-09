@@ -49,9 +49,10 @@ One admin account, unlimited clients, fully brandable documents (logo, color, GS
 - Email confirmation on signup and a password-reset flow (one-time emailed link, 30-minute expiry) so account recovery never depends on remembering a secret you never wrote down — and never leaks whether a given email is registered.
 
 ### Reporting, audit & data integrity
-- A six-tab Reporting & Statistics view — revenue, forecasting, per-client breakdowns, tax & compliance, activity, and system health. *(license required — but browsable unlicensed so you can see what you'd be unlocking)*
+- A seven-tab Reporting & Statistics view — revenue, forecasting, per-client breakdowns, expenses, tax & compliance, activity, and system health. *(license required — but browsable unlicensed so you can see what you'd be unlocking)*
 - A full, searchable audit log of every invoice and quote action: sent, paid, voided, and more, with a timestamp and the client attached.
 - One-click database backups with a choice of which tables to include, configurable local retention, and an optional offsite push.
+- **Tax Email**, free with no license required, zips up invoices, expenses, and receipts for a chosen date range and sends them straight to an accountant, with a live preview of the recipient, subject, and body before it goes out.
 - Dry-run restores before you commit, plus a guided walkthrough for migrating the whole install to a new server.
 - A filesystem sync check reconciles the on-disk invoice/quote HTML files against the database, so a restored backup or a manually-touched file never silently drifts out of sync.
 - **Demo Data** mode populates the app with realistic sample clients and invoices so you can try every feature risk-free, and **Factory Reset** wipes everything and returns to a clean first-run state.

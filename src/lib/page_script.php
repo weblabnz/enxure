@@ -327,11 +327,14 @@
                 btn.textContent = willShow ? 'Show fewer releases' : btn.dataset.showLabel;
             }
 
+            let _taxEmailData = null;
+            let _taxEmailLoaded = false;
             function navBackup(target) {
                 document.querySelectorAll('#sec-backup .subnav-item, .nav-subnav-slot[data-for="backup"] .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.backupTarget === target));
                 document.querySelectorAll('#sec-backup .subnav-pane').forEach(el => el.classList.toggle('active', el.id === 'backup-pane-' + target));
                 localStorage.setItem('backupSubTab', target);
                 if (target === 'sync') refreshSync();
+                if (target === 'taxemail' && !_taxEmailLoaded) loadTaxEmailPane();
             }
             const storedBackupTab = localStorage.getItem('backupSubTab');
             if (storedBackupTab && document.getElementById('backup-pane-' + storedBackupTab)) navBackup(storedBackupTab);
@@ -462,14 +465,11 @@
                     }
                 }
             }
-            let _taxEmailData = null;
-            let _taxEmailLoaded = false;
             function navStats(target) {
                 document.querySelectorAll('#sec-stats .subnav-item, .nav-subnav-slot[data-for="stats"] .subnav-item').forEach(el => el.classList.toggle('active', el.dataset.statsTarget === target));
                 document.querySelectorAll('#sec-stats .subnav-pane').forEach(el => el.classList.toggle('active', el.id === 'stats-pane-' + target));
                 localStorage.setItem('statsSubTab', target);
                 initStatsChartsFor(target);
-                if (target === 'tax-email' && !_taxEmailLoaded) loadTaxEmailPane();
             }
             // Card order/width (applyStatsLayouts) is applied before the pane is
             // first shown, so there's no flash of the default order/width.
@@ -1061,7 +1061,6 @@
                     // window.__*Data isn't refreshed — charts re-created here show stale
                     // data, which is fine for a background poll no one is watching live.
                     __statsChartsInit = {};
-                    _taxEmailLoaded = false;
                     // The fresh markup defaults to its first sub-tab — reapply the last-selected one.
                     const stored = localStorage.getItem('statsSubTab');
                     if (stored && document.getElementById('stats-pane-' + stored)) navStats(stored);
@@ -3847,7 +3846,7 @@
                     closeModal('csvPreviewModal');
                 }
             }
-            // ── Tax Email (Statistics > Tax Email) ─────────────────────────────
+            // ── Tax Email (Data Management > Tax Email) ─────────────────────────
             async function loadTaxEmailPane() {
                 document.getElementById('taxEmailLoading').style.display = 'block';
                 document.getElementById('taxEmailData').style.display = 'none';

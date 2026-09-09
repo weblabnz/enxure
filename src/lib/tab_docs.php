@@ -96,9 +96,10 @@
                                     ['icon' => 'fa-users', 'title' => 'Users & Roles', 'desc' => 'Admin and Member accounts, least-privilege by default.', 'target' => 'feat-security', 'license' => true],
                                     ['icon' => 'fa-plug', 'title' => 'External API', 'desc' => 'Token-authenticated read/write endpoints for scripts and other tools.', 'target' => 'feat-api', 'license' => true],
                                     ['icon' => 'fa-gauge-high', 'title' => 'Dashboard', 'desc' => 'At-a-glance revenue, outstanding, and overdue totals.', 'target' => 'feat-reporting'],
-                                    ['icon' => 'fa-chart-line', 'title' => 'Statistics', 'desc' => 'Six focused tabs — Revenue, Forecasting, Tax & Compliance, and more.', 'target' => 'feat-reporting', 'license' => true],
+                                    ['icon' => 'fa-chart-line', 'title' => 'Statistics', 'desc' => 'Seven focused tabs — Revenue, Forecasting, Tax & Compliance, and more.', 'target' => 'feat-reporting', 'license' => true],
                                     ['icon' => 'fa-list-check', 'title' => 'Audit Log', 'desc' => 'Every send, payment, refund, and security event, timestamped.', 'target' => 'feat-reporting'],
                                     ['icon' => 'fa-database', 'title' => 'Backup & Restore', 'desc' => 'Scoped backups with a dry-run restore before anything changes.', 'target' => 'feat-data'],
+                                    ['icon' => 'fa-paper-plane', 'title' => 'Tax Email', 'desc' => 'Zip up invoices, expenses, and receipts for a date range and email them straight to your accountant.', 'target' => 'feat-data'],
                                     ['icon' => 'fa-flask', 'title' => 'Demo Data', 'desc' => 'Seed sample clients and invoices to preview charts safely.', 'target' => 'feat-data'],
                                     ['icon' => 'fa-vial-circle-check', 'title' => 'Test Suite', 'desc' => 'In-app correctness checks for invoice math, TOTP, and webhooks.', 'target' => 'feat-data'],
                                     ['icon' => 'fa-wrench', 'title' => 'Data Repair', 'desc' => 'Four narrow fixes for drifted paid dates, totals, and duplicates.', 'target' => 'feat-data'],
@@ -553,17 +554,19 @@
                                 <h2>Statistics</h2>
                                 <p><strong>Requires a license.</strong> The Dashboard above stays free either way.</p>
                                 <p>If any client is set to a currency other than the instance default (Settings &gt; Finance), Statistics' totals, tables, and the Tax &amp; Compliance exports below show every currency, grouped rather than blended (e.g. "USD $500.00 + EUR $200.00") — same as the Dashboard's headline totals and the Invoices/Clients/Quotes tabs. The exceptions are Statistics' charts, the Forecasting tab, and AR Aging, which blend every currency into one converted total instead, using a daily-cached exchange rate (provider configurable under Settings &gt; Finance) — a single chart axis or forecast can't otherwise mix currencies at all (see Clients &amp; Client Portal).</p>
-                                <p>Statistics is split into six focused tabs rather than one long scrolling page:
+                                <p>Statistics is split into seven focused tabs rather than one long scrolling page:
                                     <strong>Revenue</strong>, <strong>Forecasting</strong>, <strong>Clients</strong>,
-                                    <strong>Tax &amp; Compliance</strong>, <strong>Activity</strong>, and
-                                    <strong>System</strong>. Between them they cover reports like Accounts
-                                    Receivable Aging, Quote Pipeline (how many quotes are open vs. converted vs.
-                                    stale), voided-invoice totals, Client Growth &amp; Mix, a "Clients Needing
-                                    Attention" list, Email Delivery Health (send success/failure rates), Most Active
-                                    Clients by invoice count, and tax-year progress with a monthly breakdown — the
-                                    Tax &amp; Compliance tab is also where the tax-year CSV exports live (full
-                                    invoice list, and a monthly summary), using whatever tax year start month is set
-                                    in Settings.</p>
+                                    <strong>Expenses</strong>, <strong>Tax &amp; Compliance</strong>,
+                                    <strong>Activity</strong>, and <strong>System</strong>. Between them they cover
+                                    reports like Accounts Receivable Aging, Quote Pipeline (how many quotes are open
+                                    vs. converted vs. stale), voided-invoice totals, Client Growth &amp; Mix, a
+                                    "Clients Needing Attention" list, Email Delivery Health (send success/failure
+                                    rates), Most Active Clients by invoice count, and tax-year progress with a
+                                    monthly breakdown — the Tax &amp; Compliance tab is also where the tax-year CSV
+                                    exports live (full invoice list, and a monthly summary), using whatever tax year
+                                    start month is set in Settings. Sending the underlying documents to an
+                                    accountant is a separate, license-free tool — see <strong>Tax Email</strong>
+                                    under Data Management.</p>
                                 <h2>Audit Log</h2>
                                 <p>Every invoice send (and send failure), payment, refund, void/unvoid, and
                                     account-security event — 2FA enabled/disabled, API token created/revoked/deleted,
@@ -597,6 +600,14 @@
                                     an optional Offsite Push panel can send new backups to a remote destination via
                                     rclone, with credentials kept out of the app itself and living on the cron
                                     container instead.</p>
+                                <h2>Tax Email</h2>
+                                <p>No license required — this is a free tool for handing an accountant exactly what
+                                    they need. Pick a date range (it defaults to the current tax year, using
+                                    whichever start month is set under Settings), tick which invoices, expenses, and
+                                    recurring expense templates to include, and send it all as a zip: a CSV for each
+                                    category, plus invoice PDFs and expense receipts if you leave those attachment
+                                    options on. A live preview shows the exact recipient, subject, and body before
+                                    anything sends.</p>
                                 <h2>Demo Data</h2>
                                 <p>Seeds a handful of sample clients, invoices, and quotes spread across recent
                                     months, every one of them flagged with the client-level <strong>Is Test

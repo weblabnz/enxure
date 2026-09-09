@@ -2,6 +2,11 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.11] - 2026-09-10
+
+### Changed
+- Tax Email moved from Statistics to Data Management (now sitting between Audit Log Retention and Demo Data). It was never actually a licensed feature — `send_tax_email`/`preview_tax_email` are gated on admin only, not on license — but living inside Statistics' markup meant it inherited that whole section's license lock (`opacity:0.5; pointer-events:none` on an unlicensed instance) along with everything else there. Statistics is back down to seven tabs.
+
 ## [3.0.10] - 2026-09-09
 
 ### Fixed
