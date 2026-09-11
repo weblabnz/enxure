@@ -1850,6 +1850,112 @@
             margin: 0;
         }
 
+        .roadmap-meta {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 0.6rem;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        .roadmap-see-also {
+            background: none;
+            border: none;
+            padding: 0;
+            margin-left: auto;
+            color: var(--accent);
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .roadmap-see-also:hover {
+            text-decoration: underline;
+        }
+
+        .roadmap-suggest {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin: 0.75rem 0 1.25rem;
+            padding: 0.75rem 1rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+        }
+
+        .roadmap-suggest-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-right: 0.25rem;
+        }
+
+        .roadmap-shipped {
+            margin: 0 0 1.5rem;
+        }
+
+        .roadmap-shipped-head {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .roadmap-shipped-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            align-items: center;
+        }
+
+        .roadmap-shipped-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 0.5rem 0.85rem;
+            cursor: pointer;
+            text-align: left;
+            font-family: inherit;
+        }
+
+        .roadmap-shipped-item:hover {
+            border-color: var(--accent);
+        }
+
+        .roadmap-shipped-version {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+
+        .roadmap-shipped-meta {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+        }
+
+        .roadmap-shipped-more {
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0.5rem 0.25rem;
+        }
+
+        .roadmap-shipped-more:hover {
+            text-decoration: underline;
+        }
+
         .feature-cards-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

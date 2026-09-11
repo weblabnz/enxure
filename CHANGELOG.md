@@ -2,6 +2,11 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.13] - 2026-09-12
+
+### Added
+- Docs > Roadmap: a "Recently shipped" strip pulled live from CHANGELOG.md's own version headers (last 3 releases, version/date/change-count, linking into the Changelog tab) — no second hand-maintained list to drift out of sync, and it closes the loop on items (like 3.0.12's CSRF tokens) that used to sit on this same Roadmap. A "Suggest it on GitLab" / "Email instead" call-to-action replaces the old plain-text sentence, so raising an idea is one click instead of hunting for the Source Code tab. Each roadmap item now also shows how long it's been on the list ("On the roadmap since ..."), and the Passkey/WebAuthn item links straight to the current Two-Factor Authentication docs so anyone reading it can see today's actual login security options while they wait.
+
 ## [3.0.12] - 2026-09-11
 
 ### Added

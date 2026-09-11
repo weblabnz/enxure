@@ -129,13 +129,60 @@
                         <div class="card">
                             <div class="card-body doc-content">
                                 <h1>Roadmap</h1>
-                                <p>No fixed release dates yet, but work is underway. If you have your own idea, raise it on the GitLab repo (see <strong>Source Code</strong>).</p>
+                                <p>No fixed release dates yet, but work is underway.</p>
+                                <div class="roadmap-suggest">
+                                    <span class="roadmap-suggest-label">Something you need isn't here?</span>
+                                    <a class="btn small" href="https://gitlab.com/weblabnz/enxure/-/issues/new" target="_blank" rel="noopener"><i class="fa-brands fa-gitlab"></i> Suggest it on GitLab</a>
+                                    <a class="btn small" href="mailto:contact-project+weblabnz-enxure-inv@incoming.gitlab.com?subject=Feature%20suggestion"><i class="fa-solid fa-envelope"></i> Email instead</a>
+                                </div>
+                                <?php
+                                // Pulled straight from CHANGELOG.md's own version headers (not a
+                                // second hand-maintained list) so this can never drift out of sync
+                                // with what's actually shipped — including closing the loop on an
+                                // item that used to be on the list below (see the CSRF tokens entry
+                                // in 3.0.12, previously here).
+                                $__rmChangelogFile = DOCS_DIR . 'CHANGELOG.md';
+                                $__rmRecent = [];
+                                if (is_file($__rmChangelogFile)) {
+                                    $__rmCur = null;
+                                    foreach (preg_split('/\r\n|\n/', file_get_contents($__rmChangelogFile)) as $__rmLine) {
+                                        if (preg_match('/^##\s+\[([^\]]+)\]\s*-\s*(\d{4}-\d{2}-\d{2})/', $__rmLine, $__rmM)) {
+                                            if ($__rmCur !== null) {
+                                                $__rmRecent[] = $__rmCur;
+                                            }
+                                            if (count($__rmRecent) >= 3) {
+                                                break;
+                                            }
+                                            $__rmCur = ['version' => $__rmM[1], 'date' => $__rmM[2], 'notes' => 0];
+                                        } elseif ($__rmCur !== null && preg_match('/^\s*[-*]\s+/', $__rmLine)) {
+                                            $__rmCur['notes']++;
+                                        }
+                                    }
+                                    if ($__rmCur !== null && count($__rmRecent) < 3) {
+                                        $__rmRecent[] = $__rmCur;
+                                    }
+                                }
+                                ?>
+                                <?php if ($__rmRecent): ?>
+                                    <div class="roadmap-shipped">
+                                        <div class="roadmap-shipped-head">Recently shipped</div>
+                                        <div class="roadmap-shipped-row">
+                                            <?php foreach ($__rmRecent as $__rs): ?>
+                                                <button type="button" class="roadmap-shipped-item" onclick="navDocs('changelog')">
+                                                    <span class="roadmap-shipped-version">v<?= htmlspecialchars($__rs['version'], ENT_QUOTES, 'UTF-8') ?></span>
+                                                    <span class="roadmap-shipped-meta"><?= htmlspecialchars((DateTime::createFromFormat('Y-m-d', $__rs['date']) ?: null)?->format('M j') ?? $__rs['date'], ENT_QUOTES, 'UTF-8') ?> · <?= $__rs['notes'] ?> change<?= $__rs['notes'] === 1 ? '' : 's' ?></span>
+                                                </button>
+                                            <?php endforeach; ?>
+                                            <button type="button" class="roadmap-shipped-more" onclick="navDocs('changelog')">Full Changelog <i class="fa-solid fa-arrow-right"></i></button>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
                                 <p>What's coming next, roughly ordered by how soon each is likely to land. The dot marks roughly how big a lift it is: <span class="roadmap-legend-quick">green</span> is a quick win, <span class="roadmap-legend-medium">amber</span> a medium lift, <span class="roadmap-legend-large">red</span> a bigger effort.</p>
                                 <?php
                                 $__roadmapEffortLabels = ['quick' => 'Quick win', 'medium' => 'Medium lift', 'large' => 'Larger effort'];
                                 $__roadmapItems = [
-                                    ['effort' => 'large', 'title' => 'Passkey / WebAuthn login', 'desc' => '2FA is TOTP-only today. Adding passkeys as an alternative second factor (or a full passwordless login option) would cover people who\'d rather use a hardware key or their device\'s built-in biometrics than an authenticator app.'],
-                                    ['effort' => 'large', 'title' => 'Two-way Xero / QuickBooks Online sync', 'desc' => 'Today\'s Accounting Journal and QuickBooks (IIF) exports are one-way CSV/file dumps. A real API-based sync that pushes invoices and payments and pulls back reconciliation status would remove the manual export/import step entirely — the largest single item here.'],
+                                    ['effort' => 'large', 'title' => 'Passkey / WebAuthn login', 'since' => '2026-08-30', 'seeAlso' => ['label' => 'Two-Factor Authentication', 'target' => 'feat-security'], 'desc' => '2FA is TOTP-only today. Adding passkeys as an alternative second factor (or a full passwordless login option) would cover people who\'d rather use a hardware key or their device\'s built-in biometrics than an authenticator app.'],
+                                    ['effort' => 'large', 'title' => 'Two-way Xero / QuickBooks Online sync', 'since' => '2026-08-30', 'desc' => 'Today\'s Accounting Journal and QuickBooks (IIF) exports are one-way CSV/file dumps. A real API-based sync that pushes invoices and payments and pulls back reconciliation status would remove the manual export/import step entirely — the largest single item here.'],
                                 ];
                                 ?>
                                 <div class="roadmap-timeline">
@@ -148,6 +195,12 @@
                                                     <span class="badge roadmap-effort roadmap-<?= $__item['effort'] ?>"><?= $__roadmapEffortLabels[$__item['effort']] ?></span>
                                                 </div>
                                                 <p class="roadmap-desc"><?= $__item['desc'] ?></p>
+                                                <div class="roadmap-meta">
+                                                    <span>On the roadmap since <?= htmlspecialchars((DateTime::createFromFormat('Y-m-d', $__item['since']) ?: null)?->format('M j, Y') ?? $__item['since'], ENT_QUOTES, 'UTF-8') ?></span>
+                                                    <?php if (!empty($__item['seeAlso'])): ?>
+                                                        <button type="button" class="roadmap-see-also" onclick="navDocs('<?= htmlspecialchars($__item['seeAlso']['target'], ENT_QUOTES, 'UTF-8') ?>')">See current: <?= htmlspecialchars($__item['seeAlso']['label'], ENT_QUOTES, 'UTF-8') ?> <i class="fa-solid fa-arrow-right"></i></button>
+                                                    <?php endif; ?>
+                                                </div>
                                             </div>
                                         </div>
                                     <?php endforeach; ?>
