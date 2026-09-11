@@ -1679,6 +1679,19 @@ function enxureTestDefinitions($mysqli, array $settings): array
             $mysqli->query("DELETE FROM enxure_totp_backup_codes WHERE user_id = " . (int) $fakeUserId);
         }
     });
+    $run('Security', 'CSRF token', 'matching token accepted', 'enxureCsrfTokenIsValid() accepts a provided token that matches the session token exactly — the case every real request from the app\'s own pages hits, since page_script.php\'s fetch() wrapper attaches it automatically.', function () {
+        $token = bin2hex(random_bytes(32));
+        enxureAssertTrue(enxureCsrfTokenIsValid($token, $token));
+    });
+    $run('Security', 'CSRF token', 'wrong or missing token rejected', 'A provided token that doesn\'t match the session token is rejected, and so is a missing one (null) — the two shapes an actual cross-site request would arrive in: no token at all, or a token an attacker cannot have known.', function () {
+        $token = bin2hex(random_bytes(32));
+        enxureAssertTrue(!enxureCsrfTokenIsValid($token, bin2hex(random_bytes(32))), 'different token');
+        enxureAssertTrue(!enxureCsrfTokenIsValid($token, null), 'no token provided');
+    });
+    $run('Security', 'CSRF token', 'empty session token never validates', 'hash_equals(\'\', \'\') is true, so a naive comparison would accept an empty provided token whenever the session token was somehow unset/wiped — enxureCsrfTokenIsValid() explicitly rejects an empty session token first, before it ever reaches hash_equals().', function () {
+        enxureAssertTrue(!enxureCsrfTokenIsValid('', ''), 'empty session token vs empty provided token');
+        enxureAssertTrue(!enxureCsrfTokenIsValid(null, null), 'both null');
+    });
 
     // ── Receipt OCR ── the Add Expense vendor/amount prefill. The first two
     // tests are pure logic (no dependencies at all); the third renders an

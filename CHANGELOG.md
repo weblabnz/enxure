@@ -2,6 +2,12 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.12] - 2026-09-11
+
+### Added
+- CSRF tokens on every session-authenticated `$_POST['action']` request (the last open item from the 2.11.8 security review — see CODEBASE.md). A per-session token is generated in `auth_gate.php` and checked in the AJAX Handlers block before any action runs; `window.fetch` is wrapped once in `page_script.php` to attach it to every existing `URLSearchParams`/`FormData` POST body automatically, so none of the ~90 individual call sites needed touching. Cron-triggered requests (`cron_key`) are exempt — they authenticate via `CRON_SECRET`, not a session cookie, and never carry the token.
+- Statistics > Forecasting: a "Recurring Expenses (× 12)" line and a "Projected Net Income" summary, computed from active `enxure_recurring_expenses` templates normalized to a monthly figure. Previously Forecasting only projected revenue (MRR), so an active recurring expense stayed invisible everywhere in Statistics until the recurring-billing cron actually auto-logged its first `enxure_expenses` row for it.
+
 ## [3.0.11] - 2026-09-10
 
 ### Changed

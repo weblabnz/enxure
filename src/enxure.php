@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', require __DIR__ . '/lib/license_purchase_url.php');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.11');
+define('APP_VERSION', '3.0.12');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
@@ -1230,6 +1230,16 @@ function renderActivityRows(array $actions): string
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
     try {
+        // CSRF: every action below runs under an authenticated session (the
+        // $isAuth/$isCron gate is in api_v1.php, required before this file
+        // reaches here) and needs the per-session token set in auth_gate.php.
+        // $isCron requests authenticate via CRON_SECRET instead of a session
+        // cookie and never carry this token, so they're exempt — same
+        // exemption pattern as $__adminOnlyActions below.
+        if (!$isCron && !enxureCsrfTokenIsValid($_SESSION['csrf_token'] ?? null, $_POST['csrf_token'] ?? null)) {
+            echo json_encode(['success' => false, 'error' => 'Your session may have expired — refresh the page and try again.']);
+            exit;
+        }
         // Open-core: everything works without a license except seven paid
         // capabilities. Five are POST actions, gated here in one place; the
         // other two (Reporting & Statistics, hiding "Powered by enXure") are
@@ -2463,6 +2473,18 @@ $stats_mrr_by_ccy = enxureGroupAmountsByCurrency($rows_mrr_all, 's', $settings);
 $stats_mrr = enxureSumByCcyConverted($stats_mrr_by_ccy, $stats_default_ccy, $stats_fx_rates);
 
 $stats_12m_projected = ($stats_mrr * 12) + $stats_outstanding_revenue;
+
+// Active recurring expense templates normalized to a monthly figure — a
+// forward-looking projection (enxure_recurring_expenses), unlike every other
+// $stats_expense_* value which sums actual logged enxure_expenses rows.
+$freqToMonthly = ['weekly' => 52 / 12, 'monthly' => 1, 'quarterly' => 1 / 3, 'annually' => 1 / 12];
+$stats_recurring_expenses_monthly = 0;
+$res_recur_exp = $mysqli->query("SELECT amount, frequency FROM enxure_recurring_expenses WHERE is_active = 1");
+while ($r = $res_recur_exp->fetch_assoc()) {
+    $stats_recurring_expenses_monthly += (float) $r['amount'] * ($freqToMonthly[$r['frequency']] ?? 1);
+}
+$stats_recurring_expenses_yearly = $stats_recurring_expenses_monthly * 12;
+$stats_projected_net_income = $stats_12m_projected - $stats_recurring_expenses_yearly;
 
 // Top clients — grouped by (client, currency) rather than filtered to the
 // default currency, so a client billed in another currency still shows up

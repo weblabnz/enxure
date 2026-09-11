@@ -1,6 +1,19 @@
         <script src="assets/js/simple-datatables.js"></script>
         <script src="assets/js/qrcode.min.js"></script>
         <script>
+            const CSRF_TOKEN = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
+            // Every action call site below builds its own URLSearchParams/FormData and
+            // calls fetch('', {method:'POST', body}) directly (no shared request helper
+            // exists) — wrapping fetch here attaches the token everywhere at once instead
+            // of touching every call site. Server-side check is enxure.php's AJAX
+            // Handlers block, right after `header('Content-Type: application/json');`.
+            const __enxureNativeFetch = window.fetch.bind(window);
+            window.fetch = function (input, init) {
+                if (init && typeof init.method === 'string' && init.method.toUpperCase() === 'POST' && (init.body instanceof URLSearchParams || init.body instanceof FormData)) {
+                    init.body.set('csrf_token', CSRF_TOKEN);
+                }
+                return __enxureNativeFetch(input, init);
+            };
             const APP_CURRENCY = <?= json_encode($settings['currency'] ?? 'USD') ?>;
             let chartInstance = null, pieChartInstance = null, chartAllData = null, chartRange = '12';
             const CLIENT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#f97316', '#84cc16', '#a855f7', '#ec4899', '#14b8a6', '#f43f5e'];

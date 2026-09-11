@@ -209,7 +209,7 @@ function renderStatsSection(): string
     $stats_ty_monthly, $stats_tax_year_days_total, $stats_tax_year_days_elapsed, $stats_tax_year_progress_pct,
     $stats_last_recurring_run, $stats_late_fees_charged, $stats_reminders_sent, $stats_reminders_failed,
     $most_active_clients, $stats_invoice_status, $stats_revenue_trend, $stats_expense_ty_total, $stats_net_income_ty,
-    $stats_expense_categories, $stats_expense_monthly, $stats_db_size_bytes, $stats_invoices_dir_size_bytes,
+    $stats_expense_categories, $stats_expense_monthly, $stats_recurring_expenses_monthly, $stats_recurring_expenses_yearly, $stats_projected_net_income, $stats_db_size_bytes, $stats_invoices_dir_size_bytes,
     $stats_backups_dir_size_bytes, $stats_webhook_unmatched_total, $stats_webhook_unmatched_30d,
     $stats_php_version, $stats_mysql_version, $stats_default_ccy, $stats_has_other_currency,
     $stats_fx_unconverted_currencies;
@@ -449,11 +449,25 @@ function renderStatsSection(): string
                                         Monthly Avg</span>:</span>
                                 <strong style="color:var(--success);"><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($stats_mrr, 2) ?></strong>
                             </li>
+                            <li
+                                style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.6rem;">
+                                <span style="color:var(--text-secondary);"><span class="has-tooltip"
+                                        data-tip="Active recurring expense templates (Expenses tab), normalized to monthly and projected × 12 — counted here even if the recurring-billing cron hasn't auto-logged an actual expense entry for them yet">Recurring
+                                        Expenses</span> (× 12):</span>
+                                <strong style="color:var(--danger);"><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($stats_recurring_expenses_yearly, 2) ?></strong>
+                            </li>
                             <li style="display:flex; justify-content:space-between;">
                                 <span style="color:var(--text-secondary);"><span class="has-tooltip"
                                         data-tip="How much of the yearly forecast comes from predictable MRR vs one-off outstanding invoices">MRR
                                         Contribution</span>:</span>
                                 <strong><?= $stats_12m_projected > 0 ? number_format(($stats_mrr * 12 / $stats_12m_projected) * 100, 1) : '0.0' ?>%</strong>
+                            </li>
+                            <li
+                                style="display:flex; justify-content:space-between; border-top:1px solid color-mix(in srgb, <?= $stats_projected_net_income >= 0 ? 'var(--success)' : 'var(--danger)' ?> 30%, transparent); padding-top:0.6rem; background:color-mix(in srgb, <?= $stats_projected_net_income >= 0 ? 'var(--success)' : 'var(--danger)' ?> 8%, transparent); border-radius:6px; padding:0.5rem 0.6rem; margin-top:0.25rem;">
+                                <span style="color:var(--<?= $stats_projected_net_income >= 0 ? 'success' : 'danger' ?>); font-weight:600;"><span class="has-tooltip"
+                                        data-tip="Expected Yearly Value minus projected recurring expenses — a forward-looking estimate, not actual logged Expenses (see the Expenses tab for what's actually been spent)">Projected
+                                        Net Income</span>:</span>
+                                <strong style="color:var(--<?= $stats_projected_net_income >= 0 ? 'success' : 'danger' ?>);"><?= htmlspecialchars($stats_default_ccy) ?> $<?= number_format($stats_projected_net_income, 2) ?></strong>
                             </li>
                         </ul>
                     </div>

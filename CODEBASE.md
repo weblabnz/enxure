@@ -73,7 +73,9 @@ These are **not** required at the top of the file. Each is `require_once`'d at t
 
 This should be repeated periodically — at minimum before any release touching auth, sessions, tokens, payments, or licensing, and otherwise on a regular cadence rather than only reactively.
 
-**2026-08-30 (2.11.17).** The session-regeneration gap above is fixed: `auth_gate.php` now calls `session_regenerate_id(true)` on all four paths that grant `$_SESSION['enxure_auth']` (signup, password login, 2FA verification, password reset), rotating the session ID on every privilege escalation into an authenticated session. CSRF tokens remain the one open item on the Roadmap.
+**2026-08-30 (2.11.17).** The session-regeneration gap above is fixed: `auth_gate.php` now calls `session_regenerate_id(true)` on all four paths that grant `$_SESSION['enxure_auth']` (signup, password login, 2FA verification, password reset), rotating the session ID on every privilege escalation into an authenticated session.
+
+**2026-09-11 (3.0.12).** The CSRF gap above is fixed too: a per-session token (`$_SESSION['csrf_token']`, generated in `auth_gate.php`) is now required on every `$_POST['action']` request in `enxure.php`'s AJAX Handlers block, checked with `hash_equals()` before any action runs. `$isCron` requests stay exempt (they authenticate via `CRON_SECRET`, not a session cookie). Client-side, `page_script.php` wraps `window.fetch` once to attach the token to every POST's `URLSearchParams`/`FormData` body automatically, rather than editing each of the ~90 individual `fetch('', {method:'POST', ...})` call sites. Neither of the two defense-in-depth gaps from the 2.11.8 review remains open.
 
 ## History
 

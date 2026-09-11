@@ -134,7 +134,6 @@
                                 <?php
                                 $__roadmapEffortLabels = ['quick' => 'Quick win', 'medium' => 'Medium lift', 'large' => 'Larger effort'];
                                 $__roadmapItems = [
-                                    ['effort' => 'medium', 'title' => 'CSRF tokens', 'desc' => 'No explicit CSRF protection exists yet on state-changing actions; today\'s browsers\' default same-site cookie behavior mitigates the classic attack, but proper tokens are the correct long-term fix (see Security Review in CODEBASE.md).'],
                                     ['effort' => 'large', 'title' => 'Passkey / WebAuthn login', 'desc' => '2FA is TOTP-only today. Adding passkeys as an alternative second factor (or a full passwordless login option) would cover people who\'d rather use a hardware key or their device\'s built-in biometrics than an authenticator app.'],
                                     ['effort' => 'large', 'title' => 'Two-way Xero / QuickBooks Online sync', 'desc' => 'Today\'s Accounting Journal and QuickBooks (IIF) exports are one-way CSV/file dumps. A real API-based sync that pushes invoices and payments and pulls back reconciliation status would remove the manual export/import step entirely — the largest single item here.'],
                                 ];

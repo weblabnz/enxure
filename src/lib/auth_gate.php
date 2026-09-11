@@ -348,6 +348,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
 $isAuth = isset($_SESSION['enxure_auth']) && $_SESSION['enxure_auth'] === true;
 $isCron = CRON_SECRET !== '' && isset($_REQUEST['cron_key']) && hash_equals(CRON_SECRET, (string) $_REQUEST['cron_key']);
 
+// One token per session, checked against every $_POST['action'] request below
+// (see enxure.php's AJAX Handlers block) — not needed by $isCron requests,
+// which authenticate via CRON_SECRET instead of a session cookie.
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// Pulled out as its own pure function so it's unit-testable (see 'Security:
+// CSRF token' in the Test Suite) without a live HTTP request/session. Rejects
+// an empty session token outright, even against an empty provided token —
+// hash_equals('', '') is true, so without this guard a request could pass by
+// coincidentally matching an unset/wiped session token with a blank one.
+function enxureCsrfTokenIsValid(?string $sessionToken, ?string $providedToken): bool
+{
+    return $sessionToken !== null && $sessionToken !== '' && $providedToken !== null && hash_equals($sessionToken, $providedToken);
+}
+
 // The logged-in user's id/role — every "my account" or "am I allowed to do
 // this" check below is scoped to this, instead of the pre-multi-user
 // assumption that enxure_users always has exactly one row.
