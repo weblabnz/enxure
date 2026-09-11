@@ -2,6 +2,21 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.16] - 2026-09-12
+
+### Added
+- Docs > Roadmap: 3 more quick-win items, all verified as real gaps in the current code — bulk "Send Reminder" for overdue invoices (today's bulk toolbar has Mark Paid/Resend/Delete but reminders are still one invoice at a time), emailing the Client Portal link directly to a client (generatePortalLink() only ever fills a copy/paste text box today), and a separate contact-person name for a client (enxure_clients only has client_name, so a B2B client's invoice greeting can't address their actual AP contact). Roadmap's quick-win tier is now 6 items; 14 total.
+
+## [3.0.15] - 2026-09-12
+
+### Added
+- Docs > Roadmap: 2 more quick-win items, both verified against the actual code rather than assumed — CC/BCC on invoice emails (every send today calls `addAddress()` with exactly one recipient, no way to loop in an AP inbox or auto-BCC a bookkeeper) and duplicating an existing invoice/quote into the builder (no clone action exists anywhere; today it means rebuilding every line item from scratch). Roadmap is now 11 items.
+
+## [3.0.14] - 2026-09-12
+
+### Added
+- Docs > Roadmap: 7 new items, expanding it from 2 to 9 — each grounded in a real gap found in the current code, not a wishlist filler. Quick win: a PO number / client reference field on invoices. Medium lifts: a multi-step overdue reminder cadence (today's `sendOverdueReminders()` sends exactly one, ever), billable expenses (no link from `enxure_expenses` to a client today), structured JSON outbound webhooks alongside the existing plain-text notification channel, and client account statements built on the existing Tax Email zip machinery. Large lifts: installment/milestone billing on a single invoice (Recurring Billing can only ever charge the same amount every period) and stored payment methods with automatic charging on the due date.
+
 ## [3.0.13] - 2026-09-12
 
 ### Added
