@@ -17,6 +17,8 @@
                         onclick="navBackup('audit')"><i class="fa-solid fa-broom"></i> Audit Log Retention</button>
                     <button type="button" class="subnav-item" data-backup-target="taxemail"
                         onclick="navBackup('taxemail')"><i class="fa-solid fa-paper-plane"></i> Tax Email</button>
+                    <button type="button" class="subnav-item" data-backup-target="statements"
+                        onclick="navBackup('statements')"><i class="fa-solid fa-file-invoice-dollar"></i> Client Statements</button>
                     <button type="button" class="subnav-item" data-backup-target="demo"
                         onclick="navBackup('demo')"><i class="fa-solid fa-wand-magic-sparkles"></i> Demo Data</button>
                     <button type="button" class="subnav-item" data-backup-target="testsuite"
@@ -417,6 +419,80 @@ See INSTALL.md's Testing email safely section to set that up.">(requires Mailpit
                                 <div class="card-body" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
                                     <span id="taxEmailSummary" style="color:var(--text-secondary); font-size:0.85rem;"></span>
                                     <button id="taxEmailSendBtn" class="btn primary" onclick="sendTaxEmail()" disabled><i class="fa-solid fa-paper-plane"></i> Send</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Client Statements -->
+                    <div class="subnav-pane" id="backup-pane-statements">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Client &amp; Date Range</h3>
+                            </div>
+                            <div class="card-body" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+                                <div class="form-group" style="margin:0; flex:1; min-width:220px;"><label class="form-label">Client</label>
+                                    <select id="statementClientKey" class="form-control" onchange="loadClientStatement()">
+                                        <option value="">Select a client&hellip;</option>
+                                        <?php foreach ($clients as $__sc): ?>
+                                            <option value="<?= htmlspecialchars($__sc['client_key']) ?>"><?= htmlspecialchars($__sc['client_name']) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin:0;"><label class="form-label">Start Date</label>
+                                    <input type="date" id="statementStartDate" class="form-control" value="<?= date('Y-m-01') ?>" onchange="loadClientStatement()"></div>
+                                <div class="form-group" style="margin:0;"><label class="form-label">End Date</label>
+                                    <input type="date" id="statementEndDate" class="form-control" value="<?= date('Y-m-d') ?>" onchange="loadClientStatement()"></div>
+                                <button type="button" class="btn" onclick="loadClientStatement()"><i class="fa-solid fa-rotate"></i> Reload</button>
+                            </div>
+                        </div>
+
+                        <div id="statementEmpty" class="card">
+                            <div class="card-body" style="text-align:center; padding:2rem; color:var(--text-secondary);">
+                                <p style="margin:0;">Pick a client and date range to build their statement.</p>
+                            </div>
+                        </div>
+
+                        <div id="statementData" style="display:none;">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Statement Preview</h3>
+                                    <div style="display:flex; gap:0.5rem;">
+                                        <button type="button" class="btn" onclick="downloadClientStatement()"><i class="fa-solid fa-download"></i> Download PDF</button>
+                                    </div>
+                                </div>
+                                <div class="card-body" style="padding:0;">
+                                    <table style="width:100%; border-collapse:collapse;">
+                                        <thead>
+                                            <tr style="text-align:left; border-bottom:1px solid var(--border);">
+                                                <th style="padding:0.6rem 1rem;">Date</th>
+                                                <th style="padding:0.6rem 1rem;">Description</th>
+                                                <th style="padding:0.6rem 1rem; text-align:right;">Invoiced</th>
+                                                <th style="padding:0.6rem 1rem; text-align:right;">Paid</th>
+                                                <th style="padding:0.6rem 1rem; text-align:right;">Balance</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="statementRows"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Email to Client</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                                        <div class="form-group" style="flex:1; min-width:220px;"><label class="form-label">Recipient Email</label>
+                                            <input type="email" id="statementRecipient" class="form-control" placeholder="client@example.com"></div>
+                                    </div>
+                                    <div class="form-group"><label class="form-label">Message <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
+                                        <textarea id="statementMessage" class="form-control" rows="2" placeholder="Anything you want to add above the balance summary"></textarea>
+                                    </div>
+                                </div>
+                                <div class="card-body" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; border-top:1px solid var(--border);">
+                                    <span id="statementSummary" style="color:var(--text-secondary); font-size:0.85rem;"></span>
+                                    <button id="statementSendBtn" class="btn primary" onclick="sendClientStatement()"><i class="fa-solid fa-paper-plane"></i> Send</button>
                                 </div>
                             </div>
                         </div>

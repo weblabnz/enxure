@@ -2,6 +2,14 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.19] - 2026-09-12
+
+### Added
+- Data Management > Client Statements: pick a client and a date range and get a running account statement — balance brought forward, every invoice and payment in the period, and the closing balance — as one PDF (built on `generateInvoicePdf()`, the same dompdf/logo pipeline every invoice already uses), downloadable directly or emailed straight to the client via the same send flow as Tax Email. Payment history is read from `enxure_invoices.paid_amount`/`paid_at` (the field `reconcile_payment_totals` already treats as authoritative), falling back to per-installment `enxure_payments` rows only for dates when they're actually logged — so a client whose invoices were marked paid without a matching `enxure_payments` row (demo data, legacy rows, anything that bypassed the normal mark-paid flow) still nets out correctly instead of showing as fully outstanding. Closes the Roadmap item from 3.0.14.
+
+### Fixed
+- Client Edit modal > Client Portal: the expiry dropdown and its buttons had mismatched heights and cramped spacing (differing padding/font-size between `.form-control` and `.btn`) — both rows now use a matching explicit height and more breathing room between controls.
+
 ## [3.0.18] - 2026-09-12
 
 ### Fixed

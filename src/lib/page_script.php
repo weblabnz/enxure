@@ -4100,6 +4100,83 @@
                     btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send';
                 }
             }
+            // ── Client Statements (Data Management > Client Statements) ─────────
+            let _clientStatementData = null;
+            async function loadClientStatement() {
+                const clientKey = document.getElementById('statementClientKey').value;
+                if (!clientKey) {
+                    document.getElementById('statementEmpty').style.display = 'block';
+                    document.getElementById('statementData').style.display = 'none';
+                    _clientStatementData = null;
+                    return;
+                }
+                const startDate = document.getElementById('statementStartDate').value;
+                const endDate = document.getElementById('statementEndDate').value;
+                try {
+                    const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'preview_client_statement', client_key: clientKey, start_date: startDate, end_date: endDate }) });
+                    const data = await res.json();
+                    if (!data.success) { showToast(data.error || 'Failed to load statement', true); return; }
+                    _clientStatementData = data;
+                    const fmt = n => `${data.currency} $${parseFloat(n).toFixed(2)}`;
+                    const openingLabel = new Date(new Date(data.start_date + 'T00:00:00').getTime() - 86400000).toISOString().slice(0, 10);
+                    let rowsHtml = `<tr style="font-weight:600; background:var(--surface-2);"><td style="padding:0.6rem 1rem;">${openingLabel}</td><td style="padding:0.6rem 1rem;">Balance brought forward</td><td style="padding:0.6rem 1rem;"></td><td style="padding:0.6rem 1rem;"></td><td style="padding:0.6rem 1rem; text-align:right;">${fmt(data.opening_balance)}</td></tr>`;
+                    rowsHtml += data.rows.map(row => `
+                        <tr style="border-bottom:1px solid var(--border);">
+                            <td style="padding:0.6rem 1rem;">${row.date}</td>
+                            <td style="padding:0.6rem 1rem;">${row.description}</td>
+                            <td style="padding:0.6rem 1rem; text-align:right;">${row.invoiced > 0 ? fmt(row.invoiced) : ''}</td>
+                            <td style="padding:0.6rem 1rem; text-align:right;">${row.paid > 0 ? fmt(row.paid) : ''}</td>
+                            <td style="padding:0.6rem 1rem; text-align:right;">${fmt(row.balance)}</td>
+                        </tr>`).join('') || '<tr><td colspan="5" style="padding:1.5rem; text-align:center; color:var(--text-secondary);">No activity in this period.</td></tr>';
+                    rowsHtml += `<tr style="font-weight:600; background:var(--surface-2);"><td colspan="4" style="padding:0.6rem 1rem;">Balance due as of ${data.end_date}</td><td style="padding:0.6rem 1rem; text-align:right;">${fmt(data.closing_balance)}</td></tr>`;
+                    document.getElementById('statementRows').innerHTML = rowsHtml;
+                    document.getElementById('statementRecipient').value = data.client_email || '';
+                    document.getElementById('statementSummary').textContent = `${data.rows.length} transaction(s) — balance due ${fmt(data.closing_balance)}`;
+                    document.getElementById('statementEmpty').style.display = 'none';
+                    document.getElementById('statementData').style.display = 'block';
+                } catch (e) {
+                    showToast('Failed to load statement: ' + e.message, true);
+                }
+            }
+            function downloadClientStatement() {
+                const clientKey = document.getElementById('statementClientKey').value;
+                if (!clientKey) { showToast('Select a client first', true); return; }
+                const startDate = document.getElementById('statementStartDate').value;
+                const endDate = document.getElementById('statementEndDate').value;
+                const params = new URLSearchParams({ export: 'client_statement_pdf', client_key: clientKey, start: startDate, end: endDate });
+                window.open('?' + params.toString(), '_blank');
+            }
+            async function sendClientStatement() {
+                const clientKey = document.getElementById('statementClientKey').value;
+                if (!clientKey) { showToast('Select a client first', true); return; }
+                const recipient = document.getElementById('statementRecipient').value.trim();
+                if (!recipient) { showToast('Enter the recipient\'s email address', true); return; }
+                const btn = document.getElementById('statementSendBtn');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
+                try {
+                    const data = new URLSearchParams({
+                        action: 'send_client_statement',
+                        client_key: clientKey,
+                        recipient_email: recipient,
+                        message: document.getElementById('statementMessage').value,
+                        start_date: document.getElementById('statementStartDate').value,
+                        end_date: document.getElementById('statementEndDate').value,
+                    });
+                    const res = await fetch('', { method: 'POST', body: data });
+                    const json = await res.json();
+                    if (json.success) {
+                        showToast('Statement sent to ' + recipient);
+                    } else {
+                        showToast(json.error || 'Failed to send statement', true);
+                    }
+                } catch (e) {
+                    showToast('Failed to send statement: ' + e.message, true);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send';
+                }
+            }
             // ── Global fixed tooltip (avoids stacking-context clipping from transform animations) ──
             (function () {
                 const tip = document.createElement('div');

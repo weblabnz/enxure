@@ -102,14 +102,14 @@
                             share the link yourself (email, etc.); nothing is sent automatically.
                             <?php if (!$licenseValid): ?><strong>Generating or regenerating a link requires a
                                     license</strong> — revoking an existing one stays free.<?php endif; ?></p>
-                        <div id="clientPortalNoLinkWrap" style="display:flex; gap:1.5rem; align-items:center; flex-wrap:wrap; margin-top:0.75rem;">
-                            <select id="clientPortalExpiry" class="form-control" style="width:auto;" <?= $licenseValid ? '' : 'disabled' ?>>
+                        <div id="clientPortalNoLinkWrap" style="display:flex; gap:2.5rem; align-items:center; flex-wrap:wrap; margin-top:1.25rem;">
+                            <select id="clientPortalExpiry" class="form-control" style="width:auto; height:2.6rem; padding:0 0.85rem; font-size:0.875rem; box-sizing:border-box;" <?= $licenseValid ? '' : 'disabled' ?>>
                                 <option value="never">Never</option>
                                 <option value="30">30 days</option>
                                 <option value="90" selected>90 days</option>
                                 <option value="365">1 year</option>
                             </select>
-                            <button class="btn" id="generatePortalLinkBtn" type="button" onclick="generatePortalLink()" style="width:auto;"
+                            <button class="btn" id="generatePortalLinkBtn" type="button" onclick="generatePortalLink()" style="width:auto; height:2.6rem; box-sizing:border-box;"
                                 <?= $licenseValid ? '' : 'disabled title="Requires a license"' ?>><i
                                     class="fa-solid fa-link"></i> Generate Portal Link</button>
                         </div>
@@ -120,17 +120,17 @@
                                         class="fa-solid fa-copy"></i> Copy</button>
                             </div>
                             <p id="clientPortalExpiryNote" style="color:var(--text-secondary); font-size:0.8rem; margin:0.35rem 0 0;"></p>
-                            <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center;">
-                                <select id="clientPortalRegenExpiry" class="form-control" style="width:auto;" <?= $licenseValid ? '' : 'disabled' ?>>
+                            <div style="display:flex; gap:1.25rem; margin-top:0.75rem; align-items:center; flex-wrap:wrap;">
+                                <select id="clientPortalRegenExpiry" class="form-control" style="width:auto; height:2.6rem; padding:0 0.85rem; font-size:0.875rem; box-sizing:border-box;" <?= $licenseValid ? '' : 'disabled' ?>>
                                     <option value="never">Never expires</option>
                                     <option value="30">30 days</option>
                                     <option value="90" selected>90 days</option>
                                     <option value="365">1 year</option>
                                 </select>
-                                <button class="btn" type="button" onclick="generatePortalLink()" style="width:auto;"
+                                <button class="btn" type="button" onclick="generatePortalLink()" style="width:auto; height:2.6rem; box-sizing:border-box;"
                                     <?= $licenseValid ? '' : 'disabled title="Requires a license"' ?>><i
                                         class="fa-solid fa-rotate"></i> Regenerate</button>
-                                <button class="btn danger" type="button" onclick="revokePortalLink()" style="width:auto;"><i
+                                <button class="btn danger" type="button" onclick="revokePortalLink()" style="width:auto; height:2.6rem; box-sizing:border-box;"><i
                                         class="fa-solid fa-ban"></i> Revoke</button>
                             </div>
                         </div>
