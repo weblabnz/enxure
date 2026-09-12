@@ -1316,6 +1316,14 @@
                 document.getElementById('expenseCategory').value = e ? e.category : 'other';
                 document.getElementById('expenseAmount').value = e ? e.amount : '0.00';
                 document.getElementById('expenseDescription').value = e ? (e.description || '') : '';
+                document.getElementById('expenseBillableClient').value = e ? (e.billable_client_id || '') : '';
+                const billedNote = document.getElementById('expenseBilledNote');
+                if (e && e.billed_invoice_number) {
+                    billedNote.textContent = `Already billed on invoice ${e.billed_invoice_number} — changing this won't affect that invoice.`;
+                    billedNote.style.display = '';
+                } else {
+                    billedNote.style.display = 'none';
+                }
                 document.getElementById('expenseInvoiceFiles').value = '';
                 document.getElementById('expenseInvoiceFilesList').innerHTML = '';
                 document.getElementById('expenseReceiptFiles').value = '';
@@ -1412,6 +1420,7 @@
                 formData.append('category', document.getElementById('expenseCategory').value);
                 formData.append('amount', document.getElementById('expenseAmount').value);
                 formData.append('description', document.getElementById('expenseDescription').value);
+                formData.append('billable_client_id', document.getElementById('expenseBillableClient').value);
                 const res = await fetch('', { method: 'POST', body: formData });
                 const json = await res.json();
                 if (!json.success) { showToast(json.error || 'Failed to save', true); btn.disabled = false; return; }
@@ -1571,6 +1580,14 @@
                 }
                 return items;
             }
+            function getBilledExpenseIds() {
+                const rows = document.querySelectorAll('#lineItemsBody .line-item-row');
+                const ids = [];
+                for (const row of rows) {
+                    if (row.dataset.expenseId) ids.push(parseInt(row.dataset.expenseId, 10));
+                }
+                return ids;
+            }
             // One discount % and one tax % for the whole invoice, not per line item
             // — matches computeInvoiceTotals() server-side. Discount comes off the
             // line-item subtotal first, tax applies to what's left.
@@ -1579,6 +1596,30 @@
                     discount_pct: Math.min(100, Math.max(0, parseFloat(document.getElementById('adhocDiscountPct').value) || 0)),
                     tax_rate: Math.min(100, Math.max(0, parseFloat(document.getElementById('adhocTaxRate').value) || 0)),
                 };
+            }
+            async function loadBillableExpenses(clientId) {
+                const container = document.getElementById('adhocBillableExpenses');
+                if (!clientId) { container.style.display = 'none'; container.innerHTML = ''; return; }
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'get_billable_expenses', client_id: clientId }) });
+                const json = await res.json();
+                if (!json.success || !json.expenses.length) { container.style.display = 'none'; container.innerHTML = ''; return; }
+                const ccy = document.getElementById('adhocAmountCcy').textContent;
+                container.innerHTML = '<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:0.5rem;"><i class="fa-solid fa-receipt"></i> Billable expenses for this client — click to add as a line item</div>' +
+                    json.expenses.map(x => `<button type="button" class="btn small" style="margin:0 0.4rem 0.4rem 0;" data-expense='${JSON.stringify(x).replace(/'/g, "&#39;")}' onclick="addBillableExpenseLineItem(this)">${x.vendor} — ${ccy} ${parseFloat(x.amount).toFixed(2)}</button>`).join('');
+            }
+            function addBillableExpenseLineItem(btn) {
+                const exp = JSON.parse(btn.dataset.expense);
+                const tbody = document.getElementById('lineItemsBody');
+                const tr = document.createElement('tr');
+                tr.className = 'line-item-row';
+                tr.dataset.expenseId = exp.id;
+                tr.innerHTML = LINE_ITEM_ROW_HTML;
+                tr.querySelector('.li-code').value = 'EXP';
+                tr.querySelector('.li-desc').value = exp.description ? `${exp.vendor} — ${exp.description}` : exp.vendor;
+                tr.querySelector('.li-amount').value = exp.amount;
+                tbody.appendChild(tr);
+                btn.remove();
+                updateAdhocTotal();
             }
             function resetLineItems() {
                 const tbody = document.getElementById('lineItemsBody');
@@ -1626,6 +1667,7 @@
                     balanceEl.style.display = 'none';
                     hintEl.textContent = '';
                     document.getElementById('adhocAmountCcy').textContent = APP_CURRENCY;
+                    loadBillableExpenses(null);
                     return;
                 }
                 const outstanding = parseFloat(opt.dataset.outstanding || '0');
@@ -1639,6 +1681,7 @@
                 const defaultDue = new Date(Date.now() + terms * 86400000);
                 hintEl.textContent = `Leave blank to use this client's terms (${terms} days — ${defaultDue.toLocaleDateString()})`;
                 document.getElementById('adhocAmountCcy').textContent = opt.dataset.currency || APP_CURRENCY;
+                loadBillableExpenses(opt.value);
             }
             async function previewAdhocInvoice() {
                 const cid = document.getElementById('adhocClient').value;
@@ -1667,16 +1710,17 @@
                 const dueDate = document.getElementById('adhocDueDate').value;
                 const memo = document.getElementById('adhocMemo').value;
                 const clientReference = document.getElementById('adhocClientReference').value;
+                const billedExpenseIds = JSON.stringify(getBilledExpenseIds());
                 if (isQuote) {
                     const btn = document.getElementById('saveQuoteBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; btn.disabled = true;
                     const quoteExpiresAt = document.getElementById('adhocQuoteExpiry').value;
-                    const data = new URLSearchParams({ action: 'save_quote', client_id: cid, line_items: JSON.stringify(items), due_date: dueDate, quote_expires_at: quoteExpiresAt, memo: memo, client_reference: clientReference, ...getInvoiceAdjustments() });
+                    const data = new URLSearchParams({ action: 'save_quote', client_id: cid, line_items: JSON.stringify(items), due_date: dueDate, quote_expires_at: quoteExpiresAt, memo: memo, client_reference: clientReference, billed_expense_ids: billedExpenseIds, ...getInvoiceAdjustments() });
                     const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                     if (json.success) { showToast(`Quote ${json.quoteNum} saved!`); setTimeout(() => window.location.reload(), 2000); }
                     else { showToast(json.error || 'Failed to save quote', true); btn.innerHTML = '<i class="fa-solid fa-file-pen"></i> Save as Quote'; btn.disabled = false; }
                 } else {
                     const btn = document.getElementById('sendAdhocBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...'; btn.disabled = true;
-                    const data = new URLSearchParams({ action: 'generate_adhoc', client_id: cid, line_items: JSON.stringify(items), due_date: dueDate, memo: memo, client_reference: clientReference, ...getInvoiceAdjustments() });
+                    const data = new URLSearchParams({ action: 'generate_adhoc', client_id: cid, line_items: JSON.stringify(items), due_date: dueDate, memo: memo, client_reference: clientReference, billed_expense_ids: billedExpenseIds, ...getInvoiceAdjustments() });
                     const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                     if (json.success) { showToast(`Invoice ${json.invNum} sent!`); setTimeout(() => window.location.reload(), 2000); }
                     else { showToast(json.error || 'Failed to send', true); btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Generate & Send'; btn.disabled = false; }

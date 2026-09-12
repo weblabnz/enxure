@@ -174,6 +174,16 @@
                                 style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
                         <textarea id="expenseDescription" class="form-control" rows="2"></textarea>
                     </div>
+                    <div class="form-group"><label class="form-label">Billable To <span
+                                style="font-weight:400; color:var(--text-secondary);">(optional — offered as a one-click line item next time this client's invoice is built)</span></label>
+                        <select id="expenseBillableClient" class="form-control">
+                            <option value="">-- Not billable --</option>
+                            <?php foreach ($clients as $c): ?>
+                                <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['client_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p id="expenseBilledNote" style="display:none; font-size:0.8rem; color:var(--text-secondary); margin:0.35rem 0 0;"></p>
+                    </div>
                     <div class="form-group"><label class="form-label">Invoice <span
                                 style="font-weight:400; color:var(--text-secondary);">(optional — the vendor's bill, if you keep that separately from the receipt)</span></label>
                         <div id="expenseInvoiceFilesList" style="margin-bottom:0.5rem;"></div>

@@ -37,6 +37,10 @@ $hasRecurringExpenseCol = $mysqli->query("SELECT 1 FROM information_schema.COLUM
 if (!$hasRecurringExpenseCol) {
     $mysqli->query("ALTER TABLE enxure_expenses ADD COLUMN recurring_expense_id INT DEFAULT NULL, ADD INDEX idx_recurring_expense_id (recurring_expense_id)");
 }
+$hasBillableClientCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_expenses' AND COLUMN_NAME = 'billable_client_id'")->num_rows > 0;
+if (!$hasBillableClientCol) {
+    $mysqli->query("ALTER TABLE enxure_expenses ADD COLUMN billable_client_id INT DEFAULT NULL, ADD COLUMN billed_invoice_id INT DEFAULT NULL, ADD INDEX idx_billable_client_id (billable_client_id)");
+}
 // Invoice attachments (contracts, receipts) — one row per uploaded file, files
 // themselves live on disk under INVOICES_DIR/attachments/<invoice_id>/.
 $mysqli->query("CREATE TABLE IF NOT EXISTS enxure_invoice_attachments (id INT AUTO_INCREMENT PRIMARY KEY, invoice_id INT NOT NULL, filename VARCHAR(255) NOT NULL, stored_path VARCHAR(500) NOT NULL, file_size INT NOT NULL DEFAULT 0, uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_invoice_id (invoice_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");

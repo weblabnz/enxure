@@ -136,11 +136,14 @@ CREATE TABLE IF NOT EXISTS `enxure_expenses` (
   `description`    TEXT,
   `receipt_path`   VARCHAR(500) DEFAULT NULL COMMENT 'Legacy single-receipt path, superseded by enxure_expense_receipts — kept for old rows, migrated into that table on boot',
   `recurring_expense_id` INT DEFAULT NULL COMMENT 'FK to enxure_recurring_expenses.id when auto-logged by the recurring cron run, NULL for a manually-entered expense',
+  `billable_client_id` INT DEFAULT NULL COMMENT 'FK to enxure_clients.id when this expense should be re-billed to a client',
+  `billed_invoice_id` INT DEFAULT NULL COMMENT 'FK to enxure_invoices.id once added as a line item on a generated/saved invoice',
   `created_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_expense_date` (`expense_date`),
   INDEX `idx_category`     (`category`),
-  INDEX `idx_recurring_expense_id` (`recurring_expense_id`)
+  INDEX `idx_recurring_expense_id` (`recurring_expense_id`),
+  INDEX `idx_billable_client_id` (`billable_client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `enxure_recurring_expenses` (

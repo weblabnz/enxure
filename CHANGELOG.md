@@ -2,6 +2,11 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.22] - 2026-09-12
+
+### Added
+- Expenses: a "Billable To" field tags an expense as chargeable back to a client. That client's Ad Hoc Invoice builder then lists its unbilled billable expenses as one-click buttons that drop a pre-filled line item (vendor, description, amount) into the invoice/quote being built — no more retyping a fronted domain, stock photo license, or subcontractor invoice by hand. An expense used this way is marked against that invoice/quote (`enxure_expenses.billed_invoice_id`) so it can't be billed twice, and is freed back up automatically if that invoice/quote is later deleted. Closes the Roadmap item from 3.0.14.
+
 ## [3.0.21] - 2026-09-12
 
 ### Fixed

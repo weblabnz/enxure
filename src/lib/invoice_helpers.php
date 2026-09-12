@@ -218,6 +218,19 @@ function computeInvoiceTotals(array &$lineItems, float $discountPct, float $taxR
     ];
 }
 
+function enxureMarkExpensesBilled($mysqli, array $expenseIds, int $clientId, int $invoiceId): void
+{
+    $expenseIds = array_values(array_unique(array_filter(array_map('intval', $expenseIds))));
+    if (empty($expenseIds) || $clientId <= 0 || $invoiceId <= 0) {
+        return;
+    }
+    $placeholders = implode(',', array_fill(0, count($expenseIds), '?'));
+    $types = 'ii' . str_repeat('i', count($expenseIds));
+    $stmt = $mysqli->prepare("UPDATE enxure_expenses SET billed_invoice_id = ? WHERE billable_client_id = ? AND billed_invoice_id IS NULL AND id IN ($placeholders)");
+    $stmt->bind_param($types, $invoiceId, $clientId, ...$expenseIds);
+    $stmt->execute();
+}
+
 // Formats a percentage for display without a trailing ".00" (7.5% not 7.50%,
 // but 10% not 10.).
 function formatPct(float $pct): string

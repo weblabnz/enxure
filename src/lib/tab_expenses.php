@@ -96,6 +96,7 @@
                             <th>Category</th>
                             <th>Amount</th>
                             <th>Description</th>
+                            <th data-sortable="false">Billable</th>
                             <th data-sortable="false">Receipt</th>
                             <th data-sortable="false">Actions</th>
                         </tr>

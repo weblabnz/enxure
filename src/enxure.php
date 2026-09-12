@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', require __DIR__ . '/lib/license_purchase_url.php');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.21');
+define('APP_VERSION', '3.0.22');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
@@ -461,7 +461,7 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
         enxureLogAction($mysqli, $iid, $invNum, 'note_added', trim($memo));
     }
 
-    return ['success' => $emailSent, 'invNum' => $invNum, 'error' => $errorMsg];
+    return ['success' => $emailSent, 'invNum' => $invNum, 'error' => $errorMsg, 'id' => $iid];
 }
 
 // (renderEmailTemplate, sendTelegramNotification, sendSlackNotification now
@@ -1111,6 +1111,15 @@ function renderExpenseRows(array $expenses): string
             <td>$<?= number_format($e['amount'], 2) ?></td>
             <td style="color:var(--text-secondary); max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                 <?= htmlspecialchars($e['description'] ?? '') ?></td>
+            <td>
+                <?php if (!empty($e['billed_invoice_number'])): ?>
+                    <span style="font-size:0.75rem; color:var(--success);" title="Billed to <?= htmlspecialchars($e['billable_client_name'] ?? '') ?>"><i class="fa-solid fa-check"></i> Billed: <?= htmlspecialchars($e['billed_invoice_number']) ?></span>
+                <?php elseif (!empty($e['billable_client_name'])): ?>
+                    <span style="font-size:0.75rem; color:var(--accent);"><i class="fa-solid fa-arrow-right"></i> <?= htmlspecialchars($e['billable_client_name']) ?></span>
+                <?php else: ?>
+                    <span style="color:var(--text-secondary);">—</span>
+                <?php endif; ?>
+            </td>
             <td style="text-align:center;">
                 <?php if ((int) $e['receipt_count'] > 0): ?>
                     <button type="button" class="btn small" title="<?= (int) $e['receipt_count'] ?> receipt<?= (int) $e['receipt_count'] === 1 ? '' : 's' ?>"
@@ -1355,6 +1364,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $category = array_key_exists($_POST['category'] ?? '', expenseCategories()) ? $_POST['category'] : 'other';
             $amount = (float) ($_POST['amount'] ?? 0);
             $description = trim($_POST['description'] ?? '');
+            $billableClientId = (int) ($_POST['billable_client_id'] ?? 0);
+            if (!$billableClientId || $mysqli->query("SELECT id FROM enxure_clients WHERE id = $billableClientId")->num_rows === 0) {
+                $billableClientId = null;
+            }
             if ($vendor === '') {
                 throw new Exception('Vendor is required.');
             }
@@ -1364,13 +1377,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             $categoryLabel = expenseCategories()[$category] ?? ucfirst($category);
             if ($id > 0) {
-                $stmt = $mysqli->prepare("UPDATE enxure_expenses SET expense_date=?, vendor=?, category=?, amount=?, description=? WHERE id=?");
-                $stmt->bind_param("sssdsi", $date, $vendor, $category, $amount, $description, $id);
+                $stmt = $mysqli->prepare("UPDATE enxure_expenses SET expense_date=?, vendor=?, category=?, amount=?, description=?, billable_client_id=? WHERE id=?");
+                $stmt->bind_param("sssdsii", $date, $vendor, $category, $amount, $description, $billableClientId, $id);
                 $stmt->execute();
                 enxureLogAction($mysqli, null, '', 'expense_updated', "{$vendor} — {$categoryLabel} — " . number_format($amount, 2));
             } else {
-                $stmt = $mysqli->prepare("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description) VALUES (?, ?, ?, ?, ?)");
-                $stmt->bind_param("sssds", $date, $vendor, $category, $amount, $description);
+                $stmt = $mysqli->prepare("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description, billable_client_id) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("sssdsi", $date, $vendor, $category, $amount, $description, $billableClientId);
                 $stmt->execute();
                 $id = $mysqli->insert_id;
                 enxureLogAction($mysqli, null, '', 'expense_added', "{$vendor} — {$categoryLabel} — " . number_format($amount, 2));
@@ -1396,6 +1409,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 enxureLogAction($mysqli, null, '', 'expense_deleted', "{$row['vendor']} — " . number_format((float) $row['amount'], 2));
             }
             echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'get_billable_expenses') {
+            $clientId = (int) ($_POST['client_id'] ?? 0);
+            $stmt = $mysqli->prepare("SELECT id, expense_date, vendor, category, amount, description FROM enxure_expenses WHERE billable_client_id = ? AND billed_invoice_id IS NULL ORDER BY expense_date DESC");
+            $stmt->bind_param("i", $clientId);
+            $stmt->execute();
+            $billableExpenses = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            echo json_encode(['success' => true, 'expenses' => $billableExpenses]);
             exit;
         }
         if ($_POST['action'] === 'get_expense_receipts') {
@@ -1590,6 +1612,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $totals = computeInvoiceTotals($lineItems, $discountPct, $taxRate);
             $dueDateOverride = validDateOverride($_POST['due_date'] ?? null);
             $res = processInvoice($mysqli, $client, $totals['total'], '', $emailPassword, $lineItems, $dueDateOverride, $_POST['memo'] ?? null, $totals['discount_pct'], $totals['tax_rate'], $clientReference);
+            $billedExpenseIds = json_decode($_POST['billed_expense_ids'] ?? '[]', true) ?: [];
+            enxureMarkExpensesBilled($mysqli, $billedExpenseIds, $clientId, (int) ($res['id'] ?? 0));
             echo json_encode($res);
             exit;
         }
@@ -1662,11 +1686,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, client_reference, discount_pct, tax_rate, line_items_json, status, html_content, file_path, is_quote, quote_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 1, ?)");
             $stmt->bind_param("ssssssdssddssss", $quoteNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $currencyCode, $clientReference, $discountPct, $taxRate, $lineItemsJson, $htmlContent, $relPath, $quoteExpiresAt);
             $stmt->execute();
+            $qid = $stmt->insert_id;
             $memo = trim($_POST['memo'] ?? '');
             if ($memo !== '') {
-                $qid = $stmt->insert_id;
                 enxureLogAction($mysqli, $qid, $quoteNum, 'note_added', $memo);
             }
+            $billedExpenseIds = json_decode($_POST['billed_expense_ids'] ?? '[]', true) ?: [];
+            enxureMarkExpensesBilled($mysqli, $billedExpenseIds, $clientId, $qid);
             echo json_encode(['success' => true, 'quoteNum' => $quoteNum]);
             exit;
         }
@@ -1981,6 +2007,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $mysqli->query("DELETE FROM enxure_invoice_attachments WHERE invoice_id = $id");
                 $mysqli->query("DELETE FROM enxure_payments WHERE invoice_id = $id");
                 $mysqli->query("DELETE FROM enxure_actions WHERE invoice_id = $id");
+                $mysqli->query("UPDATE enxure_expenses SET billed_invoice_id = NULL WHERE billed_invoice_id = $id");
                 $mysqli->query("DELETE FROM enxure_invoices WHERE id = $id");
             }
             echo json_encode(['success' => true]);
@@ -2399,7 +2426,7 @@ while ($r = $res->fetch_assoc())
     $clients[] = $r;
 
 $expenses = [];
-$res = $mysqli->query("SELECT e.*, COUNT(r.id) as receipt_count FROM enxure_expenses e LEFT JOIN enxure_expense_receipts r ON r.expense_id = e.id GROUP BY e.id ORDER BY e.expense_date DESC, e.id DESC");
+$res = $mysqli->query("SELECT e.*, COUNT(r.id) as receipt_count, bc.client_name as billable_client_name, bi.invoice_number as billed_invoice_number FROM enxure_expenses e LEFT JOIN enxure_expense_receipts r ON r.expense_id = e.id LEFT JOIN enxure_clients bc ON bc.id = e.billable_client_id LEFT JOIN enxure_invoices bi ON bi.id = e.billed_invoice_id GROUP BY e.id ORDER BY e.expense_date DESC, e.id DESC");
 while ($r = $res->fetch_assoc())
     $expenses[] = $r;
 $total_expenses = $mysqli->query("SELECT SUM(amount) as s FROM enxure_expenses")->fetch_assoc()['s'] ?? 0;

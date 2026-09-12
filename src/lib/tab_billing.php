@@ -23,6 +23,7 @@
                         </select>
                         <div id="adhocClientBalance" style="display:none; margin-top:0.4rem; font-size:0.8rem; color:var(--warning);"></div>
                     </div>
+                    <div id="adhocBillableExpenses" style="display:none; margin-bottom:1rem; background: var(--surface-hover); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.9rem;"></div>
                     <div class="form-group">
                         <label class="form-label">Line Items</label>
                         <table style="width:100%; border-collapse:collapse; margin-bottom:0.5rem;">
