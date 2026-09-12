@@ -461,7 +461,7 @@ See INSTALL.md's Testing email safely section to set that up.">(requires Mailpit
                                         <button type="button" class="btn" onclick="downloadClientStatement()"><i class="fa-solid fa-download"></i> Download PDF</button>
                                     </div>
                                 </div>
-                                <div class="card-body" style="padding:0;">
+                                <div class="card-body" style="padding:0; overflow:hidden; border-radius:0 0 var(--radius-lg) var(--radius-lg);">
                                     <table style="width:100%; border-collapse:collapse;">
                                         <thead>
                                             <tr style="text-align:left; border-bottom:1px solid var(--border);">

@@ -2,6 +2,11 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.21] - 2026-09-12
+
+### Fixed
+- Client Statements' preview table: the "Balance due" row's background squared off past the card's rounded bottom corners (`.card` has `border-radius` but no `overflow` clipping, and the table's `card-body` filled it edge-to-edge). The card-body now clips to a matching bottom border-radius.
+
 ## [3.0.20] - 2026-09-12
 
 ### Changed
