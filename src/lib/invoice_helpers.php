@@ -165,6 +165,31 @@ function enxureParseAmount($raw): float
     return (float) str_replace(',', '', trim((string) $raw));
 }
 
+// Best-effort reconstruction of an invoice/quote's line items from its
+// stored HTML, for rows saved before line_items_json existed — powers
+// Duplicate on older invoices. Only recognizes the default/compact
+// template's plain (no class attribute) row shape; returns [] rather than
+// guessing for anything else, including a custom template, so the caller
+// can fall back to one blank line item instead of a wrong one.
+function enxureExtractLineItemsFromHtml(string $html): array
+{
+    if (!preg_match_all('/<tr><td>(.*?)<\/td><td>(.*?)<\/td><td>(.*?)<\/td><\/tr>/s', $html, $matches, PREG_SET_ORDER)) {
+        return [];
+    }
+    $items = [];
+    foreach ($matches as $m) {
+        if (!preg_match('/([\d,]+\.\d{2})\s*$/', $m[3], $amountMatch)) {
+            continue;
+        }
+        $items[] = [
+            'code' => html_entity_decode($m[1], ENT_QUOTES),
+            'desc' => html_entity_decode($m[2], ENT_QUOTES),
+            'amount' => number_format(enxureParseAmount($amountMatch[1]), 2),
+        ];
+    }
+    return $items;
+}
+
 // Computes subtotal/discount/tax/total from line items and a single
 // invoice-level discount % and tax % (not per line item). Discount is taken
 // off the subtotal first, then tax applied to what's left. Mutates
@@ -224,7 +249,7 @@ function expenseCategories(): array
 // a terser layout for invoices with many line items; 'detailed' is the
 // default; 'custom' renders $customTemplate through enxureRenderTemplate()
 // instead of the built-in markup below.
-function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amount, $accountName, $accountNumber, $senderEmail, $lineItems = [], $brandColor = '#4a90e2', $footerText = '', $currencyCode = 'USD', $licenseFingerprint = '', $discountPct = 0.0, $taxRate = 0.0, $template = 'detailed', ?string $payUrl = null, bool $showPoweredBy = true, string $vatNumber = '', string $recipientPhone = '', string $recipientAddress = '', ?string $customTemplate = null, string $businessName = '', string $documentType = 'Invoice', ?string $quoteExpiresAt = null)
+function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amount, $accountName, $accountNumber, $senderEmail, $lineItems = [], $brandColor = '#4a90e2', $footerText = '', $currencyCode = 'USD', $licenseFingerprint = '', $discountPct = 0.0, $taxRate = 0.0, $template = 'detailed', ?string $payUrl = null, bool $showPoweredBy = true, string $vatNumber = '', string $recipientPhone = '', string $recipientAddress = '', ?string $customTemplate = null, string $businessName = '', string $documentType = 'Invoice', ?string $quoteExpiresAt = null, string $recipientContactName = '', string $clientReference = '')
 {
     $watermarkComment = $licenseFingerprint !== '' ? "<!-- lic:{$licenseFingerprint} -->" : '';
     $watermarkSpan = $licenseFingerprint !== '' ? "<span style=\"font-size:1px;color:#f9f9f8;user-select:none;\">{$licenseFingerprint}</span>" : '';
@@ -240,10 +265,13 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
             'recipient' => $recipient,
             'recipient_phone' => $recipientPhone,
             'recipient_address' => $recipientAddress,
+            'recipient_contact_name' => $recipientContactName,
             'date' => $date,
             'due_date' => $dueDate,
             'quote_expires_at' => $quoteExpiresAt ?? '',
             'invoice_number' => $invoiceNumber,
+            'client_reference' => $clientReference,
+            'has_client_reference' => $clientReference !== '',
             'amount' => $amount,
             'currency_code' => $currencyCode,
             'account_name' => $accountName,
@@ -302,6 +330,9 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     $currencyCode = htmlspecialchars($currencyCode);
 
     $recipientDetailsHtml = '';
+    if ($recipientContactName !== '') {
+        $recipientDetailsHtml .= "<p><strong>Attn:</strong> " . htmlspecialchars($recipientContactName) . "</p>";
+    }
     if ($recipientAddress !== '') {
         $recipientDetailsHtml .= "<p>" . nl2br(htmlspecialchars($recipientAddress)) . "</p>";
     }
@@ -310,6 +341,7 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     }
     $vatHtml = $vatNumber !== '' ? "<p><strong>GST / VAT Number:</strong> " . htmlspecialchars($vatNumber) . "</p>" : '';
     $quoteExpiryHtml = ($documentType === 'Quote' && $quoteExpiresAt) ? "<p><strong>Valid Until:</strong> " . htmlspecialchars($quoteExpiresAt) . "</p>" : '';
+    $clientReferenceHtml = $clientReference !== '' ? "<p><strong>Reference:</strong> " . htmlspecialchars($clientReference) . "</p>" : '';
 
     // $payUrl is null when no gateway is enabled, or no Public URL is
     // configured to build one from (see enxurePublicBaseUrl()) — omitted
@@ -333,7 +365,7 @@ function generateInvoiceHTML($recipient, $date, $dueDate, $invoiceNumber, $amoun
     return <<<HTML
 {$watermarkComment}<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>{$documentType}</title>
 <style>{$style}</style></head>
-<body><div class="header"><h2>{$documentType}</h2><img src="cid:logo_cid" alt="Logo" /></div><div class="invoice-meta"><p><strong>Invoice To:</strong> {$recipient}</p>{$recipientDetailsHtml}<p><strong>Invoice Date:</strong> {$date}</p><p><strong>Invoice Due:</strong> {$dueDate}</p><p><strong>Invoice Number:</strong> {$invoiceNumber}</p><p><strong>Amount Due:</strong> {$currencyCode} \${$amount}</p>{$quoteExpiryHtml}{$payButtonHtml}</div><h3>Invoice Details</h3><table><thead><tr><th>Code</th><th>Description</th><th>Amount</th></tr></thead><tbody>{$linesHtml}{$summaryRowsHtml}<tr class="total-row"><td colspan="2">Total</td><td>{$currencyCode} \${$amount}</td></tr></tbody></table><div class="footer"><h3>Payment Instructions</h3>{$footerHtml}<h3>For Any Inquiries</h3><p>Email: {$senderEmail}</p>{$vatHtml}{$poweredByHtml}</div>{$watermarkSpan}</body></html>
+<body><div class="header"><h2>{$documentType}</h2><img src="cid:logo_cid" alt="Logo" /></div><div class="invoice-meta"><p><strong>Invoice To:</strong> {$recipient}</p>{$recipientDetailsHtml}<p><strong>Invoice Date:</strong> {$date}</p><p><strong>Invoice Due:</strong> {$dueDate}</p><p><strong>Invoice Number:</strong> {$invoiceNumber}</p>{$clientReferenceHtml}<p><strong>Amount Due:</strong> {$currencyCode} \${$amount}</p>{$quoteExpiryHtml}{$payButtonHtml}</div><h3>Invoice Details</h3><table><thead><tr><th>Code</th><th>Description</th><th>Amount</th></tr></thead><tbody>{$linesHtml}{$summaryRowsHtml}<tr class="total-row"><td colspan="2">Total</td><td>{$currencyCode} \${$amount}</td></tr></tbody></table><div class="footer"><h3>Payment Instructions</h3>{$footerHtml}<h3>For Any Inquiries</h3><p>Email: {$senderEmail}</p>{$vatHtml}{$poweredByHtml}</div>{$watermarkSpan}</body></html>
 HTML;
 }
 

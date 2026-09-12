@@ -545,8 +545,10 @@
                                 <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0; margin-bottom:1rem;">
                                     Subject/body of the invoice and reminder emails sent to clients. Available
                                     placeholders: <code>{business_name}</code> <code>{client_name}</code>
-                                    <code>{invoice_number}</code> <code>{amount}</code> <code>{due_date}</code>
-                                    <code>{days_overdue}</code> (reminder only).</p>
+                                    <code>{contact_name}</code> <code>{invoice_number}</code> <code>{amount}</code>
+                                    <code>{due_date}</code> <code>{days_overdue}</code> (reminder only).
+                                    <code>{contact_name}</code> falls back to <code>{client_name}</code> when a
+                                    client has no contact person set.</p>
                                 <form id="emailTemplatesForm" onsubmit="event.preventDefault(); saveEmailTemplates();">
                                     <div class="form-group">
                                         <label class="form-label" for="invoiceEmailSubject">Invoice Email Subject</label>
@@ -562,6 +564,15 @@
                                         <label class="form-label" for="reminderEmailBody">Reminder Email Body</label>
                                         <textarea id="reminderEmailBody" name="reminder_email_body" class="form-control"
                                             rows="6"><?= htmlspecialchars($settings['reminder_email_body'] ?? DEFAULT_REMINDER_BODY) ?></textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="invoiceBccEmail">BCC Every Invoice Email <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
+                                        <input type="email" id="invoiceBccEmail" name="invoice_bcc_email" class="form-control"
+                                            placeholder="e.g. your bookkeeper's inbox"
+                                            value="<?= htmlspecialchars($settings['invoice_bcc_email'] ?? '') ?>">
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
+                                            BCC'd on every invoice, resend, and reminder email this instance sends.
+                                            Leave blank to disable.</p>
                                     </div>
                                     <button type="submit" class="btn primary" id="saveEmailTemplatesBtn"><i
                                             class="fa-solid fa-save"></i> Save Email Templates</button>
@@ -1170,7 +1181,9 @@
                                                     <code>document_type</code> ("Invoice" or "Quote"),
                                                     <code>vat_number</code>, <code>recipient</code>,
                                                     <code>recipient_phone</code>, <code>recipient_address</code>,
+                                                    <code>recipient_contact_name</code>,
                                                     <code>date</code>, <code>due_date</code>, <code>quote_expires_at</code> (quotes only), <code>invoice_number</code>,
+                                                    <code>client_reference</code>, <code>has_client_reference</code>,
                                                     <code>amount</code>, <code>currency_code</code>,
                                                     <code>account_name</code>, <code>account_number</code>,
                                                     <code>sender_email</code>, <code>brand_color</code>,

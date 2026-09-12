@@ -79,6 +79,7 @@ if (empty($lineItems)) {
 }
 $discountPct = (float) ($_POST['discount_pct'] ?? 0);
 $taxRate = (float) ($_POST['tax_rate'] ?? 0);
+$clientReference = substr(trim($_POST['client_reference'] ?? ''), 0, 100);
 $totals = computeInvoiceTotals($lineItems, $discountPct, $taxRate);
 $amount = $totals['total'];
 $date = date("Y-m-d");
@@ -88,7 +89,7 @@ $invNum = generateInvoiceNumber($mysqli, $client['client_key'], $client['client_
 $brandColor = $settings['brand_color'] ?? '#4a90e2';
 $footerText = $settings['footer_text'] ?? '';
 $currencyCode = enxureResolveCurrency($client['currency'] ?? '', $settings);
-$html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'), vatNumber: $settings['vat_number'] ?? '', recipientPhone: $client['phone'] ?? '', recipientAddress: $client['address'] ?? '', customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null, businessName: $settings['business_name'] ?? '');
+$html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'), vatNumber: $settings['vat_number'] ?? '', recipientPhone: $client['phone'] ?? '', recipientAddress: $client['address'] ?? '', customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null, businessName: $settings['business_name'] ?? '', recipientContactName: $client['contact_name'] ?? '', clientReference: $clientReference);
 try {
     $pdf = generateInvoicePdf($html);
 } catch (Throwable $e) {

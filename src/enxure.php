@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', require __DIR__ . '/lib/license_purchase_url.php');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.16');
+define('APP_VERSION', '3.0.18');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
@@ -56,7 +56,7 @@ define('PASSWORD_MIN_LENGTH', 8);
 // by renderEmailTemplate() below.
 define('DEFAULT_INVOICE_SUBJECT', '{business_name} - Invoice for {client_name}');
 define('DEFAULT_REMINDER_SUBJECT', 'Payment Reminder: Invoice {invoice_number} is overdue');
-define('DEFAULT_REMINDER_BODY', "Hi {client_name},\n\nThis is a reminder that invoice {invoice_number}, due {due_date}, is now {days_overdue} days overdue. The outstanding balance is {amount}.\n\nPlease arrange payment at your earliest convenience. If you've already paid, you can disregard this message.\n\nThanks,\n{business_name}");
+define('DEFAULT_REMINDER_BODY', "Hi {contact_name},\n\nThis is a reminder that invoice {invoice_number}, due {due_date}, is now {days_overdue} days overdue. The outstanding balance is {amount}.\n\nPlease arrange payment at your earliest convenience. If you've already paid, you can disregard this message.\n\nThanks,\n{business_name}");
 
 require_once __DIR__ . '/lib/markdown.php';
 require_once __DIR__ . '/lib/invoice_helpers.php';
@@ -316,7 +316,23 @@ function enxureLicenseSignatureOk($mysqli, array $settings): bool
     return $host !== '' && $host === enxureNormaliseDomain($fields[1]);
 }
 
-function processInvoice($mysqli, $client, $amount, $description, $emailPassword, $lineItems = null, $dueDateOverride = null, $memo = null, $discountPct = 0.0, $taxRate = 0.0)
+// Adds the client's CC (their AP inbox, Settings > Clients) and the
+// instance-wide BCC (Settings > Email Templates, e.g. a bookkeeper) to an
+// outgoing invoice-related email, when each is set and a valid address.
+// Shared by every send path that emails an invoice/reminder to a client.
+function enxureApplyInvoiceCcBcc(\PHPMailer\PHPMailer\PHPMailer $mail, string $ccEmail, array $settings): void
+{
+    $ccEmail = trim($ccEmail);
+    if ($ccEmail !== '' && filter_var($ccEmail, FILTER_VALIDATE_EMAIL)) {
+        $mail->addCC($ccEmail);
+    }
+    $bccEmail = trim($settings['invoice_bcc_email'] ?? '');
+    if ($bccEmail !== '' && filter_var($bccEmail, FILTER_VALIDATE_EMAIL)) {
+        $mail->addBCC($bccEmail);
+    }
+}
+
+function processInvoice($mysqli, $client, $amount, $description, $emailPassword, $lineItems = null, $dueDateOverride = null, $memo = null, $discountPct = 0.0, $taxRate = 0.0, $clientReference = '')
 {
     global $settings;
     $__unlocked = enxureLicenseSignatureOk($mysqli, $settings);
@@ -368,7 +384,9 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
         recipientPhone: $client['phone'] ?? '',
         recipientAddress: $client['address'] ?? '',
         customTemplate: $invoiceTemplate === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null,
-        businessName: $fromName
+        businessName: $fromName,
+        recipientContactName: $client['contact_name'] ?? '',
+        clientReference: $clientReference
     );
 
     $folderName = strtolower(str_replace(" ", "_", $client['client_name']));
@@ -401,9 +419,11 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
         $mail->CharSet = 'UTF-8';
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($client['email'], $client['client_name']);
+        enxureApplyInvoiceCcBcc($mail, $client['cc_email'] ?? '', $settings);
         $mail->Subject = renderEmailTemplate($settings['invoice_email_subject'] ?? DEFAULT_INVOICE_SUBJECT, [
             'business_name' => $fromName,
             'client_name' => $client['client_name'],
+            'contact_name' => trim($client['contact_name'] ?? '') !== '' ? $client['contact_name'] : $client['client_name'],
             'invoice_number' => $invNum,
             'amount' => $currencyCode . ' ' . number_format($amount, 2),
             'due_date' => $dueDate,
@@ -422,8 +442,9 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
     }
 
     $status = $emailSent ? 'sent' : 'failed';
-    $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssssdssss", $invNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $currencyCode, $status, $htmlContent, $relPath);
+    $lineItemsJson = json_encode($lineItems);
+    $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, client_reference, discount_pct, tax_rate, line_items_json, status, html_content, file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssdssddssss", $invNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $currencyCode, $clientReference, $discountPct, $taxRate, $lineItemsJson, $status, $htmlContent, $relPath);
     $stmt->execute();
 
     $actionType = $emailSent ? 'email_sent' : 'email_failed';
@@ -568,9 +589,11 @@ function resendInvoiceEmail($mysqli, array $inv, array $settings, string $emailP
         $mail->CharSet = 'UTF-8';
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($inv['recipient_email'], $inv['client_name']);
+        enxureApplyInvoiceCcBcc($mail, $inv['cc_email'] ?? '', $settings);
         $mail->Subject = renderEmailTemplate($settings['invoice_email_subject'] ?? DEFAULT_INVOICE_SUBJECT, [
             'business_name' => $fromName,
             'client_name' => $inv['client_name'],
+            'contact_name' => trim($inv['contact_name'] ?? '') !== '' ? $inv['contact_name'] : $inv['client_name'],
             'invoice_number' => $inv['invoice_number'],
             'amount' => $currencyCode . ' ' . number_format((float) $inv['amount'], 2),
             'due_date' => $inv['due_date'],
@@ -604,9 +627,11 @@ function sendReminderEmailForInvoice($mysqli, array $inv, array $settings, strin
     $currencyCode = enxureResolveCurrency($inv['currency'] ?? '', $settings);
     $outstanding = (float) $inv['amount'] - (float) ($inv['paid_amount'] ?? 0);
     $daysOverdue = (int) floor((time() - strtotime($inv['due_date'])) / 86400);
+    $contactName = trim($inv['contact_name'] ?? '') !== '' ? $inv['contact_name'] : $inv['client_name'];
     $vars = [
         'business_name' => $fromName,
         'client_name' => $inv['client_name'],
+        'contact_name' => $contactName,
         'invoice_number' => $inv['invoice_number'],
         'amount' => $currencyCode . ' ' . number_format($outstanding, 2),
         'due_date' => date('Y-m-d', strtotime($inv['due_date'])),
@@ -631,6 +656,7 @@ function sendReminderEmailForInvoice($mysqli, array $inv, array $settings, strin
         $mail->CharSet = 'UTF-8';
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($inv['recipient_email'], $inv['client_name']);
+        enxureApplyInvoiceCcBcc($mail, $inv['cc_email'] ?? '', $settings);
         $mail->Subject = $subject;
         // Resends the original invoice HTML rather than a plain-text blurb.
         // Falls back to the plain-text template for rows with no stored
@@ -663,7 +689,8 @@ function sendOverdueReminders($mysqli, array $settings, string $emailPassword): 
     $sent = 0;
     $errors = 0;
     $res = $mysqli->query(
-        "SELECT i.* FROM enxure_invoices i
+        "SELECT i.*, c.contact_name, c.cc_email FROM enxure_invoices i
+         LEFT JOIN enxure_clients c ON c.client_key = i.client_key
          WHERE i.is_quote = 0
            AND i.status IN ('sent', 'pending')
            AND i.due_date IS NOT NULL
@@ -816,6 +843,7 @@ function renderInvoiceRows(array $invoices): string
             <td><?= htmlspecialchars($inv['client_name']) ?><?php if ($inv['is_test'])
                   echo ' <span class="badge test">Test</span>'; ?>
             </td>
+            <td><?= htmlspecialchars($inv['client_reference'] ?? '') ?></td>
             <td>
                 <?php if ($inv['status'] !== 'paid' && $inv['paid_amount'] > 0): ?>
                     <div
@@ -853,6 +881,14 @@ function renderInvoiceRows(array $invoices): string
                 <button class="btn small"
                     onclick="viewInvoice(<?= htmlspecialchars(json_encode($inv)) ?>)"><i
                         class="fa-solid fa-eye"></i></button>
+                <button class="btn small" title="Duplicate — pre-fills Ad Hoc Invoice with this client and line items"
+                    onclick="duplicateInvoice(<?= htmlspecialchars(json_encode([
+                        'client_key' => $inv['client_key'],
+                        'client_reference' => $inv['client_reference'] ?? '',
+                        'discount_pct' => $inv['discount_pct'] ?? 0,
+                        'tax_rate' => $inv['tax_rate'] ?? 0,
+                        'line_items_json' => $inv['line_items_json'] ?: json_encode(enxureExtractLineItemsFromHtml($inv['html_content'] ?? '')),
+                    ])) ?>)"><i class="fa-solid fa-copy"></i></button>
                 <button class="btn small"
                     onclick="openNoteModal(<?= $inv['id'] ?>, '<?= htmlspecialchars($inv['invoice_number']) ?>')"
                     title="<?= $inv['note_count'] > 0 ? $inv['note_count'] . ' note(s) added' : 'Add note' ?>"
@@ -1040,6 +1076,14 @@ function renderQuoteRows($qRes): string
                 <button class="btn small" title="Preview"
                     onclick="viewInvoice(<?= htmlspecialchars(json_encode($q)) ?>)"><i
                         class="fa-solid fa-eye"></i></button>
+                <button class="btn small" title="Duplicate — pre-fills Ad Hoc Invoice with this client and line items"
+                    onclick="duplicateInvoice(<?= htmlspecialchars(json_encode([
+                        'client_key' => $q['client_key'],
+                        'client_reference' => $q['client_reference'] ?? '',
+                        'discount_pct' => $q['discount_pct'] ?? 0,
+                        'tax_rate' => $q['tax_rate'] ?? 0,
+                        'line_items_json' => $q['line_items_json'] ?: json_encode(enxureExtractLineItemsFromHtml($q['html_content'] ?? '')),
+                    ])) ?>)"><i class="fa-solid fa-copy"></i></button>
                 <button class="btn small success" title="Convert to Invoice"
                     onclick="convertQuote(<?= $q['id'] ?>,'<?= htmlspecialchars($q['invoice_number']) ?>',<?= $__quoteExpired ? 'true' : 'false' ?>)"><i
                         class="fa-solid fa-file-invoice"></i> Convert</button>
@@ -1519,6 +1563,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 throw new Exception('No line items provided');
             $discountPct = (float) ($_POST['discount_pct'] ?? 0);
             $taxRate = (float) ($_POST['tax_rate'] ?? 0);
+            $clientReference = substr(trim($_POST['client_reference'] ?? ''), 0, 100);
             $totals = computeInvoiceTotals($lineItems, $discountPct, $taxRate);
             $amount = $totals['total'];
             $date = date("Y-m-d");
@@ -1528,7 +1573,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $brandColor = $settings['brand_color'] ?? '#4a90e2';
             $footerText = $settings['footer_text'] ?? '';
             $currencyCode = enxureResolveCurrency($client['currency'] ?? '', $settings);
-            $html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'), vatNumber: $settings['vat_number'] ?? '', recipientPhone: $client['phone'] ?? '', recipientAddress: $client['address'] ?? '', customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null, businessName: $settings['business_name'] ?? '');
+            $html = generateInvoiceHTML($client['client_name'], $date, $dueDate, $invNum, number_format($amount, 2), $client['account_name'] ?: ($settings['default_account_name'] ?? ''), $client['account_number'] ?: ($settings['default_account_number'] ?? ''), getenv('SMTP_FROM_EMAIL') ?: '', $lineItems, $brandColor, $footerText, $currencyCode, invoiceWatermarkFingerprint($settings), $totals['discount_pct'], $totals['tax_rate'], $settings['invoice_template'] ?? 'detailed', null, !($licenseValid && ($settings['hide_powered_by'] ?? '0') === '1'), vatNumber: $settings['vat_number'] ?? '', recipientPhone: $client['phone'] ?? '', recipientAddress: $client['address'] ?? '', customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null, businessName: $settings['business_name'] ?? '', recipientContactName: $client['contact_name'] ?? '', clientReference: $clientReference);
             echo json_encode(['success' => true, 'html' => $html, 'invoice_number' => $invNum]);
             exit;
         }
@@ -1543,9 +1588,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 throw new Exception('No line items provided');
             $discountPct = (float) ($_POST['discount_pct'] ?? 0);
             $taxRate = (float) ($_POST['tax_rate'] ?? 0);
+            $clientReference = substr(trim($_POST['client_reference'] ?? ''), 0, 100);
             $totals = computeInvoiceTotals($lineItems, $discountPct, $taxRate);
             $dueDateOverride = validDateOverride($_POST['due_date'] ?? null);
-            $res = processInvoice($mysqli, $client, $totals['total'], '', $emailPassword, $lineItems, $dueDateOverride, $_POST['memo'] ?? null, $totals['discount_pct'], $totals['tax_rate']);
+            $res = processInvoice($mysqli, $client, $totals['total'], '', $emailPassword, $lineItems, $dueDateOverride, $_POST['memo'] ?? null, $totals['discount_pct'], $totals['tax_rate'], $clientReference);
             echo json_encode($res);
             exit;
         }
@@ -1563,6 +1609,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             $discountPct = (float) ($_POST['discount_pct'] ?? 0);
             $taxRate = (float) ($_POST['tax_rate'] ?? 0);
+            $clientReference = substr(trim($_POST['client_reference'] ?? ''), 0, 100);
             $totals = computeInvoiceTotals($lineItems, $discountPct, $taxRate);
             $amount = $totals['total'];
             $date = date('Y-m-d');
@@ -1602,7 +1649,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 customTemplate: ($settings['invoice_template'] ?? 'detailed') === 'custom' ? ($settings['custom_invoice_template'] ?? '') : null,
                 businessName: $settings['business_name'] ?? '',
                 documentType: 'Quote',
-                quoteExpiresAt: $quoteExpiresAt
+                quoteExpiresAt: $quoteExpiresAt,
+                recipientContactName: $client['contact_name'] ?? '',
+                clientReference: $clientReference
             );
             $folderName = strtolower(str_replace(' ', '_', $client['client_name']));
             $invoiceDir = INVOICES_DIR . $folderName;
@@ -1611,8 +1660,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $htmlFile = "$invoiceDir/$quoteNum.html";
             @file_put_contents($htmlFile, $htmlContent);
             $relPath = "invoices/$folderName/$quoteNum.html";
-            $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status, html_content, file_path, is_quote, quote_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 1, ?)");
-            $stmt->bind_param("ssssssdssss", $quoteNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $currencyCode, $htmlContent, $relPath, $quoteExpiresAt);
+            $lineItemsJson = json_encode($lineItems);
+            $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, client_reference, discount_pct, tax_rate, line_items_json, status, html_content, file_path, is_quote, quote_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, 1, ?)");
+            $stmt->bind_param("ssssssdssddssss", $quoteNum, $client['client_key'], $client['client_name'], $client['email'], $date, $dueDate, $amount, $currencyCode, $clientReference, $discountPct, $taxRate, $lineItemsJson, $htmlContent, $relPath, $quoteExpiresAt);
             $stmt->execute();
             $memo = trim($_POST['memo'] ?? '');
             if ($memo !== '') {
@@ -1794,7 +1844,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         if ($_POST['action'] === 'resend_invoice_email') {
             $id = (int) ($_POST['id'] ?? 0);
-            $inv = $mysqli->query("SELECT * FROM enxure_invoices WHERE id = $id")->fetch_assoc();
+            $inv = $mysqli->query("SELECT i.*, c.contact_name, c.cc_email FROM enxure_invoices i LEFT JOIN enxure_clients c ON c.client_key = i.client_key WHERE i.id = $id")->fetch_assoc();
             if (!$inv || empty($inv['html_content'])) {
                 echo json_encode(['success' => false, 'error' => 'Invoice not found or has no stored content to resend.']);
                 exit;
@@ -1817,7 +1867,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // the cron sweep. Logs 'reminder_sent' too, so a manual send also
             // satisfies the automatic sweep's idempotency guard.
             $id = (int) ($_POST['id'] ?? 0);
-            $inv = $mysqli->query("SELECT * FROM enxure_invoices WHERE id = $id")->fetch_assoc();
+            $inv = $mysqli->query("SELECT i.*, c.contact_name, c.cc_email FROM enxure_invoices i LEFT JOIN enxure_clients c ON c.client_key = i.client_key WHERE i.id = $id")->fetch_assoc();
             if (!$inv) {
                 echo json_encode(['success' => false, 'error' => 'Invoice not found.']);
                 exit;

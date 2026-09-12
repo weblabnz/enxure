@@ -24,8 +24,17 @@
                     <div class="client-form-grid">
                         <div class="form-group"><label class="form-label">Client Name</label><input type="text"
                                 id="clientName" class="form-control" required></div>
+                        <div class="form-group"><label class="form-label">Contact Person <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label><input type="text"
+                                id="clientContactName" class="form-control" placeholder="e.g. Jane Smith">
+                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Used in the
+                                invoice/reminder greeting when set. Leave blank to use the client name above, as
+                                today.</p></div>
                         <div class="form-group"><label class="form-label">Email Address</label><input type="email"
                                 id="clientEmail" class="form-control"></div>
+                        <div class="form-group"><label class="form-label">CC Email <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label><input type="email"
+                                id="clientCcEmail" class="form-control" placeholder="e.g. their AP inbox">
+                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">CC'd on
+                                every invoice email sent to this client.</p></div>
                         <div class="form-group"><label class="form-label">Phone</label><input type="text"
                                 id="clientPhone" class="form-control" placeholder="e.g. +1 555 123 4567"></div>
                         <div class="form-group" style="grid-column:1 / -1;"><label class="form-label">Address</label><textarea

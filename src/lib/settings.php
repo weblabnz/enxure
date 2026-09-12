@@ -544,12 +544,17 @@ function enxureHandleSaveEmailTemplates($mysqli): void
     $invoiceEmailSubject = trim($_POST['invoice_email_subject'] ?? '') ?: DEFAULT_INVOICE_SUBJECT;
     $reminderEmailSubject = trim($_POST['reminder_email_subject'] ?? '') ?: DEFAULT_REMINDER_SUBJECT;
     $reminderEmailBody = trim($_POST['reminder_email_body'] ?? '') ?: DEFAULT_REMINDER_BODY;
+    $invoiceBccEmail = trim($_POST['invoice_bcc_email'] ?? '');
+    if ($invoiceBccEmail !== '' && !filter_var($invoiceBccEmail, FILTER_VALIDATE_EMAIL)) {
+        throw new Exception('BCC email is not a valid email address.');
+    }
 
     $upsert = $mysqli->prepare("INSERT INTO enxure_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
     foreach ([
         'invoice_email_subject' => $invoiceEmailSubject,
         'reminder_email_subject' => $reminderEmailSubject,
         'reminder_email_body' => $reminderEmailBody,
+        'invoice_bcc_email' => $invoiceBccEmail,
     ] as $key => $value) {
         $upsert->bind_param("ss", $key, $value);
         $upsert->execute();

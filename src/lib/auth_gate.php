@@ -158,6 +158,24 @@ $hasInvoiceCurrencyCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMN
 if (!$hasInvoiceCurrencyCol) {
     $mysqli->query("ALTER TABLE enxure_invoices ADD COLUMN currency VARCHAR(3) NOT NULL DEFAULT '' AFTER amount");
 }
+// Same idea for installs that predate the client contact-person/CC-email
+// fields — empty string means "no contact person set"/"no CC" and falls back
+// to prior behavior (greeting uses client_name, no CC on invoice emails).
+$hasContactNameCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_clients' AND COLUMN_NAME = 'contact_name'")->num_rows > 0;
+if (!$hasContactNameCol) {
+    $mysqli->query("ALTER TABLE enxure_clients ADD COLUMN contact_name VARCHAR(150) NOT NULL DEFAULT '' AFTER client_name");
+}
+$hasClientCcCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_clients' AND COLUMN_NAME = 'cc_email'")->num_rows > 0;
+if (!$hasClientCcCol) {
+    $mysqli->query("ALTER TABLE enxure_clients ADD COLUMN cc_email VARCHAR(255) NOT NULL DEFAULT '' AFTER email");
+}
+// Same idea for installs that predate the PO/reference field, the
+// discount/tax snapshot, and stored line items — empty/zero/NULL match every
+// invoice generated before these existed (no reference, no Duplicate data).
+$hasClientReferenceCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_invoices' AND COLUMN_NAME = 'client_reference'")->num_rows > 0;
+if (!$hasClientReferenceCol) {
+    $mysqli->query("ALTER TABLE enxure_invoices ADD COLUMN client_reference VARCHAR(100) NOT NULL DEFAULT '' AFTER currency, ADD COLUMN discount_pct DECIMAL(5,2) NOT NULL DEFAULT 0.00 AFTER client_reference, ADD COLUMN tax_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00 AFTER discount_pct, ADD COLUMN line_items_json MEDIUMTEXT DEFAULT NULL AFTER tax_rate");
+}
 
 $userCount = $mysqli->query("SELECT COUNT(*) as c FROM enxure_users")->fetch_assoc()['c'] ?? 0;
 $authError = '';

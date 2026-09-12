@@ -181,12 +181,8 @@
                                 <?php
                                 $__roadmapEffortLabels = ['quick' => 'Quick win', 'medium' => 'Medium lift', 'large' => 'Larger effort'];
                                 $__roadmapItems = [
-                                    ['effort' => 'quick', 'title' => 'PO number / client reference field', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Ad Hoc Invoicing', 'target' => 'feat-invoicing'], 'desc' => 'Plenty of corporate clients bounce an invoice straight back to their AP department if it\'s missing a Purchase Order number. There\'s nowhere to put one today — a free-text reference field per invoice, shown on the PDF/email and filterable in the Invoices table, would fix that without touching the numbering scheme itself.'],
-                                    ['effort' => 'quick', 'title' => 'CC/BCC on invoice emails', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Ad Hoc Invoicing', 'target' => 'feat-invoicing'], 'desc' => 'Every send today calls addAddress() with exactly one recipient — the client\'s own recipient_email. There\'s no way to loop in their AP inbox alongside their main contact, or auto-BCC your own bookkeeper on every invoice that goes out, without forwarding it yourself afterward.'],
-                                    ['effort' => 'quick', 'title' => 'Duplicate an existing invoice', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Ad Hoc Invoicing', 'target' => 'feat-invoicing'], 'desc' => 'Starting a new invoice that\'s "the same as last month\'s, just adjust one line" means rebuilding every line item from scratch today — there\'s no clone action anywhere. A "Duplicate" button on any invoice or quote that opens the builder pre-filled with its client and line items would make repeat-ish billing much faster without touching Recurring Billing\'s fixed-schedule model at all.'],
                                     ['effort' => 'quick', 'title' => 'Bulk "Send Reminder" for overdue invoices', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Late Fees & Reminders', 'target' => 'feat-recurring'], 'desc' => 'send_reminder_email only ever runs one invoice at a time. The Invoices table already has a bulk-select toolbar with Mark Paid, Resend, and Delete on it — adding Send Reminder there, working exactly the same way over the checked rows, would save clicking into every overdue invoice individually when a handful all need a nudge at once.'],
                                     ['effort' => 'quick', 'title' => 'Email the Client Portal link directly', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Client Portal', 'target' => 'feat-clients'], 'desc' => 'generatePortalLink() only ever fills a text box for you to copy and paste yourself — there\'s no button that emails the link straight to the client. A "Send to client" option next to the existing Copy button, reusing the same email infrastructure every invoice send already goes through, would remove that manual copy/paste step.'],
-                                    ['effort' => 'quick', 'title' => 'Client contact-person name', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Clients & CRM Notes', 'target' => 'feat-clients'], 'desc' => 'enxure_clients only has client_name — for a client that\'s a company, there\'s nowhere to record who the invoice should actually greet (their AP contact, not the business itself). A separate, optional contact-person field used in the email/PDF greeting when set — falling back to client_name exactly as today when it\'s left blank — would make invoices read less like a form letter for B2B clients.'],
                                     ['effort' => 'medium', 'title' => 'Multi-step overdue reminder cadence', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Late Fees & Reminders', 'target' => 'feat-recurring'], 'desc' => 'sendOverdueReminders() sends exactly one reminder per invoice, fixed at 7 days overdue, ever. A configurable sequence (e.g. day 3 friendly nudge, day 14 firmer, day 30 final notice) reusing the same guard-against-duplicate pattern the single reminder already has would make chasing payment far less manual for anyone not using Late Fees.'],
                                     ['effort' => 'medium', 'title' => 'Billable expenses', 'since' => '2026-09-12', 'desc' => 'Expenses (accounts payable) have no link to a client today, so a contractor who fronts a client cost — a domain, a stock photo license, a subcontractor invoice — has to manually retype it as an invoice line item. Tagging an expense "billable to Client X" and offering it as a one-click line item next time that client\'s invoice is built would close that loop.'],
                                     ['effort' => 'medium', 'title' => 'Structured outbound webhooks', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Notifications', 'target' => 'feat-notifications'], 'desc' => 'The existing generic webhook channel sends a human-readable text string ("Invoice INV-042 is 7 days overdue") for every event type — fine for a Slack/Telegram alert, useless for driving Zapier/Make/n8n. A proper JSON payload (event name, invoice/client/amount fields) alongside the current text alerts would let the same events trigger real automations, not just notifications.'],
@@ -317,20 +313,30 @@
                                     directly, no breakdown shown.</p>
                                 <p>Due date can be typed in manually, or left blank to fall back to the client's own
                                     <strong>Payment Terms (days)</strong> figure from their Client record, counted
-                                    from the invoice date. There's also an <strong>Internal Note</strong> field —
-                                    it's saved with the invoice for your own reference but is never shown to the
-                                    client or included in the emailed/PDF version.</p>
+                                    from the invoice date. <strong>PO / Reference</strong> is an optional free-text
+                                    field for the client's own Purchase Order or reference number — shown on the
+                                    PDF/email and its own column in the Invoices table, useful for corporate clients
+                                    whose AP department bounces anything without one. There's also an
+                                    <strong>Internal Note</strong> field — it's saved with the invoice for your own
+                                    reference but is never shown to the client or included in the emailed/PDF
+                                    version.</p>
                                 <h2>Templates &amp; sending</h2>
                                 <p>Which layout an invoice renders in — <strong>Detailed</strong> or
                                     <strong>Compact</strong> — is a single instance-wide choice under Settings &gt;
                                     Branding, not something picked per invoice. Sending an invoice emails the client
                                     the rendered HTML and attaches a server-generated PDF (built with dompdf); the
                                     "Download PDF" button on the invoice itself renders through the exact same code
-                                    path, so what you download always matches what a client received. Every send —
-                                    and every send failure — is written to the Audit Log with the invoice number and
-                                    recipient. <strong>Resend Invoice Email</strong> re-sends that same stored
-                                    HTML/PDF later (e.g. a client says they lost it) without touching the invoice
-                                    number or regenerating anything.</p>
+                                    path, so what you download always matches what a client received. A client's own
+                                    <strong>CC Email</strong> (Client form) is CC'd automatically, and Settings &gt;
+                                    Email Templates has an instance-wide BCC for looping in a bookkeeper — both apply
+                                    to every invoice, resend, and reminder email. Every send — and every send failure
+                                    — is written to the Audit Log with the invoice number and recipient.
+                                    <strong>Resend Invoice Email</strong> re-sends that same stored HTML/PDF later
+                                    (e.g. a client says they lost it) without touching the invoice number or
+                                    regenerating anything, and <strong>Duplicate</strong> opens the Ad Hoc Invoice
+                                    builder pre-filled with that invoice or quote's client, line items, PO reference,
+                                    and discount/tax — handy for a repeat-ish invoice that's "the same as last
+                                    month's, just adjust one line."</p>
                                 <h2>Quotes</h2>
                                 <p>Quotes use the identical line-item builder as Ad Hoc invoices, but
                                     <strong>Save Quote</strong> stores it without emailing anything and without
@@ -459,8 +465,14 @@
                             <div class="card-body doc-content">
                                 <h1>Clients &amp; Client Portal</h1>
                                 <h2>The client record</h2>
-                                <p>The Add/Edit Client form, in order: <strong>Client Name</strong> and
-                                    <strong>Email Address</strong>; <strong>Rate</strong> (per billing period) and
+                                <p>The Add/Edit Client form, in order: <strong>Client Name</strong>;
+                                    <strong>Contact Person</strong>, optional — for a client that's a company, the
+                                    actual AP/contact person to address, used in place of the client name in the
+                                    invoice/reminder greeting and as an "Attn:" line on the invoice PDF, falling back
+                                    to the client name when left blank; <strong>Email Address</strong> and
+                                    <strong>CC Email</strong>, optional — CC'd on every invoice, resend, and reminder
+                                    email sent to this client, e.g. their AP inbox; <strong>Rate</strong> (per
+                                    billing period) and
                                     <strong>Currency</strong> — a 3-letter code (USD, EUR, GBP, etc.) for that
                                     client's invoices and quotes; leave it blank to use the instance default
                                     (Settings &gt; Finance). Each invoice/quote snapshots the client's currency at

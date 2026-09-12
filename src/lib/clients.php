@@ -84,7 +84,9 @@ function renderClientRows(array $clients): string
 // client_updated audit entry.
 const ENXURE_CLIENT_DIFF_FIELDS = [
     'client_name' => ['Name', null],
+    'contact_name' => ['Contact person', null],
     'email' => ['Email', null],
+    'cc_email' => ['CC email', null],
     'phone' => ['Phone', null],
     'address' => ['Address', null],
     'account_name' => ['Account name', null],
@@ -140,7 +142,12 @@ if ($name === '') {
 $key = strtolower(substr(preg_replace('/[^a-zA-Z0-9]/', '', $name), 0, 3));
 if (!$key)
     $key = substr(md5(time()), 0, 3);
+$contactName = trim($_POST['contact_name'] ?? '');
 $email = $_POST['email'];
+$ccEmail = trim($_POST['cc_email'] ?? '');
+if ($ccEmail !== '' && !filter_var($ccEmail, FILTER_VALIDATE_EMAIL)) {
+    throw new Exception('CC email is not a valid email address.');
+}
 $phone = $_POST['phone'] ?? '';
 $address = $_POST['address'] ?? '';
 $aname = $_POST['account_name'];
@@ -157,14 +164,14 @@ $taxRate = max(0, min(100, (float) ($_POST['tax_rate'] ?? 0)));
 $currency = enxureNormalizeCurrencyCode($_POST['currency'] ?? '');
 $act = (int) ($_POST['is_active'] ?? 0);
 $test = (int) ($_POST['is_test'] ?? 0);
-$newValues = ['client_name' => $name, 'email' => $email, 'phone' => $phone, 'address' => $address, 'account_name' => $aname, 'account_number' => $anum, 'monthly_rate' => $rate, 'payment_terms_days' => $terms, 'billing_frequency' => $freq, 'discount_pct' => $discountPct, 'tax_rate' => $taxRate, 'currency' => $currency, 'is_active' => $act, 'is_test' => $test];
+$newValues = ['client_name' => $name, 'contact_name' => $contactName, 'email' => $email, 'cc_email' => $ccEmail, 'phone' => $phone, 'address' => $address, 'account_name' => $aname, 'account_number' => $anum, 'monthly_rate' => $rate, 'payment_terms_days' => $terms, 'billing_frequency' => $freq, 'discount_pct' => $discountPct, 'tax_rate' => $taxRate, 'currency' => $currency, 'is_active' => $act, 'is_test' => $test];
 if ($id > 0) {
     $oldRow = $mysqli->prepare("SELECT * FROM enxure_clients WHERE id = ?");
     $oldRow->bind_param("i", $id);
     $oldRow->execute();
     $oldRow = $oldRow->get_result()->fetch_assoc();
-    $stmt = $mysqli->prepare("UPDATE enxure_clients SET client_name=?, email=?, phone=?, address=?, account_name=?, account_number=?, monthly_rate=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, currency=?, is_active=?, is_test=? WHERE id=?");
-    $stmt->bind_param("ssssssdisddsiii", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $id);
+    $stmt = $mysqli->prepare("UPDATE enxure_clients SET client_name=?, contact_name=?, email=?, cc_email=?, phone=?, address=?, account_name=?, account_number=?, monthly_rate=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, currency=?, is_active=?, is_test=? WHERE id=?");
+    $stmt->bind_param("ssssssssdisddsiii", $name, $contactName, $email, $ccEmail, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $id);
     $stmt->execute();
     if ($oldRow) {
         $diffs = enxureClientFieldDiffs($oldRow, $newValues);
@@ -173,8 +180,8 @@ if ($id > 0) {
         }
     }
 } else {
-    $stmt = $mysqli->prepare("INSERT INTO enxure_clients (client_name, email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, discount_pct, tax_rate, currency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssssdisddsiis", $name, $email, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $key);
+    $stmt = $mysqli->prepare("INSERT INTO enxure_clients (client_name, contact_name, email, cc_email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, discount_pct, tax_rate, currency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssssdisddsiis", $name, $contactName, $email, $ccEmail, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $key);
     $stmt->execute();
     enxureLogAction($mysqli, null, '', 'client_created', $name . ' — ' . implode('; ', enxureClientFieldDiffs(array_fill_keys(array_keys(ENXURE_CLIENT_DIFF_FIELDS), ''), $newValues)));
 }

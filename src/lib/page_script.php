@@ -1220,7 +1220,9 @@
                 document.getElementById('clientModalTitle').textContent = c ? 'Edit Client' : 'Add Client';
                 document.getElementById('clientId').value = c ? c.id : '';
                 document.getElementById('clientName').value = c ? c.client_name : '';
+                document.getElementById('clientContactName').value = c ? (c.contact_name || '') : '';
                 document.getElementById('clientEmail').value = c ? c.email : '';
+                document.getElementById('clientCcEmail').value = c ? (c.cc_email || '') : '';
                 document.getElementById('clientPhone').value = c ? (c.phone || '') : '';
                 document.getElementById('clientAddress').value = c ? (c.address || '') : '';
                 document.getElementById('clientRate').value = c ? c.monthly_rate : '0.00';
@@ -1284,7 +1286,9 @@
                 const btn = document.getElementById('saveClientBtn'); btn.disabled = true;
                 const data = new URLSearchParams({
                     action: 'save_client', id: document.getElementById('clientId').value, client_name: document.getElementById('clientName').value,
-                    email: document.getElementById('clientEmail').value, phone: document.getElementById('clientPhone').value,
+                    contact_name: document.getElementById('clientContactName').value,
+                    email: document.getElementById('clientEmail').value, cc_email: document.getElementById('clientCcEmail').value,
+                    phone: document.getElementById('clientPhone').value,
                     address: document.getElementById('clientAddress').value, monthly_rate: document.getElementById('clientRate').value,
                     currency: document.getElementById('clientCurrency').value,
                     billing_frequency: document.getElementById('clientBillingFrequency').value,
@@ -1582,6 +1586,7 @@
                 document.getElementById('adhocDueDate').value = '';
                 document.getElementById('adhocDueDateHint').textContent = '';
                 document.getElementById('adhocMemo').value = '';
+                document.getElementById('adhocClientReference').value = '';
                 document.getElementById('adhocDiscountPct').value = '0';
                 document.getElementById('adhocTaxRate').value = '0';
                 updateAdhocTotal();
@@ -1641,7 +1646,7 @@
                 if (!cid) return showToast('Please select a client', true);
                 if (!items.length) return showToast('Please add at least one line item with a description and amount', true);
                 const btn = document.getElementById('previewAdhocBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>...'; btn.disabled = true;
-                const params = { action: 'preview_adhoc', client_id: cid, line_items: JSON.stringify(items), due_date: document.getElementById('adhocDueDate').value, ...getInvoiceAdjustments() };
+                const params = { action: 'preview_adhoc', client_id: cid, line_items: JSON.stringify(items), due_date: document.getElementById('adhocDueDate').value, client_reference: document.getElementById('adhocClientReference').value, ...getInvoiceAdjustments() };
                 const data = new URLSearchParams(params);
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                 btn.innerHTML = '<i class="fa-solid fa-eye"></i> Preview'; btn.disabled = false;
@@ -1661,20 +1666,52 @@
                 if (!items.length) return showToast('Please add at least one line item with a description and amount', true);
                 const dueDate = document.getElementById('adhocDueDate').value;
                 const memo = document.getElementById('adhocMemo').value;
+                const clientReference = document.getElementById('adhocClientReference').value;
                 if (isQuote) {
                     const btn = document.getElementById('saveQuoteBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; btn.disabled = true;
                     const quoteExpiresAt = document.getElementById('adhocQuoteExpiry').value;
-                    const data = new URLSearchParams({ action: 'save_quote', client_id: cid, line_items: JSON.stringify(items), due_date: dueDate, quote_expires_at: quoteExpiresAt, memo: memo, ...getInvoiceAdjustments() });
+                    const data = new URLSearchParams({ action: 'save_quote', client_id: cid, line_items: JSON.stringify(items), due_date: dueDate, quote_expires_at: quoteExpiresAt, memo: memo, client_reference: clientReference, ...getInvoiceAdjustments() });
                     const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                     if (json.success) { showToast(`Quote ${json.quoteNum} saved!`); setTimeout(() => window.location.reload(), 2000); }
                     else { showToast(json.error || 'Failed to save quote', true); btn.innerHTML = '<i class="fa-solid fa-file-pen"></i> Save as Quote'; btn.disabled = false; }
                 } else {
                     const btn = document.getElementById('sendAdhocBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...'; btn.disabled = true;
-                    const data = new URLSearchParams({ action: 'generate_adhoc', client_id: cid, line_items: JSON.stringify(items), due_date: dueDate, memo: memo, ...getInvoiceAdjustments() });
+                    const data = new URLSearchParams({ action: 'generate_adhoc', client_id: cid, line_items: JSON.stringify(items), due_date: dueDate, memo: memo, client_reference: clientReference, ...getInvoiceAdjustments() });
                     const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                     if (json.success) { showToast(`Invoice ${json.invNum} sent!`); setTimeout(() => window.location.reload(), 2000); }
                     else { showToast(json.error || 'Failed to send', true); btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Generate & Send'; btn.disabled = false; }
                 }
+            }
+            // Pre-fills the Ad Hoc Invoice builder from an existing invoice/quote row
+            // (client + line items + PO reference + discount/tax) so a repeat-ish
+            // invoice doesn't need rebuilding from scratch. Due date and internal
+            // note are intentionally left blank — they're specific to the original.
+            function duplicateInvoice(inv) {
+                const opt = Array.from(document.getElementById('adhocClient').options).find(o => o.dataset.clientKey === inv.client_key);
+                if (!opt) { showToast('This invoice\'s client no longer exists', true); return; }
+                resetLineItems();
+                document.getElementById('adhocClient').value = opt.value;
+                updateAdhocClientInfo();
+                document.getElementById('adhocClientReference').value = inv.client_reference || '';
+                document.getElementById('adhocDiscountPct').value = inv.discount_pct || '0';
+                document.getElementById('adhocTaxRate').value = inv.tax_rate || '0';
+                let items = [];
+                try { items = JSON.parse(inv.line_items_json || '[]'); } catch (e) { items = []; }
+                const tbody = document.getElementById('lineItemsBody');
+                tbody.innerHTML = '';
+                if (!items.length) items = [{ code: '', desc: '', amount: '' }];
+                for (const item of items) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'line-item-row';
+                    tr.innerHTML = LINE_ITEM_ROW_HTML;
+                    tr.querySelector('.li-code').value = item.code || '';
+                    tr.querySelector('.li-desc').value = item.desc || '';
+                    tr.querySelector('.li-amount').value = item.amount || '';
+                    tbody.appendChild(tr);
+                }
+                updateAdhocTotal();
+                nav('billing');
+                showToast('Builder pre-filled from that invoice — review and send.');
             }
             async function runRecurringBilling() {
                 if (!confirm("This will instantly generate and email invoices to ALL active clients with a monthly rate. Proceed?")) return;

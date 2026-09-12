@@ -14,6 +14,7 @@
                             <option value="">-- Select Client --</option>
                             <?php foreach ($clients as $c): ?>
                                 <option value="<?= $c['id'] ?>"
+                                    data-client-key="<?= htmlspecialchars($c['client_key']) ?>"
                                     data-outstanding="<?= round(max(0, ($c['total_billed'] ?? 0) - ($c['total_paid'] ?? 0)), 2) ?>"
                                     data-terms="<?= (int) ($c['payment_terms_days'] ?? 21) ?>"
                                     data-currency="<?= htmlspecialchars(enxureResolveCurrency($c['currency'] ?? '', $settings)) ?>"><?= htmlspecialchars($c['client_name']) ?>
@@ -83,6 +84,10 @@
                             <label class="form-label">Due Date <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
                             <input type="date" id="adhocDueDate" class="form-control">
                             <div id="adhocDueDateHint" style="margin-top:0.3rem; font-size:0.75rem; color:var(--text-secondary);"></div>
+                        </div>
+                        <div class="form-group" style="flex:1; min-width:180px;">
+                            <label class="form-label">PO / Reference <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
+                            <input type="text" id="adhocClientReference" class="form-control" maxlength="100" placeholder="e.g. PO-4821">
                         </div>
                         <div class="form-group" id="adhocQuoteExpiryGroup" style="display:none; flex:1; min-width:180px;">
                             <label class="form-label">Quote Expires <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>

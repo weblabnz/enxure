@@ -2,6 +2,16 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.18] - 2026-09-12
+
+### Fixed
+- Duplicate (3.0.17) came up empty — a blank line item instead of the original's — for any invoice/quote saved before `line_items_json` existed, since that column only gets populated going forward and nothing backfills old rows. `enxureExtractLineItemsFromHtml()` now reconstructs line items from the stored HTML itself as a fallback whenever `line_items_json` is empty, recognizing the default/compact template's row shape; a custom template (or anything else unparseable) still falls back to one blank row rather than a wrong guess.
+
+## [3.0.17] - 2026-09-12
+
+### Added
+- Four Roadmap quick-wins, shipped together: a PO number / client reference field on ad hoc invoices and quotes (shown on the PDF/email, its own column in the Invoices table, and stored per-invoice for Duplicate below); CC/BCC on invoice emails (a per-client CC — their AP inbox, Settings > Clients — and an instance-wide BCC for every invoice/resend/reminder email, Settings > Email Templates); a Duplicate action on any invoice or quote's row that pre-fills the Ad Hoc Invoice builder with that client, its line items, discount/tax, and PO reference (line items and totals are now snapshotted onto the invoice row itself at creation time to make this possible, since none of it was stored anywhere before); and an optional Contact Person field per client, used in place of the client name in the invoice/reminder greeting (`{contact_name}`, falling back to the client name) and as an "Attn:" line on the invoice PDF, so a B2B client's invoice can address their actual AP contact instead of the company name.
+
 ## [3.0.16] - 2026-09-12
 
 ### Added

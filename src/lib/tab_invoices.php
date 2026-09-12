@@ -114,6 +114,7 @@
                             <th>Date</th>
                             <th>Due Date</th>
                             <th>Client</th>
+                            <th>Reference</th>
                             <th>Amount</th>
                             <th>Status</th>
                             <th style="width:180px;">File</th>
