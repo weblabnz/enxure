@@ -440,7 +440,7 @@ See INSTALL.md's Testing email safely section to set that up.">(requires Mailpit
                                     </select>
                                 </div>
                                 <div class="form-group" style="margin:0;"><label class="form-label">Start Date</label>
-                                    <input type="date" id="statementStartDate" class="form-control" value="<?= date('Y-m-01') ?>" onchange="loadClientStatement()"></div>
+                                    <input type="date" id="statementStartDate" class="form-control" value="<?= enxureClientStatementDefaultStart($settings) ?>" onchange="loadClientStatement()"></div>
                                 <div class="form-group" style="margin:0;"><label class="form-label">End Date</label>
                                     <input type="date" id="statementEndDate" class="form-control" value="<?= date('Y-m-d') ?>" onchange="loadClientStatement()"></div>
                                 <button type="button" class="btn" onclick="loadClientStatement()"><i class="fa-solid fa-rotate"></i> Reload</button>

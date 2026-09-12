@@ -133,6 +133,13 @@ function enxureRenderClientStatementHtml(array $client, array $settings, string 
 HTML;
 }
 
+// Same "current tax year" default as Tax Email (see getTaxYearStart() in
+// lib/stats.php), so the two date-range pickers behave consistently.
+function enxureClientStatementDefaultStart(array $settings): string
+{
+    return getTaxYearStart((int) ($settings['tax_year_start_month'] ?? 1))->format('Y-m-d');
+}
+
 function enxureHandlePreviewClientStatement($mysqli, array $settings): void
 {
     $clientKey = trim($_POST['client_key'] ?? '');
@@ -141,7 +148,7 @@ function enxureHandlePreviewClientStatement($mysqli, array $settings): void
         echo json_encode(['success' => false, 'error' => 'Select a client.']);
         exit;
     }
-    $startStr = enxureValidTaxEmailDate($_POST['start_date'] ?? null) ?: date('Y-m-01');
+    $startStr = enxureValidTaxEmailDate($_POST['start_date'] ?? null) ?: enxureClientStatementDefaultStart($settings);
     $endStr = enxureValidTaxEmailDate($_POST['end_date'] ?? null) ?: date('Y-m-d');
     if ($startStr > $endStr) {
         echo json_encode(['success' => false, 'error' => 'Start date must be on or before the end date.']);
@@ -171,7 +178,7 @@ function enxureHandleClientStatementPdfExport($mysqli, array $settings): void
         http_response_code(404);
         exit('Client not found');
     }
-    $startStr = enxureValidTaxEmailDate($_GET['start'] ?? null) ?: date('Y-m-01');
+    $startStr = enxureValidTaxEmailDate($_GET['start'] ?? null) ?: enxureClientStatementDefaultStart($settings);
     $endStr = enxureValidTaxEmailDate($_GET['end'] ?? null) ?: date('Y-m-d');
 
     $statement = enxureBuildClientStatementRows($mysqli, $clientKey, $startStr, $endStr);
@@ -204,7 +211,7 @@ function enxureHandleSendClientStatement($mysqli, array $settings, string $email
         echo json_encode(['success' => false, 'error' => 'Enter a valid recipient email address.']);
         exit;
     }
-    $startStr = enxureValidTaxEmailDate($_POST['start_date'] ?? null) ?: date('Y-m-01');
+    $startStr = enxureValidTaxEmailDate($_POST['start_date'] ?? null) ?: enxureClientStatementDefaultStart($settings);
     $endStr = enxureValidTaxEmailDate($_POST['end_date'] ?? null) ?: date('Y-m-d');
     $message = trim($_POST['message'] ?? '');
     $fromName = $settings['business_name'] ?? (getenv('SMTP_FROM_NAME') ?: 'enXure');

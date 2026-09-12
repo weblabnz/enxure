@@ -2,6 +2,11 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.20] - 2026-09-12
+
+### Changed
+- Client Statements' default start date now aligns to the current tax year (`getTaxYearStart()`, driven by Settings > Finance's `tax_year_start_month`) instead of always defaulting to the 1st of the current month — same default Tax Email already uses, via a new shared `enxureClientStatementDefaultStart()` helper.
+
 ## [3.0.19] - 2026-09-12
 
 ### Added

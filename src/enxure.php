@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', require __DIR__ . '/lib/license_purchase_url.php');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.19');
+define('APP_VERSION', '3.0.20');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
