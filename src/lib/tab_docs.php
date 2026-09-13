@@ -15,6 +15,7 @@
                         'feat-invoicing' => 'Invoicing & Quotes',
                         'feat-recurring' => 'Recurring Billing',
                         'feat-payments' => 'Payments',
+                        'feat-expenses' => 'Expenses',
                         'feat-clients' => 'Clients & Portal',
                         'feat-security' => 'Security',
                         'feat-api' => 'External API',
@@ -90,6 +91,9 @@
                                     ['icon' => 'fa-receipt', 'title' => 'Payment Ledger', 'desc' => "Every payment its own row, so partial payments keep an honest history.", 'target' => 'feat-payments'],
                                     ['icon' => 'fa-credit-card', 'title' => 'Stripe & PayPal', 'desc' => 'Hosted checkout with webhook-verified Pay Now links.', 'target' => 'feat-payments', 'license' => true],
                                     ['icon' => 'fa-rotate-left', 'title' => 'Refunds', 'desc' => 'Gateway refunds automatically reopen and adjust the invoice.', 'target' => 'feat-payments'],
+                                    ['icon' => 'fa-money-bill-wave', 'title' => 'Expense Tracking', 'desc' => 'Log vendor, category, amount, and an optional receipt for every outgoing cost, with CSV import/export.', 'target' => 'feat-expenses'],
+                                    ['icon' => 'fa-repeat', 'title' => 'Recurring Expenses', 'desc' => 'Repeating bills like hosting or SaaS, entered once and tracked on their own schedule.', 'target' => 'feat-expenses', 'license' => true],
+                                    ['icon' => 'fa-hand-holding-dollar', 'title' => 'Billable Expenses', 'desc' => "Tag an expense to a client and pull it straight onto their next invoice as a line item.", 'target' => 'feat-expenses'],
                                     ['icon' => 'fa-address-book', 'title' => 'Clients & CRM Notes', 'desc' => 'Per-client billing defaults plus free-text CRM notes.', 'target' => 'feat-clients'],
                                     ['icon' => 'fa-door-open', 'title' => 'Client Portal', 'desc' => "Token-gated, login-free page for a client's own invoices and quotes.", 'target' => 'feat-clients', 'license' => true],
                                     ['icon' => 'fa-shield-halved', 'title' => 'Two-Factor Authentication', 'desc' => 'TOTP login with one-time backup codes.', 'target' => 'feat-security'],
@@ -100,6 +104,7 @@
                                     ['icon' => 'fa-list-check', 'title' => 'Audit Log', 'desc' => 'Every send, payment, refund, and security event, timestamped.', 'target' => 'feat-reporting'],
                                     ['icon' => 'fa-database', 'title' => 'Backup & Restore', 'desc' => 'Scoped backups with a dry-run restore before anything changes.', 'target' => 'feat-data'],
                                     ['icon' => 'fa-paper-plane', 'title' => 'Tax Email', 'desc' => 'Zip up invoices, expenses, and receipts for a date range and email them straight to your accountant.', 'target' => 'feat-data'],
+                                    ['icon' => 'fa-file-invoice', 'title' => 'Client Statements', 'desc' => 'A running account PDF for one client — invoices, payments, and balance forward for any date range.', 'target' => 'feat-data'],
                                     ['icon' => 'fa-flask', 'title' => 'Demo Data', 'desc' => 'Seed sample clients and invoices to preview charts safely.', 'target' => 'feat-data'],
                                     ['icon' => 'fa-vial-circle-check', 'title' => 'Test Suite', 'desc' => 'In-app correctness checks for invoice math, TOTP, and webhooks.', 'target' => 'feat-data'],
                                     ['icon' => 'fa-wrench', 'title' => 'Data Repair', 'desc' => 'Four narrow fixes for drifted paid dates, totals, and duplicates.', 'target' => 'feat-data'],
@@ -234,9 +239,9 @@
                                     Public License v3.0 (AGPL-3.0). You can self-host it, read every line of it, and
                                     modify your own copy — the full, unmodified license text is reproduced below
                                     exactly as it must be distributed. A paid license key is a separate, optional
-                                    unlock for seven specific features (Stripe/PayPal payment collection, recurring
-                                    billing automation, the Client Portal, the external API, Reporting &amp;
-                                    Statistics, adding teammates beyond your own account, and removing the "Powered
+                                    unlock for eight specific features (Stripe/PayPal payment collection, recurring
+                                    billing automation, recurring expenses, the Client Portal, the external API,
+                                    Reporting &amp; Statistics, adding teammates beyond your own account, and removing the "Powered
                                     by enXure" credit) — see <strong>Security</strong> under Features for how that
                                     works.</p>
                                 <?php
@@ -458,6 +463,33 @@
                         </div>
                     </div>
 
+                    <div class="subnav-pane" id="docs-pane-feat-expenses">
+                        <div class="card">
+                            <div class="card-body doc-content">
+                                <h1>Expenses</h1>
+                                <h2>Logging an expense</h2>
+                                <p>Add Expense takes a date, vendor, category, amount, and an optional description
+                                    (kept separate from the vendor's own bill text, for when you keep both). One or
+                                    more receipt files — images or PDFs — can be attached to the same expense.
+                                    Bulk import/export both go through CSV, with a fixed header row: Date, Vendor,
+                                    Category, Amount, Description.</p>
+                                <h2>Billable expenses</h2>
+                                <p>Tagging an expense to a client marks it billable instead of just tracked
+                                    internally. It then shows up as an option when building that client's next
+                                    invoice, so a reimbursable cost (travel, a subcontractor, materials) can be added
+                                    as a real line item rather than re-typed. Once it's pulled onto an invoice it's
+                                    marked billed and can't be added a second time to a different one.</p>
+                                <h2>Recurring Expenses</h2>
+                                <p><strong>Requires a license</strong> to add a new one; existing recurring expenses
+                                    keep running either way. A vendor, category, amount, and frequency — the same
+                                    shape as Recurring Billing, but for money going out rather than coming in — for a
+                                    bill that repeats on its own schedule, like hosting or a SaaS subscription,
+                                    instead of being re-entered every period. Recurring expense templates are one of
+                                    the categories a Tax Email can include alongside one-off expenses.</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="subnav-pane" id="docs-pane-feat-clients">
                         <div class="card">
                             <div class="card-body doc-content">
@@ -557,14 +589,14 @@
                                     manage the rest. Adding a second (or further) account requires a license —
                                     editing or removing an existing one stays free either way, the same pattern as
                                     API tokens and the Client Portal below.</p>
-                                <h2>enXure is open source — licensing only unlocks seven extras</h2>
+                                <h2>enXure is open source — licensing only unlocks eight extras</h2>
                                 <p>enXure is free and open source (AGPL-3.0): client and invoice management, quotes,
                                     manual payments, backups, and 2FA all work fully with no license key at all — an
                                     unlicensed install is never locked out of its own account or its own data. A
-                                    license is a paid, optional unlock for seven specific capabilities: Stripe/PayPal
-                                    payment collection, recurring billing automation, the Client Portal, the
-                                    external API, Reporting &amp; Statistics, adding teammates beyond your own
-                                    account, and removing the "Powered by enXure" credit line from invoices and
+                                    license is a paid, optional unlock for eight specific capabilities: Stripe/PayPal
+                                    payment collection, recurring billing automation, recurring expenses, the Client
+                                    Portal, the external API, Reporting &amp; Statistics, adding teammates beyond your
+                                    own account, and removing the "Powered by enXure" credit line from invoices and
                                     emails. Everything else in this Docs section works exactly the same whether or
                                     not you've added a key.</p>
                             </div>
@@ -682,6 +714,14 @@
                                     category, plus invoice PDFs and expense receipts if you leave those attachment
                                     options on. A live preview shows the exact recipient, subject, and body before
                                     anything sends.</p>
+                                <h2>Client Statements</h2>
+                                <p>No license required. Pick a client and a date range to build a running account
+                                    statement: every invoice and payment that falls inside the range, plus a
+                                    <strong>Balance brought forward</strong> line summarizing everything before the
+                                    start date, so the statement is always self-contained rather than assuming the
+                                    reader has the client's full history. <strong>Download PDF</strong> renders it
+                                    through the same pipeline as invoices, or send it straight to the client's inbox
+                                    with an optional message above the balance summary.</p>
                                 <h2>Demo Data</h2>
                                 <p>Seeds a handful of sample clients, invoices, and quotes spread across recent
                                     months, every one of them flagged with the client-level <strong>Is Test

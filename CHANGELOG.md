@@ -2,6 +2,11 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.23] - 2026-09-13
+
+### Added
+- Docs > Features: two main features that existed in the app but had no representation anywhere in Docs. Client Statements gets a card under Data Management alongside a new "Client Statements" section on that page. Expenses gets its own new User Guide page (`feat-expenses`) covering logging, receipts, CSV import/export, billable-to-invoice tagging, and license-gated Recurring Expenses, plus three matching cards. The License page's "unlocks seven extras" count is corrected to eight, since Recurring Expenses was already license-gated but uncounted.
+
 ## [3.0.22] - 2026-09-12
 
 ### Added
