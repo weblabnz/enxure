@@ -70,14 +70,17 @@
                                 <th>Category</th>
                                 <th>Amount</th>
                                 <th>Frequency</th>
+                                <th>Tax Year</th>
+                                <th>Billable To</th>
                                 <th>Status</th>
+                                <th data-sortable="false">Attachments</th>
                                 <th data-sortable="false">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="recurringExpensesTbody">
                             <?php if (empty($recurringExpenses)): ?>
                                 <tr>
-                                    <td colspan="6" class="empty-state"><i class="fa-solid fa-rotate"></i>No recurring expenses set up yet — add one for a bill that repeats on its own schedule (hosting, SaaS subscriptions, etc.) instead of re-entering it every period.</td>
+                                    <td colspan="9" class="empty-state"><i class="fa-solid fa-rotate"></i>No recurring expenses set up yet — add one for a bill that repeats on its own schedule (hosting, SaaS subscriptions, etc.) instead of re-entering it every period.</td>
                                 </tr>
                             <?php else: ?>
                                 <?= renderRecurringExpenseRows($recurringExpenses, $licenseValid) ?>

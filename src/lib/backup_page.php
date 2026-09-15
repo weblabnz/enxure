@@ -329,9 +329,9 @@ See INSTALL.md's Testing email safely section to set that up.">(requires Mailpit
                             </div>
                             <div class="card-body" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
                                 <div class="form-group" style="margin:0;"><label class="form-label">Start Date</label>
-                                    <input type="date" id="taxEmailStartDate" class="form-control"></div>
+                                    <input type="text" id="taxEmailStartDate" class="form-control iso-date" placeholder="YYYY-MM-DD" maxlength="10" pattern="\d{4}-\d{2}-\d{2}" title="YYYY-MM-DD"></div>
                                 <div class="form-group" style="margin:0;"><label class="form-label">End Date</label>
-                                    <input type="date" id="taxEmailEndDate" class="form-control"></div>
+                                    <input type="text" id="taxEmailEndDate" class="form-control iso-date" placeholder="YYYY-MM-DD" maxlength="10" pattern="\d{4}-\d{2}-\d{2}" title="YYYY-MM-DD"></div>
                                 <button type="button" class="btn" onclick="loadTaxEmailPane()"><i class="fa-solid fa-rotate"></i> Reload</button>
                                 <span style="color:var(--text-secondary); font-size:0.8rem;">Defaults to the current tax year (Settings &gt; Finance).</span>
                             </div>
@@ -440,9 +440,9 @@ See INSTALL.md's Testing email safely section to set that up.">(requires Mailpit
                                     </select>
                                 </div>
                                 <div class="form-group" style="margin:0;"><label class="form-label">Start Date</label>
-                                    <input type="date" id="statementStartDate" class="form-control" value="<?= enxureClientStatementDefaultStart($settings) ?>" onchange="loadClientStatement()"></div>
+                                    <input type="text" id="statementStartDate" class="form-control iso-date" placeholder="YYYY-MM-DD" maxlength="10" pattern="\d{4}-\d{2}-\d{2}" title="YYYY-MM-DD" value="<?= enxureClientStatementDefaultStart($settings) ?>" onchange="loadClientStatement()"></div>
                                 <div class="form-group" style="margin:0;"><label class="form-label">End Date</label>
-                                    <input type="date" id="statementEndDate" class="form-control" value="<?= date('Y-m-d') ?>" onchange="loadClientStatement()"></div>
+                                    <input type="text" id="statementEndDate" class="form-control iso-date" placeholder="YYYY-MM-DD" maxlength="10" pattern="\d{4}-\d{2}-\d{2}" title="YYYY-MM-DD" value="<?= date('Y-m-d') ?>" onchange="loadClientStatement()"></div>
                                 <button type="button" class="btn" onclick="loadClientStatement()"><i class="fa-solid fa-rotate"></i> Reload</button>
                             </div>
                         </div>

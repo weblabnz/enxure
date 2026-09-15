@@ -41,6 +41,26 @@ $hasBillableClientCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS
 if (!$hasBillableClientCol) {
     $mysqli->query("ALTER TABLE enxure_expenses ADD COLUMN billable_client_id INT DEFAULT NULL, ADD COLUMN billed_invoice_id INT DEFAULT NULL, ADD INDEX idx_billable_client_id (billable_client_id)");
 }
+// Ties each recurring expense template to the tax year it belongs to, so a
+// new tax year gets its own row (via Duplicate) instead of one template's
+// attachments accumulating forever — see enxure_recurring_expense_receipts
+// below. Existing rows backfill to the current tax year on upgrade.
+$hasTaxYearCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_recurring_expenses' AND COLUMN_NAME = 'tax_year'")->num_rows > 0;
+if (!$hasTaxYearCol) {
+    $mysqli->query("ALTER TABLE enxure_recurring_expenses ADD COLUMN tax_year INT NOT NULL DEFAULT 0, ADD INDEX idx_tax_year (tax_year)");
+    $currentTaxYear = getTaxYear((int) ($settings['tax_year_start_month'] ?? 1));
+    $mysqli->query("UPDATE enxure_recurring_expenses SET tax_year = $currentTaxYear WHERE tax_year = 0");
+}
+// Same Invoice/Receipt attachment pattern as enxure_expense_receipts, but for
+// recurring expense templates — files live under RECEIPTS_DIR/recurring/<recurring_expense_id>/.
+$mysqli->query("CREATE TABLE IF NOT EXISTS enxure_recurring_expense_receipts (id INT AUTO_INCREMENT PRIMARY KEY, recurring_expense_id INT NOT NULL, filename VARCHAR(255) NOT NULL, stored_path VARCHAR(500) NOT NULL, file_size INT NOT NULL DEFAULT 0, doc_type ENUM('invoice','receipt') NOT NULL DEFAULT 'receipt', uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_recurring_expense_id (recurring_expense_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+// Optional client to auto-bill each occurrence to — same field/meaning as
+// enxure_expenses.billable_client_id, just carried onto every row the cron
+// auto-logs from this template instead of being set by hand each period.
+$hasRecurBillableClientCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_recurring_expenses' AND COLUMN_NAME = 'billable_client_id'")->num_rows > 0;
+if (!$hasRecurBillableClientCol) {
+    $mysqli->query("ALTER TABLE enxure_recurring_expenses ADD COLUMN billable_client_id INT DEFAULT NULL, ADD INDEX idx_billable_client_id (billable_client_id)");
+}
 // Invoice attachments (contracts, receipts) — one row per uploaded file, files
 // themselves live on disk under INVOICES_DIR/attachments/<invoice_id>/.
 $mysqli->query("CREATE TABLE IF NOT EXISTS enxure_invoice_attachments (id INT AUTO_INCREMENT PRIMARY KEY, invoice_id INT NOT NULL, filename VARCHAR(255) NOT NULL, stored_path VARCHAR(500) NOT NULL, file_size INT NOT NULL DEFAULT 0, uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_invoice_id (invoice_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");

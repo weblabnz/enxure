@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', require __DIR__ . '/lib/license_purchase_url.php');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.23');
+define('APP_VERSION', '3.0.24');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
@@ -1222,6 +1222,14 @@ function renderRecurringExpenseRows(array $recurringExpenses, bool $licenseValid
             <td><?= htmlspecialchars($categories[$re['category']] ?? ucfirst($re['category'])) ?></td>
             <td>$<?= number_format($re['amount'], 2) ?></td>
             <td><?= htmlspecialchars($freqLabels[$re['frequency']] ?? ucfirst($re['frequency'])) ?></td>
+            <td><?= (int) $re['tax_year'] ?></td>
+            <td>
+                <?php if (!empty($re['billable_client_name'])): ?>
+                    <span style="font-size:0.75rem; color:var(--accent);"><i class="fa-solid fa-arrow-right"></i> <?= htmlspecialchars($re['billable_client_name']) ?></span>
+                <?php else: ?>
+                    <span style="color:var(--text-secondary);">—</span>
+                <?php endif; ?>
+            </td>
             <td>
                 <label style="display:inline-flex; align-items:center; gap:0.4rem; cursor:<?= $licenseValid ? 'pointer' : 'not-allowed' ?>;">
                     <input type="checkbox" <?= $re['is_active'] ? 'checked' : '' ?> <?= $licenseValid ? '' : 'disabled' ?>
@@ -1229,10 +1237,21 @@ function renderRecurringExpenseRows(array $recurringExpenses, bool $licenseValid
                     <span style="font-size:0.8rem; color:var(--text-secondary);"><?= $re['is_active'] ? 'Active' : 'Paused' ?></span>
                 </label>
             </td>
+            <td style="text-align:center;">
+                <?php if ((int) $re['receipt_count'] > 0): ?>
+                    <button type="button" class="btn small" title="<?= (int) $re['receipt_count'] ?> attachment<?= (int) $re['receipt_count'] === 1 ? '' : 's' ?>"
+                        onclick="openRecurringExpenseModal(<?= htmlspecialchars(json_encode($re)) ?>)"><i class="fa-solid fa-paperclip"></i>
+                        <?= (int) $re['receipt_count'] ?></button>
+                <?php else: ?>
+                    <span style="color:var(--text-secondary);">—</span>
+                <?php endif; ?>
+            </td>
             <td style="white-space:nowrap;">
                 <button class="btn small" <?= $licenseValid ? '' : 'disabled title="Requires a license"' ?>
                     onclick="openRecurringExpenseModal(<?= htmlspecialchars(json_encode($re)) ?>)"><i
                         class="fa-solid fa-pen"></i></button>
+                <button class="btn small" title="Duplicate into the current tax year" <?= $licenseValid ? '' : 'disabled title="Requires a license"' ?>
+                    onclick="duplicateRecurringExpense(<?= $re['id'] ?>)"><i class="fa-solid fa-copy"></i></button>
                 <button class="btn small danger" onclick="deleteRecurringExpense(<?= $re['id'] ?>)"><i
                         class="fa-solid fa-trash"></i></button>
             </td>
@@ -1307,7 +1326,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // - Adding a teammate beyond the original account (create_user; editing
         //   or removing one — update_user/delete_user — stays free, same pattern
         //   as the others above).
-        $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'save_recurring_nth_weekday', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense', 'create_user'];
+        $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'save_recurring_nth_weekday', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense', 'duplicate_recurring_expense', 'create_user'];
         if (!enxureLicenseSignatureOk($mysqli, $settings) && in_array($_POST['action'], $__licensePaidActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This needs a license — add a key under Settings > License, or see Docs for what a license unlocks.']);
             exit;
@@ -1524,6 +1543,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $amount = (float) ($_POST['amount'] ?? 0);
             $description = trim($_POST['description'] ?? '');
             $frequency = in_array($_POST['frequency'] ?? '', ['weekly', 'monthly', 'quarterly', 'annually'], true) ? $_POST['frequency'] : 'monthly';
+            $billableClientId = (int) ($_POST['billable_client_id'] ?? 0);
+            if (!$billableClientId || $mysqli->query("SELECT id FROM enxure_clients WHERE id = $billableClientId")->num_rows === 0) {
+                $billableClientId = null;
+            }
             if ($vendor === '') {
                 throw new Exception('Vendor is required.');
             }
@@ -1532,16 +1555,112 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             $recurNotes = "{$vendor} — " . number_format($amount, 2) . " — {$frequency}";
             if ($id > 0) {
-                $stmt = $mysqli->prepare("UPDATE enxure_recurring_expenses SET vendor=?, category=?, amount=?, description=?, frequency=? WHERE id=?");
-                $stmt->bind_param("sssdsi", $vendor, $category, $amount, $description, $frequency, $id);
+                $stmt = $mysqli->prepare("UPDATE enxure_recurring_expenses SET vendor=?, category=?, amount=?, description=?, frequency=?, billable_client_id=? WHERE id=?");
+                $stmt->bind_param("sssdsii", $vendor, $category, $amount, $description, $frequency, $billableClientId, $id);
                 $stmt->execute();
                 enxureLogAction($mysqli, null, '', 'recurring_expense_updated', $recurNotes);
             } else {
-                $stmt = $mysqli->prepare("INSERT INTO enxure_recurring_expenses (vendor, category, amount, description, frequency) VALUES (?, ?, ?, ?, ?)");
-                $stmt->bind_param("sssds", $vendor, $category, $amount, $description, $frequency);
+                // tax_year is fixed at creation (today's tax year) — a new year
+                // gets a fresh row via Duplicate, not by editing this one.
+                $taxYear = getTaxYear((int) ($settings['tax_year_start_month'] ?? 1));
+                $stmt = $mysqli->prepare("INSERT INTO enxure_recurring_expenses (vendor, category, amount, description, frequency, tax_year, billable_client_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("sssdsii", $vendor, $category, $amount, $description, $frequency, $taxYear, $billableClientId);
                 $stmt->execute();
+                $id = $mysqli->insert_id;
                 enxureLogAction($mysqli, null, '', 'recurring_expense_created', $recurNotes);
             }
+            echo json_encode(['success' => true, 'id' => $id]);
+            exit;
+        }
+        if ($_POST['action'] === 'duplicate_recurring_expense') {
+            // Carries vendor/category/amount/frequency/description/billable_client_id
+            // forward into a fresh row for the current tax year — never copies
+            // attachments, since the whole point is that each tax year's receipts
+            // start from zero.
+            $id = (int) ($_POST['id'] ?? 0);
+            $src = $mysqli->query("SELECT vendor, category, amount, description, frequency, billable_client_id FROM enxure_recurring_expenses WHERE id = " . $id)->fetch_assoc();
+            if (!$src) {
+                echo json_encode(['success' => false, 'error' => 'Recurring expense not found']);
+                exit;
+            }
+            $taxYear = getTaxYear((int) ($settings['tax_year_start_month'] ?? 1));
+            $exists = $mysqli->query("SELECT id FROM enxure_recurring_expenses WHERE vendor = '" . $mysqli->real_escape_string($src['vendor']) . "' AND tax_year = $taxYear")->num_rows > 0;
+            if ($exists) {
+                echo json_encode(['success' => false, 'error' => "A recurring expense for {$src['vendor']} already exists for this tax year."]);
+                exit;
+            }
+            $stmt = $mysqli->prepare("INSERT INTO enxure_recurring_expenses (vendor, category, amount, description, frequency, tax_year, is_active, billable_client_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?)");
+            $stmt->bind_param("sssdsii", $src['vendor'], $src['category'], $src['amount'], $src['description'], $src['frequency'], $taxYear, $src['billable_client_id']);
+            $stmt->execute();
+            $newId = $mysqli->insert_id;
+            enxureLogAction($mysqli, null, '', 'recurring_expense_created', "{$src['vendor']} — " . number_format((float) $src['amount'], 2) . " — {$src['frequency']} (duplicated for tax year {$taxYear})");
+            echo json_encode(['success' => true, 'id' => $newId]);
+            exit;
+        }
+        if ($_POST['action'] === 'get_recurring_expense_receipts') {
+            $recurringExpenseId = (int) ($_POST['recurring_expense_id'] ?? 0);
+            $res = $mysqli->query("SELECT id, filename, stored_path, file_size, doc_type, uploaded_at FROM enxure_recurring_expense_receipts WHERE recurring_expense_id = $recurringExpenseId ORDER BY uploaded_at DESC");
+            $receipts = [];
+            while ($r = $res->fetch_assoc()) {
+                $r['url'] = RECEIPTS_URL . implode('/', array_map('rawurlencode', explode('/', $r['stored_path'])));
+                $receipts[] = $r;
+            }
+            echo json_encode(['success' => true, 'receipts' => $receipts]);
+            exit;
+        }
+        if ($_POST['action'] === 'upload_recurring_expense_receipt') {
+            $recurringExpenseId = (int) ($_POST['recurring_expense_id'] ?? 0);
+            $reExists = $mysqli->query("SELECT id FROM enxure_recurring_expenses WHERE id = $recurringExpenseId")->num_rows > 0;
+            if (!$reExists) {
+                echo json_encode(['success' => false, 'error' => 'Recurring expense not found']);
+                exit;
+            }
+            if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+                echo json_encode(['success' => false, 'error' => 'No file uploaded, or the upload failed.']);
+                exit;
+            }
+            $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'], true)) {
+                echo json_encode(['success' => false, 'error' => 'Unsupported file type — attachments must be an image or PDF.']);
+                exit;
+            }
+            $recurringDir = RECEIPTS_DIR . 'recurring/' . $recurringExpenseId;
+            if (!is_dir($recurringDir))
+                @mkdir($recurringDir, 0777, true);
+            $origName = basename($_FILES['file']['name']);
+            $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $origName);
+            $storedName = uniqid('rcpt_') . '_' . $safeName;
+            if (!move_uploaded_file($_FILES['file']['tmp_name'], "$recurringDir/$storedName")) {
+                echo json_encode(['success' => false, 'error' => 'Failed to save the uploaded file.']);
+                exit;
+            }
+            $storedPath = "recurring/$recurringExpenseId/$storedName";
+            $size = (int) $_FILES['file']['size'];
+            $docType = ($_POST['doc_type'] ?? 'receipt') === 'invoice' ? 'invoice' : 'receipt';
+            $stmt = $mysqli->prepare("INSERT INTO enxure_recurring_expense_receipts (recurring_expense_id, filename, stored_path, file_size, doc_type) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("issis", $recurringExpenseId, $origName, $storedPath, $size, $docType);
+            $stmt->execute();
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'delete_recurring_expense_receipt') {
+            $id = (int) ($_POST['id'] ?? 0);
+            $row = $mysqli->query("SELECT stored_path FROM enxure_recurring_expense_receipts WHERE id = $id")->fetch_assoc();
+            if ($row) {
+                @unlink(RECEIPTS_DIR . $row['stored_path']);
+                $stmt = $mysqli->prepare("DELETE FROM enxure_recurring_expense_receipts WHERE id = ?");
+                $stmt->bind_param("i", $id);
+                $stmt->execute();
+            }
+            echo json_encode(['success' => true]);
+            exit;
+        }
+        if ($_POST['action'] === 'move_recurring_expense_receipt') {
+            $id = (int) ($_POST['id'] ?? 0);
+            $docType = ($_POST['doc_type'] ?? '') === 'invoice' ? 'invoice' : 'receipt';
+            $stmt = $mysqli->prepare("UPDATE enxure_recurring_expense_receipts SET doc_type = ? WHERE id = ?");
+            $stmt->bind_param("si", $docType, $id);
+            $stmt->execute();
             echo json_encode(['success' => true]);
             exit;
         }
@@ -1561,6 +1680,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'delete_recurring_expense') {
             $id = (int) ($_POST['id'] ?? 0);
             $reRow = $mysqli->query("SELECT vendor, amount FROM enxure_recurring_expenses WHERE id = " . $id)->fetch_assoc();
+            $recRes = $mysqli->query("SELECT stored_path FROM enxure_recurring_expense_receipts WHERE recurring_expense_id = $id");
+            while ($recRow = $recRes->fetch_assoc())
+                @unlink(RECEIPTS_DIR . $recRow['stored_path']);
+            @rmdir(RECEIPTS_DIR . 'recurring/' . $id);
+            $mysqli->query("DELETE FROM enxure_recurring_expense_receipts WHERE recurring_expense_id = $id");
             $stmt = $mysqli->prepare("DELETE FROM enxure_recurring_expenses WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
@@ -1766,8 +1890,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'quarterly' => $mysqli->prepare("SELECT COUNT(*) as c FROM enxure_expenses WHERE recurring_expense_id = ? AND QUARTER(expense_date) = QUARTER(CURDATE()) AND YEAR(expense_date) = YEAR(CURDATE())"),
                 'annually' => $mysqli->prepare("SELECT COUNT(*) as c FROM enxure_expenses WHERE recurring_expense_id = ? AND YEAR(expense_date) = YEAR(CURDATE())"),
             ];
-            $recurExpInsertStmt = $mysqli->prepare("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description, recurring_expense_id) VALUES (CURDATE(), ?, ?, ?, ?, ?)");
-            $recurExpenses = $mysqli->query("SELECT * FROM enxure_recurring_expenses WHERE is_active = 1");
+            // billable_client_id is carried straight from the template, so every
+            // occurrence it logs is pre-marked billable without touching each one
+            // by hand — see enxure_recurring_expenses.billable_client_id.
+            $recurExpInsertStmt = $mysqli->prepare("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description, recurring_expense_id, billable_client_id) VALUES (CURDATE(), ?, ?, ?, ?, ?, ?)");
+            // Only the current tax year's row for a given template is live — last
+            // year's row (if not yet deleted) stays as history and stops generating
+            // new occurrences once its tax year has rolled over.
+            $currentTaxYearForCron = getTaxYear((int) ($settings['tax_year_start_month'] ?? 1));
+            $recurExpStmt = $mysqli->prepare("SELECT * FROM enxure_recurring_expenses WHERE is_active = 1 AND tax_year = ?");
+            $recurExpStmt->bind_param("i", $currentTaxYearForCron);
+            $recurExpStmt->execute();
+            $recurExpenses = $recurExpStmt->get_result();
             while ($re = $recurExpenses->fetch_assoc()) {
                 if (!$bypassGuard) {
                     $alreadyStmt = $recurExpAlreadyStmts[$re['frequency'] ?? 'monthly'] ?? $recurExpAlreadyStmts['monthly'];
@@ -1780,7 +1914,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
                 }
                 $reAmount = (float) $re['amount'];
-                $recurExpInsertStmt->bind_param("ssdsi", $re['vendor'], $re['category'], $reAmount, $re['description'], $re['id']);
+                $reBillableClientId = $re['billable_client_id'] !== null ? (int) $re['billable_client_id'] : null;
+                $recurExpInsertStmt->bind_param("ssdsii", $re['vendor'], $re['category'], $reAmount, $re['description'], $re['id'], $reBillableClientId);
                 if ($recurExpInsertStmt->execute()) {
                     $recurExpSent++;
                     enxureLogAction($mysqli, null, '', 'expense_added', "{$re['vendor']} — " . number_format($reAmount, 2) . " (auto-logged from recurring template)");
@@ -2432,9 +2567,19 @@ while ($r = $res->fetch_assoc())
 $total_expenses = $mysqli->query("SELECT SUM(amount) as s FROM enxure_expenses")->fetch_assoc()['s'] ?? 0;
 
 $recurringExpenses = [];
-$res = $mysqli->query("SELECT * FROM enxure_recurring_expenses ORDER BY vendor ASC, id ASC");
+$res = $mysqli->query("SELECT re.*, COUNT(r.id) as receipt_count, bc.client_name as billable_client_name FROM enxure_recurring_expenses re LEFT JOIN enxure_recurring_expense_receipts r ON r.recurring_expense_id = re.id LEFT JOIN enxure_clients bc ON bc.id = re.billable_client_id GROUP BY re.id ORDER BY re.tax_year DESC, re.vendor ASC, re.id ASC");
 while ($r = $res->fetch_assoc())
     $recurringExpenses[] = $r;
+
+$todayForRecurringTotal = (new DateTime())->format('Y-m-d');
+foreach ($recurringExpenses as $re) {
+    if (!$re['is_active'] || !$re['created_at']) {
+        continue;
+    }
+    $elapsed = count(enxureRecurringOccurrenceDates($re['frequency'], substr($re['created_at'], 0, 10), $todayForRecurringTotal));
+    $alreadyLogged = (int) $mysqli->query("SELECT COUNT(*) as c FROM enxure_expenses WHERE recurring_expense_id = {$re['id']}")->fetch_assoc()['c'];
+    $total_expenses += max(0, $elapsed - $alreadyLogged) * (float) $re['amount'];
+}
 
 $actions = [];
 $res = $mysqli->query("SELECT a.*, i.client_name FROM enxure_actions a LEFT JOIN enxure_invoices i ON a.invoice_number = i.invoice_number ORDER BY a.performed_at DESC LIMIT 200");
@@ -2561,7 +2706,8 @@ $stats_12m_projected = ($stats_mrr * 12) + $stats_outstanding_revenue;
 // $stats_expense_* value which sums actual logged enxure_expenses rows.
 $freqToMonthly = ['weekly' => 52 / 12, 'monthly' => 1, 'quarterly' => 1 / 3, 'annually' => 1 / 12];
 $stats_recurring_expenses_monthly = 0;
-$res_recur_exp = $mysqli->query("SELECT amount, frequency FROM enxure_recurring_expenses WHERE is_active = 1");
+$currentTaxYearForStats = getTaxYear((int) ($settings['tax_year_start_month'] ?? 1));
+$res_recur_exp = $mysqli->query("SELECT amount, frequency FROM enxure_recurring_expenses WHERE is_active = 1 AND tax_year = $currentTaxYearForStats");
 while ($r = $res_recur_exp->fetch_assoc()) {
     $stats_recurring_expenses_monthly += (float) $r['amount'] * ($freqToMonthly[$r['frequency']] ?? 1);
 }

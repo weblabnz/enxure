@@ -36,8 +36,12 @@ function enxureHandlePreviewTaxEmail($mysqli, array $settings, int $currentUserI
         $expenses[] = $r;
     }
 
+    // Scoped to the tax year the selected start date falls in — a custom range
+    // that doesn't start on the tax year boundary still resolves to one row per
+    // vendor, rather than pulling every past year's template as well.
+    $rangeTaxYear = getTaxYear((int) ($settings['tax_year_start_month'] ?? 1), new DateTime($startStr));
     $recurringExpenses = [];
-    $res = $mysqli->query("SELECT id, vendor, category, amount, frequency, is_active FROM enxure_recurring_expenses ORDER BY vendor ASC, id ASC");
+    $res = $mysqli->query("SELECT id, vendor, category, amount, frequency, is_active, created_at FROM enxure_recurring_expenses WHERE tax_year = $rangeTaxYear ORDER BY vendor ASC, id ASC");
     while ($r = $res->fetch_assoc()) {
         $r['amount'] = (float) $r['amount'];
         $r['category_label'] = $categories[$r['category']] ?? ucfirst($r['category']);
@@ -64,7 +68,7 @@ function enxureValidTaxEmailDate(?string $value): ?string
     return ($d && $d->format('Y-m-d') === $value) ? $value : null;
 }
 
-function enxureRecurringOccurrenceDates(string $frequency, string $startStr, string $endStr): array
+function enxureRecurringOccurrenceDates(string $frequency, string $anchorStr, string $throughStr): array
 {
     $step = match ($frequency) {
         'weekly' => '+1 week',
@@ -72,10 +76,10 @@ function enxureRecurringOccurrenceDates(string $frequency, string $startStr, str
         'annually' => '+1 year',
         default => '+1 month',
     };
-    $end = new DateTime($endStr);
+    $through = new DateTime($throughStr);
+    $cursor = new DateTime($anchorStr);
     $dates = [];
-    $cursor = new DateTime($startStr);
-    while ($cursor <= $end) {
+    while ($cursor <= $through) {
         $dates[] = $cursor->format('Y-m-d');
         $cursor->modify($step);
     }
@@ -156,19 +160,41 @@ function enxureBuildTaxEmailZip($mysqli, array $settings, array $invoiceIds, arr
         }
     }
 
+    $today = (new DateTime())->format('Y-m-d');
+    $effectiveEnd = min($endStr, $today);
+
     $recurringCount = 0;
     if (!empty($recurringExpenseIds)) {
         $ids = implode(',', array_map('intval', $recurringExpenseIds));
         $csv = fopen('php://temp', 'r+');
         fputcsv($csv, ['Vendor', 'Category', 'Amount', 'Frequency', 'Active'], ',', '"', "\\");
-        $res = $mysqli->query("SELECT vendor, category, amount, frequency, description, is_active FROM enxure_recurring_expenses WHERE id IN ($ids) ORDER BY vendor ASC");
+        $res = $mysqli->query("SELECT id, vendor, category, amount, frequency, description, is_active, created_at FROM enxure_recurring_expenses WHERE id IN ($ids) ORDER BY vendor ASC");
         while ($r = $res->fetch_assoc()) {
             $categoryLabel = $categories[$r['category']] ?? ucfirst($r['category']);
             fputcsv($csv, [$r['vendor'], $categoryLabel, $r['amount'], $r['frequency'], $r['is_active'] ? 'Yes' : 'No'], ',', '"', "\\");
             $recurringCount++;
 
-            foreach (enxureRecurringOccurrenceDates($r['frequency'], $startStr, $endStr) as $occurrenceDate) {
-                $expenseRows[] = [$occurrenceDate, $r['vendor'], $categoryLabel, (float) $r['amount'], $r['description']];
+            if ($effectiveEnd >= $startStr) {
+                $anchor = $r['created_at'] ? substr($r['created_at'], 0, 10) : $startStr;
+                $occurrences = array_values(array_filter(
+                    enxureRecurringOccurrenceDates($r['frequency'], $anchor, $effectiveEnd),
+                    fn($d) => $d >= $startStr
+                ));
+                $alreadyLogged = (int) $mysqli->query("SELECT COUNT(*) as c FROM enxure_expenses WHERE recurring_expense_id = {$r['id']} AND expense_date >= '$startStr' AND expense_date <= '$endStr 23:59:59'")->fetch_assoc()['c'];
+                foreach (array_slice($occurrences, $alreadyLogged) as $occurrenceDate) {
+                    $expenseRows[] = [$occurrenceDate, $r['vendor'], $categoryLabel, (float) $r['amount'], $r['description']];
+                }
+            }
+
+            if ($includeReceipts) {
+                $recurFolder = 'Recurring Expenses/' . preg_replace('/[^\w\-]/', '_', $r['id'] . '-' . $r['vendor']) . '/';
+                $recRecRes = $mysqli->query("SELECT filename, stored_path FROM enxure_recurring_expense_receipts WHERE recurring_expense_id = " . (int) $r['id']);
+                while ($rec = $recRecRes->fetch_assoc()) {
+                    $diskPath = RECEIPTS_DIR . $rec['stored_path'];
+                    if (is_readable($diskPath)) {
+                        $zip->addFile($diskPath, $recurFolder . $rec['filename']);
+                    }
+                }
             }
         }
         rewind($csv);

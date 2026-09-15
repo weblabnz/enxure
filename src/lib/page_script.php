@@ -14,7 +14,24 @@
                 }
                 return __enxureNativeFetch(input, init);
             };
+            // Date fields are plain text (not <input type="date">) so they always render
+            // as YYYY-MM-DD regardless of the visitor's browser/OS locale, which the native
+            // picker's display format otherwise follows unpredictably.
+            function isValidIsoDate(str) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
+                const [y, m, d] = str.split('-').map(Number);
+                if (y < 1900 || y > 2099 || m < 1 || m > 12) return false;
+                const daysInMonth = [31, (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+                return d >= 1 && d <= daysInMonth[m - 1];
+            }
+            document.addEventListener('input', (e) => {
+                if (e.target.classList && e.target.classList.contains('iso-date')) {
+                    const v = e.target.value.trim();
+                    e.target.classList.toggle('invalid', v !== '' && !isValidIsoDate(v));
+                }
+            });
             const APP_CURRENCY = <?= json_encode($settings['currency'] ?? 'USD') ?>;
+            const CURRENT_TAX_YEAR = <?= (int) getTaxYear((int) ($settings['tax_year_start_month'] ?? 1)) ?>;
             let chartInstance = null, pieChartInstance = null, chartAllData = null, chartRange = '12';
             const CLIENT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#f97316', '#84cc16', '#a855f7', '#ec4899', '#14b8a6', '#f43f5e'];
             // Declared here (not just above their only use in updateDashboardCardWidthLabel
@@ -1311,7 +1328,6 @@
                 document.getElementById('expenseModalTitle').textContent = e ? 'Edit Expense' : 'Add Expense';
                 document.getElementById('expenseId').value = e ? e.id : '';
                 document.getElementById('expenseDate').value = e ? e.expense_date.substring(0, 10) : new Date().toISOString().substring(0, 10);
-                document.getElementById('expenseDateIso').textContent = document.getElementById('expenseDate').value;
                 document.getElementById('expenseVendor').value = e ? e.vendor : '';
                 document.getElementById('expenseCategory').value = e ? e.category : 'other';
                 document.getElementById('expenseAmount').value = e ? e.amount : '0.00';
@@ -1455,7 +1471,57 @@
                 document.getElementById('recurringExpenseAmount').value = re ? re.amount : '0.00';
                 document.getElementById('recurringExpenseFrequency').value = re ? re.frequency : 'monthly';
                 document.getElementById('recurringExpenseDescription').value = re ? (re.description || '') : '';
+                document.getElementById('recurringExpenseBillableClient').value = re ? (re.billable_client_id || '') : '';
+                document.getElementById('recurringExpenseTaxYearNote').textContent = `Tax year: ${re ? re.tax_year : CURRENT_TAX_YEAR}${re ? '' : ' (assigned automatically on save)'}`;
+                document.getElementById('recurringExpenseInvoiceFiles').value = '';
+                document.getElementById('recurringExpenseInvoiceFilesList').innerHTML = '';
+                document.getElementById('recurringExpenseReceiptFiles').value = '';
+                document.getElementById('recurringExpenseReceiptFilesList').innerHTML = '';
                 document.getElementById('recurringExpenseModal').classList.add('active');
+                if (re && re.id) loadRecurringExpenseReceipts(re.id);
+            }
+            function _renderRecurringExpenseFileList(files, recurringExpenseId) {
+                if (!files.length) return '';
+                return files.map(r => {
+                    const target = r.doc_type === 'invoice' ? 'receipt' : 'invoice';
+                    return `
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.4rem 0; border-bottom:1px solid var(--border);">
+                        <a href="${r.url}" target="_blank" style="color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.85rem;"><i class="fa-solid fa-paperclip"></i> ${r.filename}</a>
+                        <div style="display:flex; align-items:center; gap:0.5rem; white-space:nowrap;">
+                            <span style="color:var(--text-secondary); font-size:0.75rem;">${_formatFileSize(r.file_size)}</span>
+                            <button type="button" class="btn small" title="Move to ${target === 'invoice' ? 'Invoice' : 'Receipt'}" onclick="moveRecurringExpenseReceipt(${r.id}, ${recurringExpenseId}, '${target}')"><i class="fa-solid fa-right-left"></i></button>
+                            <button type="button" class="btn small danger" onclick="deleteRecurringExpenseReceipt(${r.id}, ${recurringExpenseId})"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                `;
+                }).join('');
+            }
+            async function loadRecurringExpenseReceipts(recurringExpenseId) {
+                const invoiceList = document.getElementById('recurringExpenseInvoiceFilesList');
+                const receiptList = document.getElementById('recurringExpenseReceiptFilesList');
+                receiptList.innerHTML = '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Loading…</p>';
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'get_recurring_expense_receipts', recurring_expense_id: recurringExpenseId }) });
+                const json = await res.json();
+                if (!json.success) { invoiceList.innerHTML = ''; receiptList.innerHTML = ''; return; }
+                invoiceList.innerHTML = _renderRecurringExpenseFileList(json.receipts.filter(r => r.doc_type === 'invoice'), recurringExpenseId);
+                receiptList.innerHTML = _renderRecurringExpenseFileList(json.receipts.filter(r => r.doc_type !== 'invoice'), recurringExpenseId);
+            }
+            async function deleteRecurringExpenseReceipt(id, recurringExpenseId) {
+                if (!confirm('Delete this attachment?')) return;
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'delete_recurring_expense_receipt', id: id }) });
+                const json = await res.json();
+                // recurringExpensesTable isn't wired into the simpleDatatables refresh
+                // system (see dataTables init above) — same reasoning as
+                // save/toggle/delete elsewhere in this section, so a full reload is
+                // what picks up the updated attachment count on the list.
+                if (json.success) { showToast('Attachment deleted!'); setTimeout(() => window.location.reload(), 1000); }
+                else showToast(json.error || 'Failed to delete', true);
+            }
+            async function moveRecurringExpenseReceipt(id, recurringExpenseId, docType) {
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'move_recurring_expense_receipt', id: id, doc_type: docType }) });
+                const json = await res.json();
+                if (json.success) { showToast(`Moved to ${docType === 'invoice' ? 'Invoice' : 'Receipt'}!`); await loadRecurringExpenseReceipts(recurringExpenseId); }
+                else showToast(json.error || 'Failed to move', true);
             }
             async function saveRecurringExpense() {
                 if (!document.getElementById('recurringExpenseVendor').value.trim()) return showToast('Vendor is required', true);
@@ -1469,15 +1535,36 @@
                     amount: document.getElementById('recurringExpenseAmount').value,
                     frequency: document.getElementById('recurringExpenseFrequency').value,
                     description: document.getElementById('recurringExpenseDescription').value,
+                    billable_client_id: document.getElementById('recurringExpenseBillableClient').value,
                 });
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
-                if (json.success) { showToast('Recurring expense saved!'); setTimeout(() => window.location.reload(), 1000); } else { showToast(json.error || 'Failed to save', true); btn.disabled = false; }
+                if (!json.success) { showToast(json.error || 'Failed to save', true); btn.disabled = false; return; }
+                const filesToUpload = [
+                    ...Array.from(document.getElementById('recurringExpenseInvoiceFiles').files).map(file => ({ file, docType: 'invoice' })),
+                    ...Array.from(document.getElementById('recurringExpenseReceiptFiles').files).map(file => ({ file, docType: 'receipt' })),
+                ];
+                for (const { file, docType } of filesToUpload) {
+                    const rFormData = new FormData();
+                    rFormData.append('action', 'upload_recurring_expense_receipt');
+                    rFormData.append('recurring_expense_id', json.id);
+                    rFormData.append('doc_type', docType);
+                    rFormData.append('file', file);
+                    await fetch('', { method: 'POST', body: rFormData });
+                }
+                showToast('Recurring expense saved!');
+                setTimeout(() => window.location.reload(), 1000);
             }
             async function toggleRecurringExpenseActive(id, active) {
                 const data = new URLSearchParams({ action: 'toggle_recurring_expense', id: id, is_active: active ? '1' : '0' });
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                 if (json.success) showToast(active ? 'Resumed!' : 'Paused!');
                 else { showToast(json.error || 'Failed to update', true); setTimeout(() => window.location.reload(), 1000); }
+            }
+            async function duplicateRecurringExpense(id) {
+                if (!confirm(`Create a fresh copy of this recurring expense for tax year ${CURRENT_TAX_YEAR}? It starts with no attachments.`)) return;
+                const data = new URLSearchParams({ action: 'duplicate_recurring_expense', id: id });
+                const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
+                if (json.success) { showToast('Duplicated for the current tax year!'); setTimeout(() => window.location.reload(), 1000); } else showToast(json.error || 'Failed to duplicate', true);
             }
             async function deleteRecurringExpense(id) {
                 if (!confirm('Delete this recurring expense? Past expenses it already logged are not affected.')) return;
@@ -4015,12 +4102,12 @@
                 boxes.forEach(cb => cb.checked = !allChecked);
                 updateTaxEmailSummary();
             }
-            function taxEmailRecurringOccurrenceDates(frequency, startStr, endStr) {
+            function taxEmailRecurringOccurrenceDates(frequency, anchorStr, throughStr) {
                 const step = { weekly: [0, 0, 7], quarterly: [0, 3, 0], annually: [1, 0, 0] }[frequency] || [0, 1, 0];
-                const end = new Date(endStr + 'T00:00:00');
-                let cursor = new Date(startStr + 'T00:00:00');
+                const through = new Date(throughStr + 'T00:00:00');
+                let cursor = new Date(anchorStr + 'T00:00:00');
                 const dates = [];
-                while (cursor <= end) {
+                while (cursor <= through) {
                     dates.push(cursor.toISOString().slice(0, 10));
                     cursor = new Date(cursor.getFullYear() + step[0], cursor.getMonth() + step[1], cursor.getDate() + step[2]);
                 }
@@ -4041,12 +4128,18 @@
                 });
                 let recurringOccurrenceCount = 0;
                 let recurringOccurrenceTotal = 0;
+                const todayStr = new Date().toISOString().slice(0, 10);
+                const effectiveEnd = _taxEmailData.end_date < todayStr ? _taxEmailData.end_date : todayStr;
                 recChecked.forEach(cb => {
                     const re = _taxEmailData.recurring_expenses.find(r => String(r.id) === cb.value);
-                    if (!re) return;
-                    const occurrences = taxEmailRecurringOccurrenceDates(re.frequency, _taxEmailData.start_date, _taxEmailData.end_date);
-                    recurringOccurrenceCount += occurrences.length;
-                    recurringOccurrenceTotal += occurrences.length * parseFloat(re.amount);
+                    if (!re || effectiveEnd < _taxEmailData.start_date) return;
+                    const anchor = (re.created_at ? re.created_at.slice(0, 10) : _taxEmailData.start_date);
+                    const occurrences = taxEmailRecurringOccurrenceDates(re.frequency, anchor, effectiveEnd)
+                        .filter(d => d >= _taxEmailData.start_date);
+                    const alreadyLogged = _taxEmailData.expenses.filter(exp => String(exp.recurring_expense_id) === String(re.id)).length;
+                    const projectedCount = Math.max(0, occurrences.length - alreadyLogged);
+                    recurringOccurrenceCount += projectedCount;
+                    recurringOccurrenceTotal += projectedCount * parseFloat(re.amount);
                 });
                 const expTotal = expChecked.reduce((s, cb) => s + parseFloat(cb.dataset.amount), 0) + recurringOccurrenceTotal;
                 const expCount = expChecked.length + recurringOccurrenceCount;

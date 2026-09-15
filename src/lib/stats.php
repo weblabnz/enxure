@@ -1067,6 +1067,14 @@ function getTaxYearStart(int $startMonth, ?DateTime $now = null): DateTime
     return $taxYearStart;
 }
 
+// Calendar year a given date's tax year starts in — the value stored on
+// enxure_recurring_expenses.tax_year and matched against when auto-logging or
+// projecting recurring expenses.
+function getTaxYear(int $startMonth, ?DateTime $now = null): int
+{
+    return (int) getTaxYearStart($startMonth, $now)->format('Y');
+}
+
 function enxureHandleGetNavCounts($mysqli, array $settings): void
 {
 // Lets the sidebar poll for fresh badge counts (e.g. invoices the cron

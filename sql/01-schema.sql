@@ -154,8 +154,12 @@ CREATE TABLE IF NOT EXISTS `enxure_recurring_expenses` (
   `description`    TEXT,
   `frequency`      ENUM('weekly','monthly','quarterly','annually') NOT NULL DEFAULT 'monthly',
   `is_active`      TINYINT(1) NOT NULL DEFAULT 1,
+  `tax_year`       INT NOT NULL DEFAULT 0 COMMENT 'Calendar year the tax year containing this row starts in (see getTaxYear()) — each tax year gets its own row via Duplicate, so attachments never span years',
+  `billable_client_id` INT DEFAULT NULL COMMENT 'FK to enxure_clients.id — when set, every occurrence the cron auto-logs from this template is pre-marked billable to this client',
   `created_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_tax_year` (`tax_year`),
+  INDEX `idx_billable_client_id` (`billable_client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `enxure_expense_receipts` (
@@ -167,6 +171,17 @@ CREATE TABLE IF NOT EXISTS `enxure_expense_receipts` (
   `doc_type`       ENUM('invoice','receipt') NOT NULL DEFAULT 'receipt' COMMENT 'Which of the Add Expense modal''s two upload slots this came from — receipt OCR only reads doc_type=receipt files',
   `uploaded_at`    DATETIME DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_expense_id` (`expense_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `enxure_recurring_expense_receipts` (
+  `id`             INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `recurring_expense_id` INT NOT NULL COMMENT 'FK to enxure_recurring_expenses.id',
+  `filename`       VARCHAR(255) NOT NULL COMMENT 'Original uploaded filename, shown in the UI',
+  `stored_path`    VARCHAR(500) NOT NULL COMMENT 'Relative path under invoxa-invoices/receipts/recurring/<recurring_expense_id>/',
+  `file_size`      INT NOT NULL DEFAULT 0,
+  `doc_type`       ENUM('invoice','receipt') NOT NULL DEFAULT 'receipt' COMMENT 'Same Invoice/Receipt split as enxure_expense_receipts.doc_type',
+  `uploaded_at`    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_recurring_expense_id` (`recurring_expense_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `enxure_payments` (

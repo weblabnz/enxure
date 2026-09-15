@@ -83,7 +83,8 @@
                     <div style="display:flex; gap:1rem; flex-wrap:wrap;">
                         <div class="form-group" style="flex:1; min-width:180px;">
                             <label class="form-label">Due Date <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
-                            <input type="date" id="adhocDueDate" class="form-control">
+                            <input type="text" id="adhocDueDate" class="form-control iso-date" placeholder="YYYY-MM-DD"
+                                maxlength="10" pattern="\d{4}-\d{2}-\d{2}" title="YYYY-MM-DD">
                             <div id="adhocDueDateHint" style="margin-top:0.3rem; font-size:0.75rem; color:var(--text-secondary);"></div>
                         </div>
                         <div class="form-group" style="flex:1; min-width:180px;">
@@ -92,7 +93,8 @@
                         </div>
                         <div class="form-group" id="adhocQuoteExpiryGroup" style="display:none; flex:1; min-width:180px;">
                             <label class="form-label">Quote Expires <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
-                            <input type="date" id="adhocQuoteExpiry" class="form-control">
+                            <input type="text" id="adhocQuoteExpiry" class="form-control iso-date" placeholder="YYYY-MM-DD"
+                                maxlength="10" pattern="\d{4}-\d{2}-\d{2}" title="YYYY-MM-DD">
                             <div style="margin-top:0.3rem; font-size:0.75rem; color:var(--text-secondary);">Shown to the client; leave blank for no expiry.</div>
                         </div>
                         <div class="form-group" style="flex:2; min-width:240px;">

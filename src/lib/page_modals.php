@@ -153,11 +153,8 @@
                     <input type="hidden" id="expenseId">
                     <div class="form-group" style="width:50%;">
                         <label class="form-label">Date</label>
-                        <div style="display:flex; align-items:center; gap:0.75rem;">
-                            <input type="date" id="expenseDate" class="form-control" style="flex:1;"
-                                oninput="document.getElementById('expenseDateIso').textContent = this.value">
-                            <span id="expenseDateIso" style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;"></span>
-                        </div>
+                        <input type="text" id="expenseDate" class="form-control iso-date" placeholder="YYYY-MM-DD"
+                            maxlength="10" pattern="\d{4}-\d{2}-\d{2}" title="YYYY-MM-DD">
                     </div>
                     <div class="form-group"><label class="form-label">Vendor</label><input type="text"
                             id="expenseVendor" class="form-control" placeholder="" required></div>
@@ -238,7 +235,29 @@
                                 style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
                         <textarea id="recurringExpenseDescription" class="form-control" rows="2"></textarea>
                     </div>
-                    <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Logged automatically as a new expense the next time recurring billing runs (Settings &gt; Billing, or the monthly cron), once per period on today's date — same guard against double-logging as recurring invoices.</p>
+                    <div class="form-group"><label class="form-label">Billable To <span
+                                style="font-weight:400; color:var(--text-secondary);">(optional — every occurrence this logs is pre-marked billable to this client, ready to add to their next invoice)</span></label>
+                        <select id="recurringExpenseBillableClient" class="form-control">
+                            <option value="">-- Not billable --</option>
+                            <?php foreach ($clients as $c): ?>
+                                <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['client_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <p id="recurringExpenseTaxYearNote" style="color:var(--text-secondary); font-size:0.8rem; margin:0 0 1rem;"></p>
+                    <div class="form-group"><label class="form-label">Invoice <span
+                                style="font-weight:400; color:var(--text-secondary);">(optional — the vendor's bill for this tax year)</span></label>
+                        <div id="recurringExpenseInvoiceFilesList" style="margin-bottom:0.5rem;"></div>
+                        <input type="file" id="recurringExpenseInvoiceFiles" class="form-control" accept="image/*,.pdf" multiple
+                            style="padding:0.5rem;">
+                    </div>
+                    <div class="form-group"><label class="form-label">Receipt <span
+                                style="font-weight:400; color:var(--text-secondary);">(optional — proof of payment for this tax year)</span></label>
+                        <div id="recurringExpenseReceiptFilesList" style="margin-bottom:0.5rem;"></div>
+                        <input type="file" id="recurringExpenseReceiptFiles" class="form-control" accept="image/*,.pdf" multiple
+                            style="padding:0.5rem;">
+                    </div>
+                    <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Logged automatically as a new expense the next time recurring billing runs (Settings &gt; Billing, or the monthly cron), once per period on today's date — same guard against double-logging as recurring invoices. When a new tax year starts, use Duplicate on the list to carry this forward into a fresh row — attachments start empty again.</p>
                 </div>
                 <div class="modal-footer"><button class="btn" onclick="closeModal('recurringExpenseModal')">Cancel</button><button
                         class="btn primary" id="saveRecurringExpenseBtn" onclick="saveRecurringExpense()"><i class="fa-solid fa-save"></i>

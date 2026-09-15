@@ -2,6 +2,16 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.24] - 2026-09-15
+
+### Added
+- Recurring Expenses: file attachments (Invoice/Receipt uploads, same Invoice/Receipt split as regular expenses), a "Billable To" client (every occurrence the cron auto-logs from the template is pre-marked billable to that client), and a `tax_year` column so each tax year gets its own row instead of one template's attachments accumulating forever. Duplicate carries vendor/category/amount/frequency/billable client forward into a fresh row for the current tax year, deliberately without copying attachments.
+
+### Fixed
+- Expenses tab's Total Expenses stat only summed `enxure_expenses`, ignoring active Recurring Expense templates entirely. It now adds each active template's amount for however many billing periods have elapsed since it was created (per its frequency) that aren't already represented by a real logged expense row.
+- Tax Email projected a recurring expense template's occurrences across the whole selected date range starting from the range's own start date, regardless of when the template was actually created and regardless of whether those periods were already logged as real expenses — inflating the "N expense(s) totalling $X" summary and double-counting anything also selected from the Expenses list. Occurrences are now anchored to the template's creation date, capped at today (never projected into the future), and reduced by however many periods are already real logged rows for that template.
+- Every date field (Expenses, Ad Hoc Invoice due date/quote expiry, Tax Email and Client Statement date ranges) used the native `<input type="date">` picker, whose displayed format follows the visitor's own browser/OS locale rather than anything the app controls — showing `MM/DD/YYYY` for anyone on a US-formatted browser regardless of server locale. Replaced with plain text fields that always display `YYYY-MM-DD`, with client-side validation flagging anything that isn't a real calendar date.
+
 ## [3.0.23] - 2026-09-13
 
 ### Added
