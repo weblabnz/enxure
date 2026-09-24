@@ -92,6 +92,7 @@ const ENXURE_CLIENT_DIFF_FIELDS = [
     'account_name' => ['Account name', null],
     'account_number' => ['Account number', null],
     'monthly_rate' => ['Monthly rate', 'money'],
+    'recurring_items_json' => ['Recurring items', 'items'],
     'payment_terms_days' => ['Payment terms (days)', null],
     'billing_frequency' => ['Billing frequency', null],
     'discount_pct' => ['Discount %', 'money'],
@@ -109,6 +110,10 @@ function enxureFormatClientDiffValue($value, ?string $kind): string
     if ($kind === 'bool') {
         return ((int) $value) ? 'Yes' : 'No';
     }
+    if ($kind === 'items') {
+        $items = enxureNormalizeRecurringItems($value);
+        return $items ? implode(', ', array_map(fn($li) => $li['code'] . ' ' . $li['desc'] . ' ' . number_format($li['amount'], 2), $items)) : '(none)';
+    }
     $value = trim((string) $value);
     return $value === '' ? '(empty)' : $value;
 }
@@ -122,9 +127,11 @@ function enxureClientFieldDiffs(array $old, array $new): array
     foreach (ENXURE_CLIENT_DIFF_FIELDS as $field => [$label, $kind]) {
         $oldVal = $old[$field] ?? '';
         $newVal = $new[$field] ?? '';
-        $changed = $kind === 'money'
-            ? abs((float) $oldVal - (float) $newVal) > 0.001
-            : (string) $oldVal !== (string) $newVal;
+        $changed = match ($kind) {
+            'money' => abs((float) $oldVal - (float) $newVal) > 0.001,
+            'items' => enxureNormalizeRecurringItems($oldVal) !== enxureNormalizeRecurringItems($newVal),
+            default => (string) $oldVal !== (string) $newVal,
+        };
         if ($changed) {
             $diffs[] = $label . ': ' . enxureFormatClientDiffValue($oldVal, $kind) . ' → ' . enxureFormatClientDiffValue($newVal, $kind);
         }
@@ -153,6 +160,12 @@ $address = $_POST['address'] ?? '';
 $aname = $_POST['account_name'];
 $anum = $_POST['account_number'];
 $rate = (float) $_POST['monthly_rate'];
+$recurItems = enxureNormalizeRecurringItems($_POST['recurring_items'] ?? '');
+$recurItemsJson = null;
+if ($recurItems) {
+    $recurItemsJson = json_encode($recurItems);
+    $rate = round(array_sum(array_column($recurItems, 'amount')), 2);
+}
 $terms = (int) ($_POST['payment_terms_days'] ?? 21);
 if ($terms < 1)
     $terms = 21;
@@ -164,14 +177,14 @@ $taxRate = max(0, min(100, (float) ($_POST['tax_rate'] ?? 0)));
 $currency = enxureNormalizeCurrencyCode($_POST['currency'] ?? '');
 $act = (int) ($_POST['is_active'] ?? 0);
 $test = (int) ($_POST['is_test'] ?? 0);
-$newValues = ['client_name' => $name, 'contact_name' => $contactName, 'email' => $email, 'cc_email' => $ccEmail, 'phone' => $phone, 'address' => $address, 'account_name' => $aname, 'account_number' => $anum, 'monthly_rate' => $rate, 'payment_terms_days' => $terms, 'billing_frequency' => $freq, 'discount_pct' => $discountPct, 'tax_rate' => $taxRate, 'currency' => $currency, 'is_active' => $act, 'is_test' => $test];
+$newValues = ['client_name' => $name, 'contact_name' => $contactName, 'email' => $email, 'cc_email' => $ccEmail, 'phone' => $phone, 'address' => $address, 'account_name' => $aname, 'account_number' => $anum, 'monthly_rate' => $rate, 'recurring_items_json' => $recurItemsJson, 'payment_terms_days' => $terms, 'billing_frequency' => $freq, 'discount_pct' => $discountPct, 'tax_rate' => $taxRate, 'currency' => $currency, 'is_active' => $act, 'is_test' => $test];
 if ($id > 0) {
     $oldRow = $mysqli->prepare("SELECT * FROM enxure_clients WHERE id = ?");
     $oldRow->bind_param("i", $id);
     $oldRow->execute();
     $oldRow = $oldRow->get_result()->fetch_assoc();
-    $stmt = $mysqli->prepare("UPDATE enxure_clients SET client_name=?, contact_name=?, email=?, cc_email=?, phone=?, address=?, account_name=?, account_number=?, monthly_rate=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, currency=?, is_active=?, is_test=? WHERE id=?");
-    $stmt->bind_param("ssssssssdisddsiii", $name, $contactName, $email, $ccEmail, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $id);
+    $stmt = $mysqli->prepare("UPDATE enxure_clients SET client_name=?, contact_name=?, email=?, cc_email=?, phone=?, address=?, account_name=?, account_number=?, monthly_rate=?, recurring_items_json=?, payment_terms_days=?, billing_frequency=?, discount_pct=?, tax_rate=?, currency=?, is_active=?, is_test=? WHERE id=?");
+    $stmt->bind_param("ssssssssdsisddsiii", $name, $contactName, $email, $ccEmail, $phone, $address, $aname, $anum, $rate, $recurItemsJson, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $id);
     $stmt->execute();
     if ($oldRow) {
         $diffs = enxureClientFieldDiffs($oldRow, $newValues);
@@ -180,8 +193,8 @@ if ($id > 0) {
         }
     }
 } else {
-    $stmt = $mysqli->prepare("INSERT INTO enxure_clients (client_name, contact_name, email, cc_email, phone, address, account_name, account_number, monthly_rate, payment_terms_days, billing_frequency, discount_pct, tax_rate, currency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssssssdisddsiis", $name, $contactName, $email, $ccEmail, $phone, $address, $aname, $anum, $rate, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $key);
+    $stmt = $mysqli->prepare("INSERT INTO enxure_clients (client_name, contact_name, email, cc_email, phone, address, account_name, account_number, monthly_rate, recurring_items_json, payment_terms_days, billing_frequency, discount_pct, tax_rate, currency, is_active, is_test, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssssdsisddsiis", $name, $contactName, $email, $ccEmail, $phone, $address, $aname, $anum, $rate, $recurItemsJson, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $key);
     $stmt->execute();
     enxureLogAction($mysqli, null, '', 'client_created', $name . ' — ' . implode('; ', enxureClientFieldDiffs(array_fill_keys(array_keys(ENXURE_CLIENT_DIFF_FIELDS), ''), $newValues)));
 }

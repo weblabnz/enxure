@@ -218,6 +218,37 @@ function computeInvoiceTotals(array &$lineItems, float $discountPct, float $taxR
     ];
 }
 
+function enxureNormalizeRecurringItems($raw): array
+{
+    $decoded = is_array($raw) ? $raw : json_decode((string) $raw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $items = [];
+    foreach ($decoded as $li) {
+        if (!is_array($li)) {
+            continue;
+        }
+        $desc = trim((string) ($li['desc'] ?? ''));
+        $amount = round((float) ($li['amount'] ?? 0), 2);
+        if ($desc === '' || $amount <= 0) {
+            continue;
+        }
+        $code = trim((string) ($li['code'] ?? ''));
+        $items[] = ['code' => mb_substr($code !== '' ? $code : 'WEB01', 0, 20), 'desc' => mb_substr($desc, 0, 255), 'amount' => $amount];
+    }
+    return $items;
+}
+
+function enxureRecurringLineItems(array $client): array
+{
+    $items = enxureNormalizeRecurringItems($client['recurring_items_json'] ?? null);
+    if ($items) {
+        return $items;
+    }
+    return [['code' => 'WEB01', 'desc' => 'Website management', 'amount' => (float) ($client['monthly_rate'] ?? 0)]];
+}
+
 function enxureMarkExpensesBilled($mysqli, array $expenseIds, int $clientId, int $invoiceId): void
 {
     $expenseIds = array_values(array_unique(array_filter(array_map('intval', $expenseIds))));

@@ -1243,6 +1243,13 @@
                 document.getElementById('clientPhone').value = c ? (c.phone || '') : '';
                 document.getElementById('clientAddress').value = c ? (c.address || '') : '';
                 document.getElementById('clientRate').value = c ? c.monthly_rate : '0.00';
+                document.getElementById('clientRecurItemsBody').innerHTML = '';
+                let recurItems = [];
+                try { recurItems = c && c.recurring_items_json ? JSON.parse(c.recurring_items_json) : []; } catch (e) { recurItems = []; }
+                recurItems = Array.isArray(recurItems) ? recurItems : [];
+                if (!recurItems.length) recurItems = [{ code: 'WEB01', desc: 'Website management', amount: c && parseFloat(c.monthly_rate) > 0 ? c.monthly_rate : '' }];
+                recurItems.forEach(item => addClientRecurItem(item));
+                updateClientRecurTotal();
                 document.getElementById('clientCurrency').value = c ? (c.currency || '') : '';
                 document.getElementById('clientBillingFrequency').value = c ? c.billing_frequency : 'monthly';
                 document.getElementById('clientPaymentTerms').value = c ? c.payment_terms_days : '21';
@@ -1266,6 +1273,56 @@
                     document.getElementById('clientPortalLinkWrap').style.display = 'none';
                 }
                 document.getElementById('clientModal').classList.add('active');
+            }
+            function addClientRecurItem(item = null) {
+                const tr = document.createElement('tr');
+                tr.className = 'client-recur-row';
+                const cells = [
+                    ['text', 'cri-code', 'WEB01', item ? item.code : '', ''],
+                    ['text', 'cri-desc', 'e.g. SEO management', item ? item.desc : '', ''],
+                    ['number', 'cri-amount', '0.00', item && item.amount !== '' ? Number(item.amount).toFixed(2) : '', 'text-align:right;'],
+                ];
+                for (const [type, cls, placeholder, value, extraStyle] of cells) {
+                    const td = document.createElement('td');
+                    td.style.padding = '0 0.5rem 0.5rem 0';
+                    const input = document.createElement('input');
+                    input.type = type;
+                    input.className = 'form-control ' + cls;
+                    input.placeholder = placeholder;
+                    input.value = value;
+                    input.style.cssText = 'font-size:0.85rem;' + extraStyle;
+                    if (type === 'number') input.step = '0.01';
+                    input.addEventListener('input', updateClientRecurTotal);
+                    td.appendChild(input);
+                    tr.appendChild(td);
+                }
+                const tdDel = document.createElement('td');
+                tdDel.style.padding = '0 0 0.5rem 0';
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'btn small danger';
+                del.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                del.onclick = () => { tr.remove(); updateClientRecurTotal(); };
+                tdDel.appendChild(del);
+                tr.appendChild(tdDel);
+                document.getElementById('clientRecurItemsBody').appendChild(tr);
+                updateClientRecurTotal();
+            }
+            function getClientRecurItems() {
+                const items = [];
+                for (const row of document.querySelectorAll('#clientRecurItemsBody .client-recur-row')) {
+                    const desc = row.querySelector('.cri-desc').value.trim();
+                    const amount = parseFloat(row.querySelector('.cri-amount').value);
+                    if (!desc || isNaN(amount) || amount <= 0) continue;
+                    items.push({ code: row.querySelector('.cri-code').value.trim() || 'WEB01', desc, amount: Math.round(amount * 100) / 100 });
+                }
+                return items;
+            }
+            function updateClientRecurTotal() {
+                const rate = document.getElementById('clientRate');
+                const hasRows = document.querySelectorAll('#clientRecurItemsBody .client-recur-row').length > 0;
+                rate.readOnly = hasRows;
+                if (hasRows) rate.value = getClientRecurItems().reduce((s, i) => s + i.amount, 0).toFixed(2);
             }
             async function generatePortalLink() {
                 const id = document.getElementById('clientId').value;
@@ -1300,6 +1357,9 @@
             }
             async function saveClient() {
                 if (!document.getElementById('clientName').value.trim()) return showToast('Client name is required', true);
+                const recurMissingDesc = [...document.querySelectorAll('#clientRecurItemsBody .client-recur-row')].some(row => !row.querySelector('.cri-desc').value.trim() && parseFloat(row.querySelector('.cri-amount').value) > 0);
+                if (recurMissingDesc) return showToast('Each recurring item with an amount needs a description', true);
+                const recurItems = getClientRecurItems();
                 const btn = document.getElementById('saveClientBtn'); btn.disabled = true;
                 const data = new URLSearchParams({
                     action: 'save_client', id: document.getElementById('clientId').value, client_name: document.getElementById('clientName').value,
@@ -1307,6 +1367,7 @@
                     email: document.getElementById('clientEmail').value, cc_email: document.getElementById('clientCcEmail').value,
                     phone: document.getElementById('clientPhone').value,
                     address: document.getElementById('clientAddress').value, monthly_rate: document.getElementById('clientRate').value,
+                    recurring_items: JSON.stringify(recurItems),
                     currency: document.getElementById('clientCurrency').value,
                     billing_frequency: document.getElementById('clientBillingFrequency').value,
                     payment_terms_days: document.getElementById('clientPaymentTerms').value,

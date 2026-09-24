@@ -43,6 +43,21 @@
 
                     <!-- Billing terms -->
                     <div class="client-form-grid" style="margin-top:0.5rem; padding-top:1rem; border-top:1px solid var(--border);">
+                        <div class="form-group" style="grid-column:1 / -1;"><label class="form-label">Recurring Items</label>
+                            <table style="width:100%; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="font-size:0.8rem; color:var(--text-secondary);">
+                                        <th style="padding:0 0.5rem 0.4rem 0; width:100px; text-align:left;">Code</th>
+                                        <th style="padding:0 0.5rem 0.4rem 0; text-align:left;">Description</th>
+                                        <th style="padding:0 0.5rem 0.4rem 0; width:110px; text-align:right;">Amount</th>
+                                        <th style="width:32px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clientRecurItemsBody"></tbody>
+                            </table>
+                            <button type="button" class="btn small" onclick="addClientRecurItem()"><i class="fa-solid fa-plus"></i> Add Item</button>
+                            <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">Lines on each Recurring Billing invoice. Rate is their total. Items with no amount are skipped.</p>
+                        </div>
                         <div class="form-group"><label class="form-label">Rate (per billing period)</label><input type="number"
                                 id="clientRate" class="form-control" step="0.01"></div>
                         <div class="form-group"><label class="form-label">Currency</label><input type="text"

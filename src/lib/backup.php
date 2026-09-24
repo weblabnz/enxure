@@ -1363,7 +1363,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
     });
     $run('Billing Cron', 'Recurring amount', 'a $1,200+ monthly rate bills the full amount, not just the leading digits', 'Builds the exact line item run_recurring() builds from a client\'s monthly_rate and runs it through computeInvoiceTotals() the same way — for a $1,242 rate this must total $1,242, not $1 (what a stray number_format() before that call would silently produce for any rate at or above $1,000).', function () {
         $rate = 1242.00;
-        $recurLineItems = [['code' => 'WEB01', 'desc' => 'Website management', 'amount' => (float) $rate]];
+        $recurLineItems = enxureRecurringLineItems(['monthly_rate' => $rate, 'recurring_items_json' => null]);
         $recurTotals = computeInvoiceTotals($recurLineItems, 0.0, 0.0);
         enxureAssertEquals(1242.0, $recurTotals['total'], 'billed total matches the monthly rate');
     });
@@ -1375,9 +1375,29 @@ function enxureTestDefinitions($mysqli, array $settings): array
             ['rate' => 123456.78, 'discount' => 0.0, 'tax' => 0.0, 'expected' => 123456.78],
         ];
         foreach ($cases as $case) {
-            $recurLineItems = [['code' => 'WEB01', 'desc' => 'Website management', 'amount' => (float) $case['rate']]];
+            $recurLineItems = enxureRecurringLineItems(['monthly_rate' => $case['rate'], 'recurring_items_json' => null]);
             $recurTotals = computeInvoiceTotals($recurLineItems, $case['discount'], $case['tax']);
             enxureAssertEquals($case['expected'], $recurTotals['total'], "rate {$case['rate']}");
+        }
+    });
+    $run('Billing Cron', 'Recurring amount', 'per-client recurring items become the invoice lines and sum to the total', 'A client with recurring items of $1,200 web management and $400 SEO management gets exactly those two lines, in order, totalling $1,600 — monthly_rate is ignored when items are set. Blank-description and zero-amount items are dropped, and a client with malformed or empty items falls back to the single WEB01 "Website management" line at monthly_rate.', function () {
+        $client = ['monthly_rate' => 999.0, 'recurring_items_json' => json_encode([
+            ['code' => 'WEB01', 'desc' => 'Web management', 'amount' => 1200],
+            ['code' => 'SEO01', 'desc' => 'SEO management', 'amount' => 400],
+            ['code' => 'X', 'desc' => '', 'amount' => 50],
+            ['code' => 'Y', 'desc' => 'Zero', 'amount' => 0],
+        ])];
+        $items = enxureRecurringLineItems($client);
+        enxureAssertEquals(2, count($items), 'blank/zero items dropped');
+        enxureAssertEquals('SEO01', $items[1]['code'], 'second line code');
+        enxureAssertEquals('SEO management', $items[1]['desc'], 'second line description');
+        $totals = computeInvoiceTotals($items, 0.0, 0.0);
+        enxureAssertEquals(1600.0, $totals['total'], 'items total, not monthly_rate');
+        foreach (['not json', '[]', null] as $raw) {
+            $fallback = enxureRecurringLineItems(['monthly_rate' => 750.0, 'recurring_items_json' => $raw]);
+            enxureAssertEquals(1, count($fallback), 'fallback is one line');
+            enxureAssertEquals('WEB01', $fallback[0]['code'], 'fallback code');
+            enxureAssertEquals(750.0, $fallback[0]['amount'], 'fallback amount is monthly_rate');
         }
     });
     $run('Billing Cron', 'Late fees', 'fee amount calculation, percent and flat, at scale', 'Replicates applyLateFees()\'s own fee-type branch (percent: round(outstanding * value / 100, 2); flat: the configured value untouched) against a $12,345.67 outstanding balance — a 5% fee must come out to $617.28, and a flat fee configured at $50 must stay exactly $50 rather than being scaled by the outstanding balance.', function () {

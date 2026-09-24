@@ -193,6 +193,10 @@ $hasClientCcCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE
 if (!$hasClientCcCol) {
     $mysqli->query("ALTER TABLE enxure_clients ADD COLUMN cc_email VARCHAR(255) NOT NULL DEFAULT '' AFTER email");
 }
+$hasClientRecurItemsCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_clients' AND COLUMN_NAME = 'recurring_items_json'")->num_rows > 0;
+if (!$hasClientRecurItemsCol) {
+    $mysqli->query("ALTER TABLE enxure_clients ADD COLUMN recurring_items_json TEXT NULL AFTER monthly_rate");
+}
 // Same idea for installs that predate the PO/reference field, the
 // discount/tax snapshot, and stored line items — empty/zero/NULL match every
 // invoice generated before these existed (no reference, no Duplicate data).

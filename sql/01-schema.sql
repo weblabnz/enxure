@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS `enxure_clients` (
   `account_name`   VARCHAR(255) DEFAULT '',
   `account_number` VARCHAR(50)  DEFAULT '',
   `monthly_rate`   DECIMAL(10,2) DEFAULT 0.00,
+  `recurring_items_json` TEXT NULL COMMENT 'JSON array of {code, desc, amount} billed on each Recurring Billing invoice; monthly_rate holds their sum. NULL = one WEB01 "Website management" line at monthly_rate.',
   `payment_terms_days` INT NOT NULL DEFAULT 21 COMMENT 'Days from invoice date to due date, e.g. 15/30/45',
   `billing_frequency` ENUM('weekly','monthly','quarterly','annually') NOT NULL DEFAULT 'monthly' COMMENT 'How often run_recurring bills this client',
   `discount_pct`   DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT 'Applied to recurring invoices for this client, 0-100. Defaults to 0 (no discount).',

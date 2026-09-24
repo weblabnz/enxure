@@ -2,6 +2,11 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.25] - 2026-09-25
+
+### Added
+- Clients: per-client Recurring Items (code, description, amount) in the Add/Edit Client modal. Recurring Billing invoices bill those lines instead of the single hardcoded `WEB01` "Website management" line, e.g. `WEB01` Web management $1,200 + `SEO01` SEO management $400 = $1,600/month. The modal prefills the old default (`WEB01` "Website management" at the current Rate) so it can be edited or added to; items with no amount are skipped. Rate becomes read-only and tracks the items' total (so the clients list and MRR stats stay correct). Clients not yet saved with items keep billing the old single line at Rate. Stored in new column `enxure_clients.recurring_items_json` (added automatically on upgrade); item changes are recorded in the audit log.
+
 ## [3.0.24] - 2026-09-15
 
 ### Added

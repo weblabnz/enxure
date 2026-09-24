@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', require __DIR__ . '/lib/license_purchase_url.php');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.24');
+define('APP_VERSION', '3.0.25');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
@@ -1871,7 +1871,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 // Subtotal/Discount/Tax/Total breakdown matches theirs exactly. Clients
                 // saved before these columns existed have discount_pct/tax_rate = 0.00
                 // (see the ALTER TABLE migration above), so this is a no-op for them.
-                $recurLineItems = [['code' => 'WEB01', 'desc' => 'Website management', 'amount' => (float) $c['monthly_rate']]];
+                $recurLineItems = enxureRecurringLineItems($c);
                 $recurTotals = computeInvoiceTotals($recurLineItems, (float) ($c['discount_pct'] ?? 0), (float) ($c['tax_rate'] ?? 0));
                 $res = processInvoice($mysqli, $c, $recurTotals['total'], '', $emailPassword, $recurLineItems, null, null, $recurTotals['discount_pct'], $recurTotals['tax_rate']);
                 if ($res['success'])
