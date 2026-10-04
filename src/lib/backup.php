@@ -755,6 +755,22 @@ function enxureTestDefinitions($mysqli, array $settings): array
             @rmdir(INVOICES_DIR . 'test_suite_fixture');
         }
     });
+    $run('Core Logic', 'generateInvoiceNumber', 'ignores numbers that do not match the template', 'A client with invoices numbered like imported history ("<KEY>-HIST-202508", which ends in digits) plus a real "<KEY>002" must continue the real sequence at 003. Reading any trailing digits as the sequence once produced <KEY>202509 on live invoices.', function () use ($mysqli) {
+        [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
+        try {
+            $upper = strtoupper($clientKey);
+            $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), 1, '', 'sent')");
+            foreach (["{$upper}-HIST-202508", "{$upper}002", "{$upper}-HIST-202506"] as $number) {
+                $stmt->bind_param("ss", $number, $clientKey);
+                $stmt->execute();
+            }
+            enxureAssertEquals($upper . '003', generateInvoiceNumber($mysqli, $clientKey, 'Test Suite Fixture', []), 'continues from 002, not from the digits on the HIST numbers');
+            enxureAssertEquals('INV-' . date('Y') . '-' . $upper . '-001', generateInvoiceNumber($mysqli, $clientKey, 'Test Suite Fixture', ['invoice_number_template' => 'INV-{year}-{key}-{seq}']), 'a different template ignores numbers in another format');
+        } finally {
+            enxureTestCleanupClient($mysqli, $clientId, $clientKey);
+            @rmdir(INVOICES_DIR . 'test_suite_fixture');
+        }
+    });
     $run('Core Logic', 'generateInvoiceNumber', 'custom template and padding are honored', 'Settings > Branding\'s invoice_number_template ("INV-{year}-{key}-{seq}") and a 5-digit padding produce exactly that shape for a fresh client\'s first invoice, substituting {year} and {key} correctly.', function () use ($mysqli) {
         [$clientId, $clientKey] = enxureTestCreateClient($mysqli);
         try {

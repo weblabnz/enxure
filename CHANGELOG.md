@@ -2,6 +2,27 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.0.26] - 2026-10-04
+
+### Fixed
+- Invoice numbering: the next number was taken from any trailing digits on any of the client's invoices or invoice files, so imported historical invoices like `ASJ-HIST-202508` made the next invoice `ASJ202509`. Only numbers that match the invoice number template (e.g. `{key}{seq}`) now count toward the sequence. Invoices already issued with wrong numbers must be renumbered by hand, otherwise the next number continues from them.
+- Recurring Expense saves (new, edit, duplicate, and the Add Expense Recurring toggle) bound the description as a number instead of text, so it was stored as `0` and every expense auto-logged from that template inherited `0`. Descriptions now save correctly; rows already saved with `0` need their description re-entered.
+- Receipt/invoice images silently failing to attach: nginx had no `client_max_body_size`, so its 1 MB default rejected typical phone JPGs before PHP saw them while the expense itself still saved and showed success. The limit is now 64M to match PHP's. Upload failures on Expenses and Recurring Expense documents are also reported instead of ignored. Needs an nginx reload on existing installs.
+- Export preview modal (Tax Year Invoices and the other previews): rows were visible scrolling above the sticky table header, through the modal body's top padding. The padding is removed so the header sits flush with the top of the scroll area.
+- Pressing the mouse inside a modal and releasing outside it (e.g. selecting text in a field) closed the modal. A backdrop click now only dismisses when the press also started on the backdrop. Applies to every modal, the client CRM drawer overlay, the mobile sidebar backdrop and the welcome flash backdrop.
+
+### Changed
+- Expenses and Recurring Expenses tables: the Billable column is removed (Billable To is still set in each Edit modal), and Recurring Expenses gains a Description column like the Expenses table.
+- Recurring Expenses table: the Attachments column is removed (documents are still managed from the Edit modal).
+- Expense categories replaced with: Home office, Communication, Repairs and maintenance, Motor vehicle, Accident compensation levies, Stationery, Subscriptions, Replacement Equipment, Software, Depreciation (plus Other as the catch-all). Existing expenses and recurring expenses are migrated automatically on upgrade: Hosting → Subscriptions, Office Supplies → Stationery, Travel → Motor vehicle, Equipment → Replacement Equipment, Software stays Software, and Meals, Professional Services, Marketing and Taxes & Fees → Other.
+- Recurring Expense modal: the separate Invoice and Receipt upload slots are replaced by a single Documents slot (contract, agreement or plan details), since each period's actual invoice/receipt belongs on the expense the run auto-creates. The note in the modal says so. The Move-between-slots control is gone.
+
+### Added
+- Image uploads (expense invoices/receipts, recurring expense documents, invoice attachments): JPEG/PNG/WebP/BMP images over 1 MB are converted to WebP in the browser before upload, stepping quality down and then dimensions until under 1 MB. Each step is shown live under the file field with the before/after size. PDFs and images already under 1 MB are untouched. Receipt OCR runs on the compressed file.
+- Expenses table: rows with no receipt or invoice attached are tinted amber.
+- Expenses: a Duplicate button on each row opens the Add Expense modal prefilled with that expense's vendor, category, amount, description and billable client (today's date, no attachments) to edit before saving.
+- Add Expense modal: a Recurring toggle with a frequency picker (license-gated like Recurring Expenses). When on, saving logs the expense and also creates a matching Recurring Expense template (same vendor/category/amount/description/billable client, current tax year). The new expense is linked to the template, so the next recurring run doesn't double-log the current period. Attachments are not copied to the template.
+
 ## [3.0.25] - 2026-09-25
 
 ### Added

@@ -1476,6 +1476,23 @@
             appearance: textfield;
         }
 
+        .img-compress-status {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .img-compress-status > div {
+            margin-top: 0.35rem;
+        }
+
+        .img-compress-status .done {
+            color: var(--success);
+        }
+
+        #expensesTable tr.expense-no-receipt td {
+            background: color-mix(in srgb, var(--warning) 8%, transparent);
+        }
+
         .modal-overlay {
             position: fixed;
             top: 0;

@@ -61,6 +61,9 @@ $hasRecurBillableClientCol = $mysqli->query("SELECT 1 FROM information_schema.CO
 if (!$hasRecurBillableClientCol) {
     $mysqli->query("ALTER TABLE enxure_recurring_expenses ADD COLUMN billable_client_id INT DEFAULT NULL, ADD INDEX idx_billable_client_id (billable_client_id)");
 }
+foreach (['enxure_expenses', 'enxure_recurring_expenses'] as $__catTable) {
+    $mysqli->query("UPDATE $__catTable SET category = CASE category WHEN 'hosting' THEN 'subscriptions' WHEN 'office' THEN 'stationery' WHEN 'travel' THEN 'motor_vehicle' WHEN 'equipment' THEN 'replacement_equipment' ELSE 'other' END WHERE category IN ('hosting', 'office', 'travel', 'equipment', 'meals', 'professional', 'marketing', 'taxes')");
+}
 // Invoice attachments (contracts, receipts) — one row per uploaded file, files
 // themselves live on disk under INVOICES_DIR/attachments/<invoice_id>/.
 $mysqli->query("CREATE TABLE IF NOT EXISTS enxure_invoice_attachments (id INT AUTO_INCREMENT PRIMARY KEY, invoice_id INT NOT NULL, filename VARCHAR(255) NOT NULL, stored_path VARCHAR(500) NOT NULL, file_size INT NOT NULL DEFAULT 0, uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_invoice_id (invoice_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");

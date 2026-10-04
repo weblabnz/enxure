@@ -1191,6 +1191,15 @@
             }
 
             function closeModal(id) { document.getElementById(id).classList.remove('active'); if (id === 'noteModal' && window._notePageNeedsReload) { window._notePageNeedsReload = false; window.location.reload(); } requestAnimationFrame(() => window.dispatchEvent(new Event('resize'))); }
+            const BACKDROP_SEL = '.modal-overlay, #crmOverlay, #sidebarBackdrop, #welcomeFlashBackdrop';
+            let _pressTarget = null;
+            document.addEventListener('mousedown', e => { _pressTarget = e.target; }, true);
+            document.addEventListener('touchstart', e => { _pressTarget = e.target; }, { capture: true, passive: true });
+            document.addEventListener('click', function (e) {
+                if (e.target.matches && e.target.matches(BACKDROP_SEL) && _pressTarget && _pressTarget !== e.target) {
+                    e.stopImmediatePropagation();
+                }
+            }, true);
             // Close any modal when clicking the backdrop (outside .modal-body)
             document.addEventListener('click', function (e) {
                 if (e.target.classList.contains('modal-overlay') && e.target.classList.contains('active')) {
@@ -1401,13 +1410,28 @@
                 } else {
                     billedNote.style.display = 'none';
                 }
+                document.getElementById('expenseRecurringGroup').style.display = e ? 'none' : '';
+                document.getElementById('expenseRecurringToggle').checked = false;
+                document.getElementById('expenseRecurringFrequency').style.display = 'none';
+                document.getElementById('expenseRecurringFrequency').value = 'monthly';
                 document.getElementById('expenseInvoiceFiles').value = '';
+                document.getElementById('expenseInvoiceCompress').innerHTML = '';
+                document.getElementById('expenseReceiptCompress').innerHTML = '';
                 document.getElementById('expenseInvoiceFilesList').innerHTML = '';
                 document.getElementById('expenseReceiptFiles').value = '';
                 document.getElementById('expenseReceiptsList').innerHTML = '';
                 document.getElementById('expenseOcrStatus').style.display = 'none';
                 document.getElementById('expenseModal').classList.add('active');
                 if (e && e.id) loadExpenseReceipts(e.id);
+            }
+            function duplicateExpense(e) {
+                openExpenseModal();
+                document.getElementById('expenseModalTitle').textContent = 'Duplicate Expense';
+                document.getElementById('expenseVendor').value = e.vendor;
+                document.getElementById('expenseCategory').value = e.category;
+                document.getElementById('expenseAmount').value = e.amount;
+                document.getElementById('expenseDescription').value = e.description || '';
+                document.getElementById('expenseBillableClient').value = e.billable_client_id || '';
             }
             function _renderExpenseFileList(files, expenseId) {
                 if (!files.length) return '';
@@ -1448,6 +1472,74 @@
                 if (json.success) { showToast(`Moved to ${docType === 'invoice' ? 'Invoice' : 'Receipt'}!`); await loadExpenseReceipts(expenseId); }
                 else showToast(json.error || 'Failed to move', true);
             }
+            const IMAGE_SIZE_LIMIT = 1000000;
+            const IMAGE_MAX_DIMENSION = 3000;
+            const _compressJobs = new Set();
+            const _fmtMB = n => (n / 1048576).toFixed(2) + ' MB';
+            const _nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+            const _toWebp = (canvas, quality) => new Promise(r => canvas.toBlob(r, 'image/webp', quality));
+            async function compressImageFile(file, row) {
+                const name = file.name;
+                const before = _fmtMB(file.size);
+                const show = (html, cls = '') => { row.className = cls; row.innerHTML = html; };
+                show(`<i class="fa-solid fa-spinner fa-spin"></i> ${name} (${before}) — reading…`);
+                await _nextFrame();
+                let bitmap;
+                try { bitmap = await createImageBitmap(file); } catch (e) { show(`${name} (${before}) — couldn't be read for compression, uploading as is`); return file; }
+                let scale = Math.min(1, IMAGE_MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+                let quality = 0.85;
+                let step = 0;
+                const canvas = document.createElement('canvas');
+                while (true) {
+                    step++;
+                    const w = Math.max(1, Math.round(bitmap.width * scale)), h = Math.max(1, Math.round(bitmap.height * scale));
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+                    show(`<i class="fa-solid fa-spinner fa-spin"></i> ${name} (${before}) — step ${step}: WebP ${Math.round(quality * 100)}% at ${w}×${h}…`);
+                    await _nextFrame();
+                    const blob = await _toWebp(canvas, quality);
+                    if (!blob || blob.type !== 'image/webp') { bitmap.close(); show(`${name} (${before}) — this browser can't encode WebP, uploading as is`); return file; }
+                    if (blob.size <= IMAGE_SIZE_LIMIT || (w <= 600 && h <= 600 && quality <= 0.5)) {
+                        bitmap.close();
+                        const out = new File([blob], name.replace(/\.[^.]+$/, '') + '.webp', { type: 'image/webp' });
+                        show(`<i class="fa-solid fa-check"></i> ${name} (${before}) → ${out.name} (${_fmtMB(out.size)}) after ${step} step${step === 1 ? '' : 's'}`, 'done');
+                        return out;
+                    }
+                    show(`<i class="fa-solid fa-spinner fa-spin"></i> ${name} (${before}) — step ${step}: ${_fmtMB(blob.size)}, still over 1 MB, reducing…`);
+                    await _nextFrame();
+                    if (quality > 0.55) quality = Math.round((quality - 0.1) * 100) / 100;
+                    else { scale *= 0.8; quality = 0.8; }
+                }
+            }
+            function wireImageCompression(inputId, statusId, after) {
+                const input = document.getElementById(inputId);
+                const status = document.getElementById(statusId);
+                if (!input) return;
+                input.addEventListener('change', () => {
+                    status.innerHTML = '';
+                    const job = (async () => {
+                        const dt = new DataTransfer();
+                        for (const file of Array.from(input.files)) {
+                            if (/^image\/(jpeg|png|webp|bmp)$/.test(file.type) && file.size > IMAGE_SIZE_LIMIT) {
+                                const row = document.createElement('div');
+                                status.appendChild(row);
+                                dt.items.add(await compressImageFile(file, row));
+                            } else {
+                                dt.items.add(file);
+                            }
+                        }
+                        input.files = dt.files;
+                        if (after) after();
+                    })();
+                    _compressJobs.add(job);
+                    job.finally(() => _compressJobs.delete(job));
+                });
+            }
+            const _imagesReady = () => Promise.all(Array.from(_compressJobs));
+            wireImageCompression('expenseInvoiceFiles', 'expenseInvoiceCompress');
+            wireImageCompression('expenseReceiptFiles', 'expenseReceiptCompress', () => handleExpenseReceiptFilesChange());
+            wireImageCompression('recurringExpenseDocs', 'recurringExpenseDocsCompress');
+            wireImageCompression('attachmentFile', 'attachmentCompress');
             async function handleExpenseReceiptFilesChange() {
                 const files = Array.from(document.getElementById('expenseReceiptFiles').files).filter(f => /^image\//.test(f.type));
                 const statusEl = document.getElementById('expenseOcrStatus');
@@ -1489,6 +1581,7 @@
                 if (!document.getElementById('expenseVendor').value.trim()) return showToast('Vendor is required', true);
                 if (!(parseFloat(document.getElementById('expenseAmount').value) > 0)) return showToast('Amount must be greater than 0', true);
                 const btn = document.getElementById('saveExpenseBtn'); btn.disabled = true;
+                await _imagesReady();
                 const formData = new FormData();
                 formData.append('action', 'save_expense');
                 formData.append('id', document.getElementById('expenseId').value);
@@ -1498,6 +1591,7 @@
                 formData.append('amount', document.getElementById('expenseAmount').value);
                 formData.append('description', document.getElementById('expenseDescription').value);
                 formData.append('billable_client_id', document.getElementById('expenseBillableClient').value);
+                if (document.getElementById('expenseRecurringToggle').checked) formData.append('recurring_frequency', document.getElementById('expenseRecurringFrequency').value);
                 const res = await fetch('', { method: 'POST', body: formData });
                 const json = await res.json();
                 if (!json.success) { showToast(json.error || 'Failed to save', true); btn.disabled = false; return; }
@@ -1505,13 +1599,25 @@
                     ...Array.from(document.getElementById('expenseInvoiceFiles').files).map(file => ({ file, docType: 'invoice' })),
                     ...Array.from(document.getElementById('expenseReceiptFiles').files).map(file => ({ file, docType: 'receipt' })),
                 ];
+                const failedUploads = [];
                 for (const { file, docType } of filesToUpload) {
                     const rFormData = new FormData();
                     rFormData.append('action', 'upload_expense_receipt');
                     rFormData.append('expense_id', json.id);
                     rFormData.append('doc_type', docType);
                     rFormData.append('file', file);
-                    await fetch('', { method: 'POST', body: rFormData });
+                    try {
+                        const uRes = await fetch('', { method: 'POST', body: rFormData });
+                        const uJson = await uRes.json();
+                        if (!uJson.success) failedUploads.push(`${file.name}: ${uJson.error || 'upload failed'}`);
+                    } catch (err) {
+                        failedUploads.push(`${file.name}: upload failed (${err.message})`);
+                    }
+                }
+                if (failedUploads.length) {
+                    showToast('Expense saved, but not attached — ' + failedUploads.join('; '), true);
+                    setTimeout(() => window.location.reload(), 4000);
+                    return;
                 }
                 showToast('Expense saved!');
                 setTimeout(() => window.location.reload(), 1000);
@@ -1534,23 +1640,20 @@
                 document.getElementById('recurringExpenseDescription').value = re ? (re.description || '') : '';
                 document.getElementById('recurringExpenseBillableClient').value = re ? (re.billable_client_id || '') : '';
                 document.getElementById('recurringExpenseTaxYearNote').textContent = `Tax year: ${re ? re.tax_year : CURRENT_TAX_YEAR}${re ? '' : ' (assigned automatically on save)'}`;
-                document.getElementById('recurringExpenseInvoiceFiles').value = '';
-                document.getElementById('recurringExpenseInvoiceFilesList').innerHTML = '';
-                document.getElementById('recurringExpenseReceiptFiles').value = '';
-                document.getElementById('recurringExpenseReceiptFilesList').innerHTML = '';
+                document.getElementById('recurringExpenseDocs').value = '';
+                document.getElementById('recurringExpenseDocsCompress').innerHTML = '';
+                document.getElementById('recurringExpenseDocsList').innerHTML = '';
                 document.getElementById('recurringExpenseModal').classList.add('active');
                 if (re && re.id) loadRecurringExpenseReceipts(re.id);
             }
             function _renderRecurringExpenseFileList(files, recurringExpenseId) {
                 if (!files.length) return '';
                 return files.map(r => {
-                    const target = r.doc_type === 'invoice' ? 'receipt' : 'invoice';
                     return `
                     <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.4rem 0; border-bottom:1px solid var(--border);">
                         <a href="${r.url}" target="_blank" style="color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.85rem;"><i class="fa-solid fa-paperclip"></i> ${r.filename}</a>
                         <div style="display:flex; align-items:center; gap:0.5rem; white-space:nowrap;">
                             <span style="color:var(--text-secondary); font-size:0.75rem;">${_formatFileSize(r.file_size)}</span>
-                            <button type="button" class="btn small" title="Move to ${target === 'invoice' ? 'Invoice' : 'Receipt'}" onclick="moveRecurringExpenseReceipt(${r.id}, ${recurringExpenseId}, '${target}')"><i class="fa-solid fa-right-left"></i></button>
                             <button type="button" class="btn small danger" onclick="deleteRecurringExpenseReceipt(${r.id}, ${recurringExpenseId})"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
@@ -1558,14 +1661,11 @@
                 }).join('');
             }
             async function loadRecurringExpenseReceipts(recurringExpenseId) {
-                const invoiceList = document.getElementById('recurringExpenseInvoiceFilesList');
-                const receiptList = document.getElementById('recurringExpenseReceiptFilesList');
-                receiptList.innerHTML = '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Loading…</p>';
+                const list = document.getElementById('recurringExpenseDocsList');
+                list.innerHTML = '<p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Loading…</p>';
                 const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'get_recurring_expense_receipts', recurring_expense_id: recurringExpenseId }) });
                 const json = await res.json();
-                if (!json.success) { invoiceList.innerHTML = ''; receiptList.innerHTML = ''; return; }
-                invoiceList.innerHTML = _renderRecurringExpenseFileList(json.receipts.filter(r => r.doc_type === 'invoice'), recurringExpenseId);
-                receiptList.innerHTML = _renderRecurringExpenseFileList(json.receipts.filter(r => r.doc_type !== 'invoice'), recurringExpenseId);
+                list.innerHTML = json.success ? _renderRecurringExpenseFileList(json.receipts, recurringExpenseId) : '';
             }
             async function deleteRecurringExpenseReceipt(id, recurringExpenseId) {
                 if (!confirm('Delete this attachment?')) return;
@@ -1578,16 +1678,11 @@
                 if (json.success) { showToast('Attachment deleted!'); setTimeout(() => window.location.reload(), 1000); }
                 else showToast(json.error || 'Failed to delete', true);
             }
-            async function moveRecurringExpenseReceipt(id, recurringExpenseId, docType) {
-                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'move_recurring_expense_receipt', id: id, doc_type: docType }) });
-                const json = await res.json();
-                if (json.success) { showToast(`Moved to ${docType === 'invoice' ? 'Invoice' : 'Receipt'}!`); await loadRecurringExpenseReceipts(recurringExpenseId); }
-                else showToast(json.error || 'Failed to move', true);
-            }
             async function saveRecurringExpense() {
                 if (!document.getElementById('recurringExpenseVendor').value.trim()) return showToast('Vendor is required', true);
                 if (!(parseFloat(document.getElementById('recurringExpenseAmount').value) > 0)) return showToast('Amount must be greater than 0', true);
                 const btn = document.getElementById('saveRecurringExpenseBtn'); btn.disabled = true;
+                await _imagesReady();
                 const data = new URLSearchParams({
                     action: 'save_recurring_expense',
                     id: document.getElementById('recurringExpenseId').value,
@@ -1600,17 +1695,23 @@
                 });
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();
                 if (!json.success) { showToast(json.error || 'Failed to save', true); btn.disabled = false; return; }
-                const filesToUpload = [
-                    ...Array.from(document.getElementById('recurringExpenseInvoiceFiles').files).map(file => ({ file, docType: 'invoice' })),
-                    ...Array.from(document.getElementById('recurringExpenseReceiptFiles').files).map(file => ({ file, docType: 'receipt' })),
-                ];
-                for (const { file, docType } of filesToUpload) {
+                const failedDocs = [];
+                for (const file of Array.from(document.getElementById('recurringExpenseDocs').files)) {
                     const rFormData = new FormData();
                     rFormData.append('action', 'upload_recurring_expense_receipt');
                     rFormData.append('recurring_expense_id', json.id);
-                    rFormData.append('doc_type', docType);
                     rFormData.append('file', file);
-                    await fetch('', { method: 'POST', body: rFormData });
+                    try {
+                        const uJson = await (await fetch('', { method: 'POST', body: rFormData })).json();
+                        if (!uJson.success) failedDocs.push(`${file.name}: ${uJson.error || 'upload failed'}`);
+                    } catch (err) {
+                        failedDocs.push(`${file.name}: upload failed (${err.message})`);
+                    }
+                }
+                if (failedDocs.length) {
+                    showToast('Saved, but not attached — ' + failedDocs.join('; '), true);
+                    setTimeout(() => window.location.reload(), 4000);
+                    return;
                 }
                 showToast('Recurring expense saved!');
                 setTimeout(() => window.location.reload(), 1000);
@@ -2105,6 +2206,7 @@
                 `).join('');
             }
             async function uploadAttachment() {
+                await _imagesReady();
                 const file = document.getElementById('attachmentFile').files[0];
                 if (!file) return showToast('Choose a file first', true);
                 const btn = document.getElementById('uploadAttachmentBtn'); btn.disabled = true;
@@ -2114,7 +2216,7 @@
                 formData.append('file', file);
                 const res = await fetch('', { method: 'POST', body: formData });
                 const json = await res.json();
-                if (json.success) { showToast('Attachment uploaded!'); document.getElementById('attachmentFile').value = ''; await loadAttachments(); }
+                if (json.success) { showToast('Attachment uploaded!'); document.getElementById('attachmentFile').value = ''; document.getElementById('attachmentCompress').innerHTML = ''; await loadAttachments(); }
                 else showToast(json.error || 'Upload failed', true);
                 btn.disabled = false;
             }

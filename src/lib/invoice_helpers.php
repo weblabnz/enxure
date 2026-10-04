@@ -275,15 +275,16 @@ function formatPct(float $pct): string
 function expenseCategories(): array
 {
     return [
-        'software' => 'Software & Subscriptions',
-        'hosting' => 'Hosting & Infrastructure',
-        'office' => 'Office Supplies',
-        'travel' => 'Travel',
-        'meals' => 'Meals & Entertainment',
-        'professional' => 'Professional Services',
-        'marketing' => 'Marketing & Advertising',
-        'equipment' => 'Equipment',
-        'taxes' => 'Taxes & Fees',
+        'home_office' => 'Home office',
+        'communication' => 'Communication',
+        'repairs_maintenance' => 'Repairs and maintenance',
+        'motor_vehicle' => 'Motor vehicle',
+        'acc_levies' => 'Accident compensation levies',
+        'stationery' => 'Stationery',
+        'subscriptions' => 'Subscriptions',
+        'replacement_equipment' => 'Replacement Equipment',
+        'software' => 'Software',
+        'depreciation' => 'Depreciation',
         'other' => 'Other',
     ];
 }

@@ -196,17 +196,33 @@
                         </select>
                         <p id="expenseBilledNote" style="display:none; font-size:0.8rem; color:var(--text-secondary); margin:0.35rem 0 0;"></p>
                     </div>
+                    <div class="form-group" id="expenseRecurringGroup">
+                        <label style="display:inline-flex; align-items:center; gap:0.5rem; cursor:<?= $licenseValid ? 'pointer' : 'not-allowed' ?>;">
+                            <input type="checkbox" id="expenseRecurringToggle" <?= $licenseValid ? '' : 'disabled title="Requires a license"' ?>
+                                onchange="document.getElementById('expenseRecurringFrequency').style.display = this.checked ? '' : 'none'">
+                            <span class="form-label" style="margin:0;">Recurring</span>
+                            <?php if (!$licenseValid): ?><i class="fa-solid fa-lock" title="Requires a license" style="color:var(--text-secondary); font-size:0.8rem;"></i><?php endif; ?>
+                        </label>
+                        <select id="expenseRecurringFrequency" class="form-control" style="display:none; margin-top:0.5rem;">
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly" selected>Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="annually">Annually</option>
+                        </select>
+                    </div>
                     <div class="form-group"><label class="form-label">Invoice <span
                                 style="font-weight:400; color:var(--text-secondary);">(optional — the vendor's bill, if you keep that separately from the receipt)</span></label>
                         <div id="expenseInvoiceFilesList" style="margin-bottom:0.5rem;"></div>
                         <input type="file" id="expenseInvoiceFiles" class="form-control" accept="image/*,.pdf" multiple
                             style="padding:0.5rem;">
+                        <div id="expenseInvoiceCompress" class="img-compress-status"></div>
                     </div>
                     <div class="form-group"><label class="form-label">Receipt <span
                                 style="font-weight:400; color:var(--text-secondary);">(optional — proof of payment; an image here is scanned to prefill Vendor/Amount above)</span></label>
                         <div id="expenseReceiptsList" style="margin-bottom:0.5rem;"></div>
                         <input type="file" id="expenseReceiptFiles" class="form-control" accept="image/*,.pdf" multiple
-                            style="padding:0.5rem;" onchange="handleExpenseReceiptFilesChange()">
+                            style="padding:0.5rem;">
+                        <div id="expenseReceiptCompress" class="img-compress-status"></div>
                         <p id="expenseOcrStatus" style="display:none; color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem; margin-bottom:0;"></p>
                     </div>
                 </div>
@@ -260,19 +276,14 @@
                         </select>
                     </div>
                     <p id="recurringExpenseTaxYearNote" style="color:var(--text-secondary); font-size:0.8rem; margin:0 0 1rem;"></p>
-                    <div class="form-group"><label class="form-label">Invoice <span
-                                style="font-weight:400; color:var(--text-secondary);">(optional — the vendor's bill for this tax year)</span></label>
-                        <div id="recurringExpenseInvoiceFilesList" style="margin-bottom:0.5rem;"></div>
-                        <input type="file" id="recurringExpenseInvoiceFiles" class="form-control" accept="image/*,.pdf" multiple
+                    <div class="form-group"><label class="form-label">Documents <span
+                                style="font-weight:400; color:var(--text-secondary);">(optional — contract, agreement or plan details for this recurring bill, not receipts)</span></label>
+                        <div id="recurringExpenseDocsList" style="margin-bottom:0.5rem;"></div>
+                        <input type="file" id="recurringExpenseDocs" class="form-control" accept="image/*,.pdf" multiple
                             style="padding:0.5rem;">
+                        <div id="recurringExpenseDocsCompress" class="img-compress-status"></div>
                     </div>
-                    <div class="form-group"><label class="form-label">Receipt <span
-                                style="font-weight:400; color:var(--text-secondary);">(optional — proof of payment for this tax year)</span></label>
-                        <div id="recurringExpenseReceiptFilesList" style="margin-bottom:0.5rem;"></div>
-                        <input type="file" id="recurringExpenseReceiptFiles" class="form-control" accept="image/*,.pdf" multiple
-                            style="padding:0.5rem;">
-                    </div>
-                    <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Logged automatically as a new expense the next time recurring billing runs (Settings &gt; Billing, or the monthly cron), once per period on today's date — same guard against double-logging as recurring invoices. When a new tax year starts, use Duplicate on the list to carry this forward into a fresh row — attachments start empty again.</p>
+                    <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Logged automatically as a new expense the next time recurring billing runs (Settings &gt; Billing, or the monthly cron), once per period on today's date — same guard against double-logging as recurring invoices. Attach each period's invoice or receipt to the expense it creates in the Expenses list below. When a new tax year starts, use Duplicate on the list to carry this forward into a fresh row — documents start empty again.</p>
                 </div>
                 <div class="modal-footer"><button class="btn" onclick="closeModal('recurringExpenseModal')">Cancel</button><button
                         class="btn primary" id="saveRecurringExpenseBtn" onclick="saveRecurringExpense()"><i class="fa-solid fa-save"></i>
@@ -334,6 +345,7 @@
                         <button class="btn primary" id="uploadAttachmentBtn" onclick="uploadAttachment()"
                             style="white-space:nowrap;"><i class="fa-solid fa-upload"></i> Upload</button>
                     </div>
+                    <div id="attachmentCompress" class="img-compress-status"></div>
                 </div>
             </div>
         </div>
@@ -451,10 +463,10 @@
                         onclick="closeModal('csvPreviewModal')"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <div class="modal-body"
-                    style="padding: 1.25rem; overflow-x: auto; overflow-y: auto; flex: 1 1 auto; min-height: 0;">
+                    style="padding: 0 1.25rem 1.25rem; overflow-x: auto; overflow-y: auto; flex: 1 1 auto; min-height: 0;">
                     <!-- Summary cards -->
                     <div id="csvPreviewStats" class="mobile-grid"
-                        style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.75rem; margin-bottom:1.25rem;">
+                        style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.75rem; margin:1.25rem 0;">
                     </div>
                     <!-- Loading state -->
                     <div id="csvPreviewLoading" style="text-align:center; padding:2rem; color:var(--text-secondary);">

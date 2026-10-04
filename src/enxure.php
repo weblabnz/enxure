@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', require __DIR__ . '/lib/license_purchase_url.php');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.25');
+define('APP_VERSION', '3.0.26');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
@@ -242,31 +242,32 @@ function generateInvoiceNumber($mysqli, $clientKey, $clientName, array $settings
     if (!is_dir($invoiceDir)) {
         mkdir($invoiceDir, 0777, true);
     }
+    $padding = (int) ($settings['invoice_number_padding'] ?? 3);
+    if ($padding < 1)
+        $padding = 3;
+    $template = trim($settings['invoice_number_template'] ?? '') ?: '{key}{seq}';
+    if (!str_contains($template, '{seq}')) {
+        $template .= '{seq}';
+    }
+    $seqPattern = '/^' . strtr(preg_quote($template, '/'), [
+        preg_quote('{key}', '/') => preg_quote(strtoupper($clientKey), '/'),
+        preg_quote('{seq}', '/') => '(\d+)',
+        preg_quote('{year}', '/') => '\d{4}',
+        preg_quote('{month}', '/') => '\d{2}',
+    ]) . '$/i';
     $highestNumber = 0;
     foreach (glob("$invoiceDir/*.html") as $file) {
-        if (preg_match('/(\d+)\.html$/', basename($file), $matches))
+        if (preg_match($seqPattern, basename($file, '.html'), $matches))
             $highestNumber = max($highestNumber, (int) $matches[1]);
     }
-    // Looked up by client_key rather than an invoice_number prefix match, so
-    // this works regardless of what invoice_number_template produces.
     $q = $mysqli->prepare("SELECT invoice_number FROM enxure_invoices WHERE client_key = ? AND is_quote = 0");
     $q->bind_param("s", $clientKey);
     $q->execute();
     $res = $q->get_result();
     while ($row = $res->fetch_assoc()) {
-        if (preg_match('/(\d+)$/', $row['invoice_number'], $m)) {
+        if (preg_match($seqPattern, $row['invoice_number'], $m)) {
             $highestNumber = max($highestNumber, (int) $m[1]);
         }
-    }
-    $padding = (int) ($settings['invoice_number_padding'] ?? 3);
-    if ($padding < 1)
-        $padding = 3;
-    $template = trim($settings['invoice_number_template'] ?? '') ?: '{key}{seq}';
-    // A template without {seq} produces the same number for every invoice in
-    // a period regardless of how it got saved — append it rather than trust
-    // the stored setting.
-    if (!str_contains($template, '{seq}')) {
-        $template .= '{seq}';
     }
     $seq = str_pad((string) ($highestNumber + 1), $padding, '0', STR_PAD_LEFT);
     return strtr($template, [
@@ -1100,7 +1101,7 @@ function renderExpenseRows(array $expenses): string
     ob_start();
     foreach ($expenses as $e):
         ?>
-        <tr>
+        <tr<?= (int) $e['receipt_count'] === 0 ? ' class="expense-no-receipt"' : '' ?>>
             <td><input type="checkbox" class="expense-select-cb" value="<?= $e['id'] ?>" onchange="updateExpenseBulkBar()"></td>
             <td><?= htmlspecialchars(substr($e['expense_date'], 0, 10)) ?></td>
             <td><?= htmlspecialchars($e['vendor']) ?><?php if (!empty($e['recurring_expense_id'])): ?>
@@ -1111,15 +1112,6 @@ function renderExpenseRows(array $expenses): string
             <td>$<?= number_format($e['amount'], 2) ?></td>
             <td style="color:var(--text-secondary); max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                 <?= htmlspecialchars($e['description'] ?? '') ?></td>
-            <td>
-                <?php if (!empty($e['billed_invoice_number'])): ?>
-                    <span style="font-size:0.75rem; color:var(--success);" title="Billed to <?= htmlspecialchars($e['billable_client_name'] ?? '') ?>"><i class="fa-solid fa-check"></i> Billed: <?= htmlspecialchars($e['billed_invoice_number']) ?></span>
-                <?php elseif (!empty($e['billable_client_name'])): ?>
-                    <span style="font-size:0.75rem; color:var(--accent);"><i class="fa-solid fa-arrow-right"></i> <?= htmlspecialchars($e['billable_client_name']) ?></span>
-                <?php else: ?>
-                    <span style="color:var(--text-secondary);">—</span>
-                <?php endif; ?>
-            </td>
             <td style="text-align:center;">
                 <?php if ((int) $e['receipt_count'] > 0): ?>
                     <button type="button" class="btn small" title="<?= (int) $e['receipt_count'] ?> receipt<?= (int) $e['receipt_count'] === 1 ? '' : 's' ?>"
@@ -1132,6 +1124,8 @@ function renderExpenseRows(array $expenses): string
             <td style="white-space:nowrap;">
                 <button class="btn small" onclick="openExpenseModal(<?= htmlspecialchars(json_encode($e)) ?>)"><i
                         class="fa-solid fa-pen"></i></button>
+                <button class="btn small" title="Duplicate" onclick="duplicateExpense(<?= htmlspecialchars(json_encode($e)) ?>)"><i
+                        class="fa-solid fa-copy"></i></button>
                 <button class="btn small danger" onclick="deleteExpense(<?= $e['id'] ?>)"><i
                         class="fa-solid fa-trash"></i></button>
             </td>
@@ -1223,28 +1217,14 @@ function renderRecurringExpenseRows(array $recurringExpenses, bool $licenseValid
             <td>$<?= number_format($re['amount'], 2) ?></td>
             <td><?= htmlspecialchars($freqLabels[$re['frequency']] ?? ucfirst($re['frequency'])) ?></td>
             <td><?= (int) $re['tax_year'] ?></td>
-            <td>
-                <?php if (!empty($re['billable_client_name'])): ?>
-                    <span style="font-size:0.75rem; color:var(--accent);"><i class="fa-solid fa-arrow-right"></i> <?= htmlspecialchars($re['billable_client_name']) ?></span>
-                <?php else: ?>
-                    <span style="color:var(--text-secondary);">—</span>
-                <?php endif; ?>
-            </td>
+            <td style="color:var(--text-secondary); max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                <?= htmlspecialchars($re['description'] ?? '') ?></td>
             <td>
                 <label style="display:inline-flex; align-items:center; gap:0.4rem; cursor:<?= $licenseValid ? 'pointer' : 'not-allowed' ?>;">
                     <input type="checkbox" <?= $re['is_active'] ? 'checked' : '' ?> <?= $licenseValid ? '' : 'disabled' ?>
                         onchange="toggleRecurringExpenseActive(<?= $re['id'] ?>, this.checked)">
                     <span style="font-size:0.8rem; color:var(--text-secondary);"><?= $re['is_active'] ? 'Active' : 'Paused' ?></span>
                 </label>
-            </td>
-            <td style="text-align:center;">
-                <?php if ((int) $re['receipt_count'] > 0): ?>
-                    <button type="button" class="btn small" title="<?= (int) $re['receipt_count'] ?> attachment<?= (int) $re['receipt_count'] === 1 ? '' : 's' ?>"
-                        onclick="openRecurringExpenseModal(<?= htmlspecialchars(json_encode($re)) ?>)"><i class="fa-solid fa-paperclip"></i>
-                        <?= (int) $re['receipt_count'] ?></button>
-                <?php else: ?>
-                    <span style="color:var(--text-secondary);">—</span>
-                <?php endif; ?>
             </td>
             <td style="white-space:nowrap;">
                 <button class="btn small" <?= $licenseValid ? '' : 'disabled title="Requires a license"' ?>
@@ -1406,6 +1386,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->execute();
                 $id = $mysqli->insert_id;
                 enxureLogAction($mysqli, null, '', 'expense_added', "{$vendor} — {$categoryLabel} — " . number_format($amount, 2));
+                $recurFrequency = $_POST['recurring_frequency'] ?? '';
+                if ($recurFrequency !== '') {
+                    if (!$licenseValid) {
+                        throw new Exception('Recurring expenses require a license.');
+                    }
+                    if (!in_array($recurFrequency, ['weekly', 'monthly', 'quarterly', 'annually'], true)) {
+                        throw new Exception('Invalid recurring frequency.');
+                    }
+                    $taxYear = getTaxYear((int) ($settings['tax_year_start_month'] ?? 1));
+                    $stmt = $mysqli->prepare("INSERT INTO enxure_recurring_expenses (vendor, category, amount, description, frequency, tax_year, billable_client_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->bind_param("ssdssii", $vendor, $category, $amount, $description, $recurFrequency, $taxYear, $billableClientId);
+                    $stmt->execute();
+                    $recurId = $mysqli->insert_id;
+                    $mysqli->query("UPDATE enxure_expenses SET recurring_expense_id = $recurId WHERE id = $id");
+                    enxureLogAction($mysqli, null, '', 'recurring_expense_created', "{$vendor} — " . number_format($amount, 2) . " — {$recurFrequency}");
+                }
             }
             echo json_encode(['success' => true, 'id' => $id]);
             exit;
@@ -1556,7 +1552,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $recurNotes = "{$vendor} — " . number_format($amount, 2) . " — {$frequency}";
             if ($id > 0) {
                 $stmt = $mysqli->prepare("UPDATE enxure_recurring_expenses SET vendor=?, category=?, amount=?, description=?, frequency=?, billable_client_id=? WHERE id=?");
-                $stmt->bind_param("sssdsii", $vendor, $category, $amount, $description, $frequency, $billableClientId, $id);
+                $stmt->bind_param("ssdssii", $vendor, $category, $amount, $description, $frequency, $billableClientId, $id);
                 $stmt->execute();
                 enxureLogAction($mysqli, null, '', 'recurring_expense_updated', $recurNotes);
             } else {
@@ -1564,7 +1560,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 // gets a fresh row via Duplicate, not by editing this one.
                 $taxYear = getTaxYear((int) ($settings['tax_year_start_month'] ?? 1));
                 $stmt = $mysqli->prepare("INSERT INTO enxure_recurring_expenses (vendor, category, amount, description, frequency, tax_year, billable_client_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("sssdsii", $vendor, $category, $amount, $description, $frequency, $taxYear, $billableClientId);
+                $stmt->bind_param("ssdssii", $vendor, $category, $amount, $description, $frequency, $taxYear, $billableClientId);
                 $stmt->execute();
                 $id = $mysqli->insert_id;
                 enxureLogAction($mysqli, null, '', 'recurring_expense_created', $recurNotes);
@@ -1590,7 +1586,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             }
             $stmt = $mysqli->prepare("INSERT INTO enxure_recurring_expenses (vendor, category, amount, description, frequency, tax_year, is_active, billable_client_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?)");
-            $stmt->bind_param("sssdsii", $src['vendor'], $src['category'], $src['amount'], $src['description'], $src['frequency'], $taxYear, $src['billable_client_id']);
+            $stmt->bind_param("ssdssii", $src['vendor'], $src['category'], $src['amount'], $src['description'], $src['frequency'], $taxYear, $src['billable_client_id']);
             $stmt->execute();
             $newId = $mysqli->insert_id;
             enxureLogAction($mysqli, null, '', 'recurring_expense_created', "{$src['vendor']} — " . number_format((float) $src['amount'], 2) . " — {$src['frequency']} (duplicated for tax year {$taxYear})");
@@ -1652,15 +1648,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->bind_param("i", $id);
                 $stmt->execute();
             }
-            echo json_encode(['success' => true]);
-            exit;
-        }
-        if ($_POST['action'] === 'move_recurring_expense_receipt') {
-            $id = (int) ($_POST['id'] ?? 0);
-            $docType = ($_POST['doc_type'] ?? '') === 'invoice' ? 'invoice' : 'receipt';
-            $stmt = $mysqli->prepare("UPDATE enxure_recurring_expense_receipts SET doc_type = ? WHERE id = ?");
-            $stmt->bind_param("si", $docType, $id);
-            $stmt->execute();
             echo json_encode(['success' => true]);
             exit;
         }
