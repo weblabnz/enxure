@@ -21,3 +21,5 @@ enxure-backups/*
 # shipped product, no reason for any of it to be tracked.
 enxure-invoices-test/
 enxure-backups-test/
+
+.gitlab/
