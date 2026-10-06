@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS `enxure_clients` (
   `portal_token`   VARCHAR(64) DEFAULT NULL UNIQUE COMMENT 'Random token granting access to this client''s read-only portal (?portal=<token>). NULL = portal not enabled for this client.',
   `portal_token_expires_at` DATETIME DEFAULT NULL COMMENT 'NULL = never expires. Checked on every portal/pay request; an expired token behaves the same as an invalid one.',
   `crm_notes`      TEXT,
+  `xero_contact_id` VARCHAR(40) NULL DEFAULT NULL COMMENT 'Xero ContactID once linked/pushed',
   `created_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -95,6 +96,7 @@ CREATE TABLE IF NOT EXISTS `enxure_invoices` (
   `amount`          DECIMAL(10,2) DEFAULT 0.00,
   `currency`        VARCHAR(3) NOT NULL DEFAULT '' COMMENT 'Snapshotted from the client''s currency at creation time — stays fixed even if the client''s currency is changed later. Empty string = the instance-wide currency at the time this row was created.',
   `client_reference` VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'Free-text PO number / client reference, shown on the PDF/email and set at ad hoc invoice/quote creation.',
+  `xero_invoice_id` VARCHAR(40) NULL DEFAULT NULL COMMENT 'Xero InvoiceID once pushed',
   `discount_pct`    DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT 'Snapshotted discount % used to build this invoice/quote.',
   `tax_rate`        DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT 'Snapshotted tax % used to build this invoice/quote.',
   `line_items_json` MEDIUMTEXT NULL COMMENT 'JSON array of {code, desc, amount} used to build this invoice/quote — powers Duplicate. NULL for rows created before this existed.',
@@ -192,6 +194,7 @@ CREATE TABLE IF NOT EXISTS `enxure_payments` (
   `note`           VARCHAR(255) DEFAULT '' COMMENT 'Free-text, e.g. "bank transfer" or "2 of 3"',
   `provider`       VARCHAR(20) NOT NULL DEFAULT 'manual' COMMENT 'manual|stripe|paypal',
   `provider_ref`   VARCHAR(255) DEFAULT NULL COMMENT 'Stripe checkout session id / PayPal capture id — used as an idempotency key so a redelivered webhook or a webhook racing the return-URL handler can never double-credit the same payment',
+  `xero_payment_id` VARCHAR(40) NULL DEFAULT NULL COMMENT 'Xero PaymentID once pushed to or pulled from Xero; dedupes two-way sync',
   `paid_at`        DATETIME DEFAULT CURRENT_TIMESTAMP,
   `created_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_invoice_id` (`invoice_id`),

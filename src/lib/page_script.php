@@ -2957,6 +2957,29 @@
                 if (json.success) { showToast('Payment settings saved!'); } else { showToast(json.error || 'Failed to save', true); }
                 btn.innerHTML = '<i class="fa-solid fa-save"></i> Save Payment Settings'; btn.disabled = false;
             }
+            async function saveXeroSettings() {
+                const btn = document.getElementById('saveXeroBtn'); btn.disabled = true;
+                const data = new URLSearchParams(new FormData(document.getElementById('xeroSettingsForm')));
+                data.append('action', 'save_xero_settings');
+                const res = await fetch('', { method: 'POST', body: data });
+                const json = await res.json();
+                if (json.success) { showToast('Xero settings saved!'); setTimeout(() => location.reload(), 600); } else { showToast(json.error || 'Failed to save', true); btn.disabled = false; }
+            }
+            async function xeroSyncNow() {
+                const btn = document.getElementById('xeroSyncBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Syncing...'; btn.disabled = true;
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'xero_sync' }) });
+                const json = await res.json();
+                if (json.error) { showToast(json.error, true); } else {
+                    showToast(`Xero synced — ${json.invoices_pushed} invoice(s) and ${json.payments_pushed} payment(s) pushed, ${json.payments_pulled} payment(s) pulled` + (json.invoices_remaining > 0 ? `, ${json.invoices_remaining} invoice(s) still to push (run again)` : ''));
+                }
+                btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Sync Now'; btn.disabled = false;
+            }
+            async function xeroDisconnect() {
+                if (!confirm('Disconnect from Xero? Existing invoices stay linked; sync stops until you reconnect.')) return;
+                const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'xero_disconnect' }) });
+                const json = await res.json();
+                if (json.success) { location.reload(); } else { showToast(json.error || 'Failed to disconnect', true); }
+            }
             async function testStripeConnection() {
                 const btn = document.getElementById('testStripeBtn'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Testing...'; btn.disabled = true;
                 const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'test_stripe_connection', stripe_secret_key: document.getElementById('stripeSecretKey').value }) });
@@ -3384,7 +3407,7 @@
                 }
             }
             async function clearLicenseKey() {
-                if (!confirm('Deactivate your license? The seven paid features (payment collection, recurring billing, Client Portal, external API, Reporting & Statistics, adding teammates, and Powered-by removal) will lock again until you activate a key.')) return;
+                if (!confirm('Deactivate your license? The nine paid features (payment collection, recurring billing, recurring expenses, Client Portal, external API, Reporting & Statistics, Xero sync, adding teammates, and Powered-by removal) will lock again until you activate a key.')) return;
                 const btn = document.getElementById('clearLicenseBtn'); btn.disabled = true;
                 const res = await fetch('', { method: 'POST', body: new URLSearchParams({ action: 'save_license_key', license_key: '' }) });
                 const json = await res.json();

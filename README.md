@@ -14,7 +14,7 @@ One admin account, unlimited clients, fully brandable documents (logo, color, GS
 ## Why enXure
 
 - **You own the data.** Everything lives in your own MySQL database and your own Docker volumes. Export it, back it up, move it to another server whenever you want — there's a guided path for all three.
-- **It doesn't get in your way for free.** Every core workflow — invoices, quotes, clients, manual payments, PDF export, backups, two-factor auth — works fully with no license key. A license only unlocks seven specific extras (see [Licensing](#licensing)), not the app itself.
+- **It doesn't get in your way for free.** Every core workflow — invoices, quotes, clients, manual payments, PDF export, backups, two-factor auth — works fully with no license key. A license only unlocks nine specific extras (see [Licensing](#licensing)), not the app itself.
 - **It looks like your business, not like enXure.** Logo, brand color, GST/VAT number, footer/payment instructions, and — if the built-in Detailed/Compact layouts aren't quite right — a small template language to write your own invoice HTML from scratch, with a live preview before you commit to it.
 - **It's one container stack, not a platform.** PHP + MySQL + nginx, no Node build step, no external services required to get a first invoice out the door.
 
@@ -92,7 +92,7 @@ Sending real invoice emails needs SMTP configured, though (there's no working de
 
 ## Licensing
 
-enXure is free and open source — everything above works with no license key at all. A paid license is an optional unlock for seven extras: Stripe/PayPal payment collection, recurring billing automation, the Client Portal, the external API, adding teammates beyond your own account (Settings > Users), Reporting & Statistics, and removing the "Powered by enXure" credit from invoices and emails. [Buy a license](https://polar.sh/checkout/polar_c_9NP0xraIuDX2CVOhpCMXiO0YA4oXQZq3olpjr2xWyZU) and add the key under the **License** tab if you want those; the rest of the app is unaffected either way.
+enXure is free and open source — everything above works with no license key at all. A paid license is an optional unlock for nine extras: Stripe/PayPal payment collection, recurring billing automation, recurring expenses, the Client Portal, the external API, adding teammates beyond your own account (Settings > Users), Reporting & Statistics, the two-way Xero integration, and removing the "Powered by enXure" credit from invoices and emails. [Buy a license](https://polar.sh/checkout/polar_c_9NP0xraIuDX2CVOhpCMXiO0YA4oXQZq3olpjr2xWyZU) and add the key under the **License** tab if you want those; the rest of the app is unaffected either way.
 
 ## Support
 

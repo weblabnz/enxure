@@ -42,7 +42,7 @@ define('DOCS_DIR', __DIR__ . '/docs/');
 define('LICENSE_PURCHASE_URL', require __DIR__ . '/lib/license_purchase_url.php');
 // Bump alongside CHANGELOG.md's top entry — shown in the sidebar footer and
 // linked to Docs > Changelog.
-define('APP_VERSION', '3.0.26');
+define('APP_VERSION', '3.1.0');
 
 // Login lockout — wrong password and wrong TOTP/backup code share one
 // counter (see enxureRegisterFailedLogin()).
@@ -68,6 +68,7 @@ require_once __DIR__ . '/lib/exports.php';
 require_once __DIR__ . '/lib/tax_email.php';
 require_once __DIR__ . '/lib/client_statements.php';
 require_once __DIR__ . '/lib/payments.php';
+require_once __DIR__ . '/lib/xero.php';
 require_once __DIR__ . '/lib/backup.php';
 require_once __DIR__ . '/lib/settings.php';
 
@@ -462,6 +463,8 @@ function processInvoice($mysqli, $client, $amount, $description, $emailPassword,
         enxureLogAction($mysqli, $iid, $invNum, 'note_added', trim($memo));
     }
 
+    enxureXeroTry(fn() => enxureXeroPushInvoice($mysqli, $settings, $iid));
+
     return ['success' => $emailSent, 'invNum' => $invNum, 'error' => $errorMsg, 'id' => $iid];
 }
 
@@ -544,6 +547,7 @@ function convertQuoteToInvoice($mysqli, array $settings, int $quoteId, string $s
         ? "Quote {$row['invoice_number']} accepted by {$clientName} via the Client Portal, now invoice {$newNum}"
         : "Quote {$row['invoice_number']} converted to invoice {$newNum}";
     enxureLogAction($mysqli, $quoteId, $newNum, $actionType, $actionNotes);
+    enxureXeroTry(fn() => enxureXeroPushInvoice($mysqli, $settings, $quoteId));
 
     if ($source === 'client') {
         notifyChannel($mysqli, $settings, 'notify_on_quote_accepted', "\xF0\x9F\x93\x9D Quote accepted — {$row['invoice_number']} ({$clientName}), now invoice {$newNum}");
@@ -1306,7 +1310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // - Adding a teammate beyond the original account (create_user; editing
         //   or removing one — update_user/delete_user — stays free, same pattern
         //   as the others above).
-        $__licensePaidActions = ['save_payment_settings', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'save_recurring_nth_weekday', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense', 'duplicate_recurring_expense', 'create_user'];
+        $__licensePaidActions = ['save_payment_settings', 'save_xero_settings', 'xero_sync', 'xero_disconnect', 'run_xero_sync', 'test_stripe_connection', 'test_paypal_connection', 'run_recurring', 'toggle_cron', 'update_cron', 'save_recurring_nth_weekday', 'toggle_recurring_bypass_guard', 'toggle_late_fees', 'save_late_fee_settings', 'toggle_reminders', 'generate_portal_token', 'create_api_token', 'renew_api_token', 'save_recurring_expense', 'toggle_recurring_expense', 'duplicate_recurring_expense', 'create_user'];
         if (!enxureLicenseSignatureOk($mysqli, $settings) && in_array($_POST['action'], $__licensePaidActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This needs a license — add a key under Settings > License, or see Docs for what a license unlocks.']);
             exit;
@@ -1319,7 +1323,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // not on this list). $isCron requests bypass this the same way they
         // bypass the $isAuth gate above — a cron-triggered run has no user at
         // all, and CRON_SECRET is its own, separate authorization.
-        $__adminOnlyActions = ['backfill_client_names', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_all_untracked_files', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'fx_convert_preview', 'get_db_stats', 'import_backup', 'import_clients_csv', 'import_expenses_csv', 'import_invoices_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'send_tax_email', 'preview_tax_email', 'send_client_statement', 'preview_client_statement', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'save_recurring_nth_weekday', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
+        $__adminOnlyActions = ['backfill_client_names', 'save_xero_settings', 'xero_sync', 'xero_disconnect', 'run_xero_sync', 'backup_db', 'clear_demo_data', 'create_api_token', 'create_user', 'dedupe_payments', 'delete_api_token', 'delete_missing_db', 'delete_all_untracked_files', 'delete_single_db_entry', 'delete_untracked_file', 'factory_reset', 'fix_paid_dates', 'fx_convert_preview', 'get_db_stats', 'import_backup', 'import_clients_csv', 'import_expenses_csv', 'import_invoices_csv', 'list_backups', 'preview_restore', 'reconcile_payment_totals', 'renew_api_token', 'restore_db_backup', 'restore_missing', 'revoke_api_token', 'run_auto_backup', 'run_recurring', 'run_test_suite', 'send_tax_email', 'preview_tax_email', 'send_client_statement', 'preview_client_statement', 'save_audit_retention', 'save_backup_retention', 'save_business_identity', 'save_email_templates', 'save_invoice_defaults', 'save_invoice_numbering', 'save_invoice_template', 'save_late_fee_settings', 'save_license_key', 'save_notification_settings', 'save_offsite_backup', 'save_payment_details', 'save_payment_settings', 'save_screenshot', 'seed_demo_data', 'sync_missing', 'test_email', 'test_notification', 'test_paypal_connection', 'test_stripe_connection', 'save_recurring_nth_weekday', 'toggle_auto_backup', 'toggle_cron', 'toggle_late_fees', 'toggle_recurring_bypass_guard', 'toggle_reminders', 'toggle_show_test_only', 'toggle_test_clients', 'update_cron', 'update_user', 'delete_user'];
         if (!$isCron && !$isAdmin && in_array($_POST['action'], $__adminOnlyActions, true)) {
             echo json_encode(['success' => false, 'error' => 'This requires an admin account — see Settings > Users.']);
             exit;
@@ -1974,6 +1978,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt->execute();
             $notes = 'Voided' . ($reason !== '' ? ": $reason" : '');
             enxureLogAction($mysqli, $id, $invRow['invoice_number'], 'invoice_voided', $notes);
+            enxureXeroTry(fn() => enxureXeroVoidInvoice($mysqli, $settings, $id));
             notifyChannel($mysqli, $settings, 'notify_on_invoice_voided', "\xF0\x9F\x9A\xAB Invoice voided — {$invRow['invoice_number']}" . ($reason !== '' ? ": {$reason}" : ''));
             echo json_encode(['success' => true]);
             exit;
@@ -2215,6 +2220,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($_POST['action'] === 'test_notification') { enxureHandleTestNotification($mysqli, $settings); }
         if ($_POST['action'] === 'save_payment_settings') { enxureHandleSavePaymentSettings($mysqli); }
         if ($_POST['action'] === 'test_stripe_connection') { enxureHandleTestStripeConnection(); }
+        if ($_POST['action'] === 'save_xero_settings') { enxureHandleSaveXeroSettings($mysqli); }
+        if ($_POST['action'] === 'xero_sync') { enxureHandleXeroSync($mysqli, $settings); }
+        if ($_POST['action'] === 'xero_disconnect') { enxureHandleXeroDisconnect($mysqli); }
+        if ($_POST['action'] === 'run_xero_sync') {
+            if ((enxureXeroCfg($mysqli)['xero_enabled'] ?? '0') !== '1') {
+                echo json_encode(['success' => true, 'skipped' => true]);
+                exit;
+            }
+            echo json_encode(enxureXeroSync($mysqli, $settings));
+            exit;
+        }
         if ($_POST['action'] === 'test_paypal_connection') { enxureHandleTestPaypalConnection(); }
         if ($_POST['action'] === 'create_api_token') { enxureHandleCreateApiToken($mysqli, $settings); }
         if ($_POST['action'] === 'renew_api_token') { enxureHandleRenewApiToken($mysqli); }
@@ -2457,6 +2473,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 }
+
+if (isset($_GET['xero'])) { enxureHandleXeroRoute($mysqli, $settings, $isAdmin); }
 
 if (isset($_GET['api'])) { enxureHandleStatsApiRoutes($mysqli, $settings); }
 

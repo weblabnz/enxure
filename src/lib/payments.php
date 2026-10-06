@@ -429,6 +429,10 @@ function recordInvoicePayment($mysqli, array $settings, int $invoiceId, float $a
     $currencyCode = enxureResolveCurrency($invRow['currency'] ?? '', $settings);
     notifyChannel($mysqli, $settings, 'notify_on_payment', ($isPartial ? "\xF0\x9F\x92\xB0 Partial payment received" : "\xE2\x9C\x85 Invoice paid in full") . " — {$invNum} ({$invRow['client_name']}){$sourceLabel}: {$currencyCode} " . number_format($amount, 2));
 
+    if ($provider !== 'xero') {
+        enxureXeroTry(fn() => enxureXeroPushInvoice($mysqli, $settings, $invoiceId));
+    }
+
     return ['success' => true, 'duplicate' => false, 'is_partial' => $isPartial, 'total_paid' => $totalPaid, 'invoice_amount' => $invAmount, 'invoice_number' => $invNum];
 }
 

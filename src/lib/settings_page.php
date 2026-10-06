@@ -45,6 +45,15 @@
                             <span class="subnav-dot <?= $__paymentsOn ? 'on' : 'off' ?>" style="margin-left:0;"
                                 title="<?= !$licenseValid ? 'Online payment collection requires a license — inactive regardless of this setting' : ($__paymentsOn ? 'Online payment collection active' : 'Online payment collection off') ?>"></span>
                         </span></button>
+                    <?php $__xeroCfg = enxureXeroCfg($mysqli); $__xeroConnected = ($__xeroCfg['xero_tenant_id'] ?? '') !== '' && ($__xeroCfg['xero_refresh_token'] ?? '') !== ''; $__xeroOn = $__xeroConnected && ($__xeroCfg['xero_enabled'] ?? '0') === '1' && $licenseValid; ?>
+                    <button type="button" class="subnav-item" data-settings-target="xero"
+                        onclick="navSettings('xero')"><i class="fa-solid fa-link"></i> Xero
+                        <span style="margin-left:auto; display:inline-flex; align-items:center; gap:0.4rem;">
+                            <?php if (!$licenseValid): ?><i class="fa-solid fa-lock" title="Requires a license"
+                                    style="color:var(--text-secondary); font-size:0.8rem;"></i><?php endif; ?>
+                            <span class="subnav-dot <?= $__xeroOn ? 'on' : 'off' ?>" style="margin-left:0;"
+                                title="<?= !$licenseValid ? 'The Xero integration requires a license — inactive regardless of this setting' : ($__xeroOn ? 'Xero sync active' : 'Xero sync off') ?>"></span>
+                        </span></button>
                     <?php $__apiTokenCount = $licenseValid ? (int) ($mysqli->query("SELECT COUNT(*) as c FROM enxure_api_tokens WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())")->fetch_assoc()['c'] ?? 0) : 0; ?>
                     <button type="button" class="subnav-item" data-settings-target="api"
                         onclick="navSettings('api')"><i class="fa-solid fa-plug-circle-bolt"></i> API Access
@@ -885,6 +894,100 @@
                         </div>
                     </div>
 
+                    <div class="subnav-pane" id="settings-pane-xero">
+                        <?php if (!$licenseValid): ?>
+                            <div class="card" style="border-left:3px solid var(--warning); margin-bottom:1rem;">
+                                <div class="card-body" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
+                                    <i class="fa-solid fa-lock" style="color:var(--warning); font-size:1.1rem;"></i>
+                                    <div><strong>The Xero integration requires a license.</strong>
+                                        <span style="color:var(--text-secondary); font-size:0.85rem; display:block; margin-top:0.15rem;">
+                                            Everything below is view-only until you add a key.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                        <div style="<?= $licenseValid ? '' : 'opacity:0.5; pointer-events:none; user-select:none;' ?>">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 style="margin:0; font-size: 1.1rem;"><i class="fa-solid fa-link"
+                                        style="color:var(--accent); margin-right:0.5rem;"></i>Xero</h3>
+                            </div>
+                            <div class="card-body">
+                                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                                    Two-way sync with your Xero organisation. New invoices, voids, client details and
+                                    payments are pushed to Xero as they happen; payments recorded in Xero, invoices voided
+                                    in Xero and new Xero customers are pulled back every hour (or on demand). Quotes are
+                                    not synced.
+                                </p>
+                                <?php $__xeroRedirect = enxureXeroRedirectUri($settings); ?>
+                                <form id="xeroSettingsForm" onsubmit="event.preventDefault(); saveXeroSettings();">
+                                    <div class="form-group">
+                                        <label class="form-label" for="xeroClientId">Client ID</label>
+                                        <input type="text" id="xeroClientId" name="xero_client_id" class="form-control" autocomplete="off"
+                                            value="<?= htmlspecialchars($__xeroCfg['xero_client_id'] ?? '') ?>">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="xeroClientSecret">Client Secret</label>
+                                        <input type="password" id="xeroClientSecret" name="xero_client_secret" class="form-control" autocomplete="off"
+                                            placeholder="<?= ($__xeroCfg['xero_client_secret'] ?? '') !== '' ? 'Saved — leave blank to keep' : '' ?>">
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
+                                            Create a web app at <code>developer.xero.com</code> and set its redirect URI to
+                                            <code><?= htmlspecialchars($__xeroRedirect ?? 'https://your-domain/?xero=callback') ?></code>
+                                            <?= $__xeroRedirect === null ? '(set a Public URL under Payments first)' : '' ?>.</p>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="xeroSalesAccount">Sales account code</label>
+                                        <input type="text" id="xeroSalesAccount" name="xero_sales_account" class="form-control" placeholder="200"
+                                            value="<?= htmlspecialchars($__xeroCfg['xero_sales_account'] ?? '') ?>">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="xeroBankAccount">Payments account code</label>
+                                        <input type="text" id="xeroBankAccount" name="xero_bank_account" class="form-control" placeholder="e.g. 090"
+                                            value="<?= htmlspecialchars($__xeroCfg['xero_bank_account'] ?? '') ?>">
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
+                                            The bank account (with "Enable payments to this account" ticked in Xero) that payments
+                                            recorded in enXure are applied to. Leave blank to skip pushing payments.</p>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="xeroTaxType">Tax type</label>
+                                        <input type="text" id="xeroTaxType" name="xero_tax_type" class="form-control" placeholder="OUTPUT"
+                                            value="<?= htmlspecialchars($__xeroCfg['xero_tax_type'] ?? '') ?>">
+                                        <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:0.35rem;">
+                                            Xero tax type used on invoices that charge tax (<code>OUTPUT</code> for AU/most orgs,
+                                            <code>OUTPUT2</code> for NZ GST). Invoices without tax use <code>NONE</code>.</p>
+                                    </div>
+                                    <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; margin-bottom:0.75rem;">
+                                        <input type="checkbox" name="xero_import_contacts" value="1"
+                                            <?= ($__xeroCfg['xero_import_contacts'] ?? '1') === '1' ? 'checked' : '' ?>>
+                                        Create enXure clients for new Xero customers
+                                    </label>
+                                    <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; margin-bottom:1rem;">
+                                        <input type="checkbox" name="xero_enabled" value="1"
+                                            <?= ($__xeroCfg['xero_enabled'] ?? '0') === '1' ? 'checked' : '' ?>>
+                                        Sync enabled
+                                    </label>
+                                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                        <button type="submit" class="btn primary" id="saveXeroBtn"><i class="fa-solid fa-save"></i> Save Xero Settings</button>
+                                        <?php if ($__xeroConnected): ?>
+                                            <button type="button" class="btn" id="xeroSyncBtn" onclick="xeroSyncNow()"><i class="fa-solid fa-rotate"></i> Sync Now</button>
+                                            <button type="button" class="btn" onclick="xeroDisconnect()"><i class="fa-solid fa-link-slash"></i> Disconnect</button>
+                                        <?php else: ?>
+                                            <a class="btn" href="?xero=connect"><i class="fa-solid fa-plug"></i> Connect to Xero</a>
+                                        <?php endif; ?>
+                                    </div>
+                                </form>
+                                <?php if ($__xeroConnected): ?>
+                                    <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:1rem;">
+                                        Connected to <strong><?= htmlspecialchars($__xeroCfg['xero_tenant_name'] ?? '') ?></strong>.
+                                        <?php if ((int) ($__xeroCfg['xero_last_sync'] ?? 0) > 0): ?>Last sync <?= htmlspecialchars(date('Y-m-d H:i', (int) $__xeroCfg['xero_last_sync'])) ?>.<?php endif; ?>
+                                        <?php if (($__xeroCfg['xero_last_error'] ?? '') !== ''): ?><span style="color:var(--danger);"> Last error: <?= htmlspecialchars($__xeroCfg['xero_last_error']) ?></span><?php endif; ?>
+                                    </p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+
                     <!-- API Access -->
                     <?php $__apiBaseUrl = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'your-domain'); ?>
                     <div class="subnav-pane" id="settings-pane-api">
@@ -1380,7 +1483,7 @@
                                         <span style="color:var(--warning); font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Not licensed</span>
                                         <?php
                                         $__licenseMsgs = [
-                                            'empty' => 'enXure is free and open source — everything works without a key. A license unlocks seven paid extras: Stripe/PayPal payment collection, recurring billing automation, the Client Portal, the external API, Reporting & Statistics, adding teammates beyond your own account (Settings > Users), and removing the "Powered by enXure" credit.',
+                                            'empty' => 'enXure is free and open source — everything works without a key. A license unlocks nine paid extras: Stripe/PayPal payment collection, recurring billing automation, recurring expenses, the Client Portal, the external API, Reporting & Statistics, the two-way Xero integration, adding teammates beyond your own account (Settings > Users), and removing the "Powered by enXure" credit.',
                                             'demo_mode' => 'This is a public demo instance — paid features stay locked here regardless of any key entered, so you can see them (dimmed) without anyone being able to actually use them. Buy a license to unlock them on your own instance.',
                                             'malformed' => 'That license key doesn\'t look valid — check you copied the whole string with nothing missing.',
                                             'bad_signature' => 'That license key failed verification — check you copied it exactly, with nothing missing or altered.',

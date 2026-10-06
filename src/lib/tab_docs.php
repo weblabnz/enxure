@@ -15,6 +15,7 @@
                         'feat-invoicing' => 'Invoicing & Quotes',
                         'feat-recurring' => 'Recurring Billing',
                         'feat-payments' => 'Payments',
+                        'feat-xero' => 'Xero',
                         'feat-expenses' => 'Expenses',
                         'feat-clients' => 'Clients & Portal',
                         'feat-security' => 'Security',
@@ -91,6 +92,7 @@
                                     ['icon' => 'fa-receipt', 'title' => 'Payment Ledger', 'desc' => "Every payment its own row, so partial payments keep an honest history.", 'target' => 'feat-payments'],
                                     ['icon' => 'fa-credit-card', 'title' => 'Stripe & PayPal', 'desc' => 'Hosted checkout with webhook-verified Pay Now links.', 'target' => 'feat-payments', 'license' => true],
                                     ['icon' => 'fa-rotate-left', 'title' => 'Refunds', 'desc' => 'Gateway refunds automatically reopen and adjust the invoice.', 'target' => 'feat-payments'],
+                                    ['icon' => 'fa-link', 'title' => 'Xero Sync', 'desc' => 'Two-way sync of invoices, payments, voids and clients with your Xero organisation.', 'target' => 'feat-xero', 'license' => true],
                                     ['icon' => 'fa-money-bill-wave', 'title' => 'Expense Tracking', 'desc' => 'Log vendor, category, amount, and an optional receipt for every outgoing cost, with CSV import/export.', 'target' => 'feat-expenses'],
                                     ['icon' => 'fa-repeat', 'title' => 'Recurring Expenses', 'desc' => 'Repeating bills like hosting or SaaS, entered once and tracked on their own schedule.', 'target' => 'feat-expenses', 'license' => true],
                                     ['icon' => 'fa-hand-holding-dollar', 'title' => 'Billable Expenses', 'desc' => "Tag an expense to a client and pull it straight onto their next invoice as a line item.", 'target' => 'feat-expenses'],
@@ -191,7 +193,7 @@
                                     ['effort' => 'medium', 'title' => 'Multi-step overdue reminder cadence', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Late Fees & Reminders', 'target' => 'feat-recurring'], 'desc' => 'sendOverdueReminders() sends exactly one reminder per invoice, fixed at 7 days overdue, ever. A configurable sequence (e.g. day 3 friendly nudge, day 14 firmer, day 30 final notice) reusing the same guard-against-duplicate pattern the single reminder already has would make chasing payment far less manual for anyone not using Late Fees.'],
                                     ['effort' => 'medium', 'title' => 'Structured outbound webhooks', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Notifications', 'target' => 'feat-notifications'], 'desc' => 'The existing generic webhook channel sends a human-readable text string ("Invoice INV-042 is 7 days overdue") for every event type — fine for a Slack/Telegram alert, useless for driving Zapier/Make/n8n. A proper JSON payload (event name, invoice/client/amount fields) alongside the current text alerts would let the same events trigger real automations, not just notifications.'],
                                     ['effort' => 'large', 'title' => 'Passkey / WebAuthn login', 'since' => '2026-08-30', 'seeAlso' => ['label' => 'Two-Factor Authentication', 'target' => 'feat-security'], 'desc' => '2FA is TOTP-only today. Adding passkeys as an alternative second factor (or a full passwordless login option) would cover people who\'d rather use a hardware key or their device\'s built-in biometrics than an authenticator app.'],
-                                    ['effort' => 'large', 'title' => 'Two-way Xero / QuickBooks Online sync', 'since' => '2026-08-30', 'desc' => 'Today\'s Accounting Journal and QuickBooks (IIF) exports are one-way CSV/file dumps. A real API-based sync that pushes invoices and payments and pulls back reconciliation status would remove the manual export/import step entirely.'],
+                                    ['effort' => 'large', 'title' => 'QuickBooks Online sync', 'since' => '2026-08-30', 'desc' => 'Xero now syncs both ways over its API, but the QuickBooks (IIF) export is still a one-way file dump. A real API-based QuickBooks sync would remove its manual import step.'],
                                     ['effort' => 'large', 'title' => 'Installment / milestone billing', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Ad Hoc Invoicing', 'target' => 'feat-invoicing'], 'desc' => 'Recurring Billing only ever charges the same amount every period — it can\'t express "40% deposit now, 60% on delivery" on a single project. A payment schedule attached to one invoice (its own due dates and amounts, tracked against the same payment ledger every other invoice uses) would cover project-based work that a subscription model doesn\'t fit.'],
                                     ['effort' => 'large', 'title' => 'Stored payment methods & automatic charging', 'since' => '2026-09-12', 'seeAlso' => ['label' => 'Stripe & PayPal', 'target' => 'feat-payments'], 'desc' => 'Recurring Billing still emails a fresh invoice every period and waits for the client to click Pay Now. For clients who\'d rather not do that dance monthly, letting them save a card via Stripe (SetupIntent) once and opting in to auto-charge on the due date — with the existing failed-payment/notification paths reused for a declined card — would remove the biggest remaining bit of manual follow-up. The largest single item here.'],
                                 ];
@@ -239,9 +241,9 @@
                                     Public License v3.0 (AGPL-3.0). You can self-host it, read every line of it, and
                                     modify your own copy — the full, unmodified license text is reproduced below
                                     exactly as it must be distributed. A paid license key is a separate, optional
-                                    unlock for eight specific features (Stripe/PayPal payment collection, recurring
+                                    unlock for nine specific features (Stripe/PayPal payment collection, recurring
                                     billing automation, recurring expenses, the Client Portal, the external API,
-                                    Reporting &amp; Statistics, adding teammates beyond your own account, and removing the "Powered
+                                    Reporting &amp; Statistics, the two-way Xero integration, adding teammates beyond your own account, and removing the "Powered
                                     by enXure" credit) — see <strong>Security</strong> under Features for how that
                                     works.</p>
                                 <?php
@@ -589,16 +591,33 @@
                                     manage the rest. Adding a second (or further) account requires a license —
                                     editing or removing an existing one stays free either way, the same pattern as
                                     API tokens and the Client Portal below.</p>
-                                <h2>enXure is open source — licensing only unlocks eight extras</h2>
+                                <h2>enXure is open source — licensing only unlocks nine extras</h2>
                                 <p>enXure is free and open source (AGPL-3.0): client and invoice management, quotes,
                                     manual payments, backups, and 2FA all work fully with no license key at all — an
                                     unlicensed install is never locked out of its own account or its own data. A
-                                    license is a paid, optional unlock for eight specific capabilities: Stripe/PayPal
+                                    license is a paid, optional unlock for nine specific capabilities: Stripe/PayPal
                                     payment collection, recurring billing automation, recurring expenses, the Client
-                                    Portal, the external API, Reporting &amp; Statistics, adding teammates beyond your
+                                    Portal, the external API, Reporting &amp; Statistics, the two-way Xero integration, adding teammates beyond your
                                     own account, and removing the "Powered by enXure" credit line from invoices and
                                     emails. Everything else in this Docs section works exactly the same whether or
                                     not you've added a key.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="subnav-pane" id="docs-pane-feat-xero">
+                        <div class="card">
+                            <div class="card-body doc-content">
+                                <h1>Xero</h1>
+                                <p><strong>Requires a license.</strong> Two-way sync between enXure and one Xero organisation, configured under Settings &gt; Xero.</p>
+                                <h2>Connecting</h2>
+                                <p>Create a web app at <code>developer.xero.com</code>, set its redirect URI to the address shown on the Xero settings page, paste its <strong>Client ID</strong> and <strong>Client Secret</strong>, save, then click <strong>Connect to Xero</strong> and pick the organisation. Set the <strong>Sales account code</strong> invoices post to, and a <strong>Payments account code</strong> if payments recorded in enXure should be applied in Xero too.</p>
+                                <h2>What goes to Xero</h2>
+                                <p>Each new invoice is created in Xero as an approved sales invoice under the matching contact (found by email or name, or created). Voiding an invoice voids it in Xero, edited client details update the contact, and payments recorded in enXure — manual, Stripe or PayPal — are applied to the Xero invoice. Quotes aren't synced; a converted quote is pushed once it becomes an invoice.</p>
+                                <h2>What comes back</h2>
+                                <p>Every hour, and whenever you click <strong>Sync Now</strong>, enXure pulls payments recorded in Xero into the payment ledger (so the invoice status stays correct), marks invoices voided in Xero as void, and links Xero customers to existing clients by email or name. With <strong>Create enXure clients for new Xero customers</strong> on, unmatched customers with an email address become new clients.</p>
+                                <h2>Existing invoices</h2>
+                                <p><strong>Sync Now</strong> also pushes invoices that predate the connection, up to 40 per run to stay inside Xero's rate limits — run it again if it reports invoices still waiting. Test clients are skipped. Every push, pull and failure is recorded in the Audit Log.</p>
                             </div>
                         </div>
                     </div>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Features &mdash; enXure</title>
+    <meta name="description" content="Every enXure feature: invoicing, quotes, recurring billing, payments, Xero sync, expenses, client portal, reporting and more.">
+    <link rel="icon" type="image/svg+xml" href="assets/img/enxure-mark.svg" />
+    <link rel="alternate icon" href="assets/img/favicon.ico" />
+    <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0a0f1c" />
+    <link rel="stylesheet" href="assets/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/site.css">
+</head>
+
+<body>
+    <header class="site-nav">
+        <div class="wrap">
+            <a href="index.html"><img class="wordmark" src="assets/img/enxure-wordmark.svg" alt="enXure"></a>
+            <nav>
+                <a href="features.html">Features</a>
+                <a href="index.html#screenshots">Screenshots</a>
+                <a href="index.html#licensing">Licensing</a>
+                <a href="index.html#get-started">Get Started</a>
+                <a class="btn btn-ghost" href="https://gitlab.com/weblabnz/enxure" target="_blank" rel="noopener">Source</a>
+            </nav>
+        </div>
+    </header>
+
+    <section class="page-head" style="padding-bottom:1rem;">
+        <div class="wrap">
+            <p class="eyebrow">Features</p>
+            <h1>Everything enXure does, <span class="accent-text">at a glance</span>.</h1>
+            <p class="sub">28 features across invoicing, payments, clients, reporting and data management. 19 are free with every self-hosted install; the rest need a paid license key.</p>
+        </div>
+    </section>
+
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-nav" aria-label="Feature categories">
+                <input type="search" id="featureSearch" placeholder="Search features&hellip;" aria-label="Search features">
+                <div class="docs-nav-title">Browse</div>
+                <button type="button" class="active" data-group="all">All features <span class="count">28</span></button><button type="button" data-group="Invoicing &amp; Quotes">Invoicing &amp; Quotes <span class="count">3</span></button><button type="button" data-group="Recurring Billing">Recurring Billing <span class="count">2</span></button><button type="button" data-group="Payments">Payments <span class="count">3</span></button><button type="button" data-group="Integrations">Integrations <span class="count">1</span></button><button type="button" data-group="Expenses">Expenses <span class="count">3</span></button><button type="button" data-group="Clients &amp; Portal">Clients &amp; Portal <span class="count">2</span></button><button type="button" data-group="Security">Security <span class="count">2</span></button><button type="button" data-group="External API">External API <span class="count">1</span></button><button type="button" data-group="Reporting">Reporting <span class="count">3</span></button><button type="button" data-group="Data Management">Data Management <span class="count">6</span></button><button type="button" data-group="Notifications">Notifications <span class="count">1</span></button><button type="button" data-group="Shortcuts">Shortcuts <span class="count">1</span></button>
+            </nav>
+            <div class="docs-card">
+                <h2>Features</h2>
+                <p>Every main area of enXure, at a glance. Cards marked <span class="feature-badge-license">License</span> need a paid license key to unlock &mdash; everything else is free with a self-hosted install.</p>
+                <div class="feature-cards-grid" id="featureGrid" style="margin-top:1.25rem;">
+<div class="feature-card" data-group="Invoicing &amp; Quotes"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div></div><div class="feature-card-title">Ad Hoc Invoicing</div><p class="feature-card-desc">Line-item invoices with optional discount/tax breakdown and a live PDF.</p></div>
+<div class="feature-card" data-group="Invoicing &amp; Quotes"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-file-signature"></i></div></div><div class="feature-card-title">Quotes &amp; Conversion</div><p class="feature-card-desc">Build quotes with the same line-item tool, then convert to a real invoice on acceptance.</p></div>
+<div class="feature-card" data-group="Invoicing &amp; Quotes"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-ban"></i></div></div><div class="feature-card-title">Void &amp; Unvoid</div><p class="feature-card-desc">Pull a mistaken invoice out of every total without losing its history.</p></div>
+<div class="feature-card" data-group="Recurring Billing"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-arrows-rotate"></i></div><span class="feature-badge-license">License</span></div><div class="feature-card-title">Recurring Billing</div><p class="feature-card-desc">Per-client billing schedule with a double-billing guard, cron-driven.</p></div>
+<div class="feature-card" data-group="Recurring Billing"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-clock"></i></div><span class="feature-badge-license">License</span></div><div class="feature-card-title">Late Fees &amp; Reminders</div><p class="feature-card-desc">Automatic overdue fees and payment reminder emails.</p></div>
+<div class="feature-card" data-group="Payments"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-receipt"></i></div></div><div class="feature-card-title">Payment Ledger</div><p class="feature-card-desc">Every payment its own row, so partial payments keep an honest history.</p></div>
+<div class="feature-card" data-group="Payments"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-credit-card"></i></div><span class="feature-badge-license">License</span></div><div class="feature-card-title">Stripe &amp; PayPal</div><p class="feature-card-desc">Hosted checkout with webhook-verified Pay Now links.</p></div>
+<div class="feature-card" data-group="Payments"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-rotate-left"></i></div></div><div class="feature-card-title">Refunds</div><p class="feature-card-desc">Gateway refunds automatically reopen and adjust the invoice.</p></div>
+<div class="feature-card" data-group="Integrations"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-link"></i></div><span class="feature-badge-license">License</span></div><div class="feature-card-title">Xero Sync</div><p class="feature-card-desc">Two-way sync of invoices, payments, voids and clients with your Xero organisation.</p></div>
+<div class="feature-card" data-group="Expenses"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-money-bill-wave"></i></div></div><div class="feature-card-title">Expense Tracking</div><p class="feature-card-desc">Log vendor, category, amount, and an optional receipt for every outgoing cost, with CSV import/export.</p></div>
+<div class="feature-card" data-group="Expenses"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-repeat"></i></div><span class="feature-badge-license">License</span></div><div class="feature-card-title">Recurring Expenses</div><p class="feature-card-desc">Repeating bills like hosting or SaaS, entered once and tracked on their own schedule.</p></div>
+<div class="feature-card" data-group="Expenses"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-hand-holding-dollar"></i></div></div><div class="feature-card-title">Billable Expenses</div><p class="feature-card-desc">Tag an expense to a client and pull it straight onto their next invoice as a line item.</p></div>
+<div class="feature-card" data-group="Clients &amp; Portal"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-address-book"></i></div></div><div class="feature-card-title">Clients &amp; CRM Notes</div><p class="feature-card-desc">Per-client billing defaults plus free-text CRM notes.</p></div>
+<div class="feature-card" data-group="Clients &amp; Portal"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-door-open"></i></div><span class="feature-badge-license">License</span></div><div class="feature-card-title">Client Portal</div><p class="feature-card-desc">Token-gated, login-free page for a client&#039;s own invoices and quotes.</p></div>
+<div class="feature-card" data-group="Security"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-shield-halved"></i></div></div><div class="feature-card-title">Two-Factor Authentication</div><p class="feature-card-desc">TOTP login with one-time backup codes.</p></div>
+<div class="feature-card" data-group="Security"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-users"></i></div><span class="feature-badge-license">License</span></div><div class="feature-card-title">Users &amp; Roles</div><p class="feature-card-desc">Admin and Member accounts, least-privilege by default.</p></div>
+<div class="feature-card" data-group="External API"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-plug"></i></div><span class="feature-badge-license">License</span></div><div class="feature-card-title">External API</div><p class="feature-card-desc">Token-authenticated read/write endpoints for scripts and other tools.</p></div>
+<div class="feature-card" data-group="Reporting"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-gauge-high"></i></div></div><div class="feature-card-title">Dashboard</div><p class="feature-card-desc">At-a-glance revenue, outstanding, and overdue totals.</p></div>
+<div class="feature-card" data-group="Reporting"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-chart-line"></i></div><span class="feature-badge-license">License</span></div><div class="feature-card-title">Statistics</div><p class="feature-card-desc">Seven focused tabs — Revenue, Forecasting, Tax &amp; Compliance, and more.</p></div>
+<div class="feature-card" data-group="Reporting"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-list-check"></i></div></div><div class="feature-card-title">Audit Log</div><p class="feature-card-desc">Every send, payment, refund, and security event, timestamped.</p></div>
+<div class="feature-card" data-group="Data Management"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-database"></i></div></div><div class="feature-card-title">Backup &amp; Restore</div><p class="feature-card-desc">Scoped backups with a dry-run restore before anything changes.</p></div>
+<div class="feature-card" data-group="Data Management"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-paper-plane"></i></div></div><div class="feature-card-title">Tax Email</div><p class="feature-card-desc">Zip up invoices, expenses, and receipts for a date range and email them straight to your accountant.</p></div>
+<div class="feature-card" data-group="Data Management"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-file-invoice"></i></div></div><div class="feature-card-title">Client Statements</div><p class="feature-card-desc">A running account PDF for one client — invoices, payments, and balance forward for any date range.</p></div>
+<div class="feature-card" data-group="Data Management"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-flask"></i></div></div><div class="feature-card-title">Demo Data</div><p class="feature-card-desc">Seed sample clients and invoices to preview charts safely.</p></div>
+<div class="feature-card" data-group="Data Management"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-vial-circle-check"></i></div></div><div class="feature-card-title">Test Suite</div><p class="feature-card-desc">In-app correctness checks for invoice math, TOTP, and webhooks.</p></div>
+<div class="feature-card" data-group="Data Management"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-wrench"></i></div></div><div class="feature-card-title">Data Repair</div><p class="feature-card-desc">Four narrow fixes for drifted paid dates, totals, and duplicates.</p></div>
+<div class="feature-card" data-group="Notifications"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-bell"></i></div></div><div class="feature-card-title">Notifications</div><p class="feature-card-desc">Slack, Telegram, or a generic webhook, independent of email.</p></div>
+<div class="feature-card" data-group="Shortcuts"><div class="feature-card-top"><div class="feature-card-icon"><i class="fa-solid fa-keyboard"></i></div></div><div class="feature-card-title">Keyboard Shortcuts</div><p class="feature-card-desc">Press ? anywhere for the full shortcuts overlay.</p></div>
+                </div>
+                <p class="no-results" id="noResults">No matching features.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="wrap">
+            <div class="foot-col">
+                <div class="footer-brand">
+                    <img src="assets/img/enxure-mark.svg" alt="">
+                    <strong>enXure</strong>
+                </div>
+                <h4>Product</h4>
+                <a href="features.html">Features</a>
+                <a href="index.html#screenshots">Screenshots</a>
+                <a href="index.html#licensing">Licensing</a>
+            </div>
+            <div class="foot-col">
+                <h4>Source &amp; Support</h4>
+                <a href="https://gitlab.com/weblabnz/enxure" target="_blank" rel="noopener">GitLab Repository</a>
+                <a href="https://gitlab.com/weblabnz/enxure/-/issues" target="_blank" rel="noopener">Report an Issue</a>
+                <a href="mailto:contact-project+weblabnz-enxure-inv@incoming.gitlab.com">Contact</a>
+            </div>
+            <div class="foot-col">
+                <h4>Legal</h4>
+                <a href="https://gitlab.com/weblabnz/enxure/-/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0 License</a>
+            </div>
+            <div class="foot-col" style="align-self:flex-end;">
+                <p class="copyright">&copy; enXure. Development happens on GitLab &mdash; the GitHub mirror is read-only.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="assets/js/site.js"></script>
+</body>
+
+</html>

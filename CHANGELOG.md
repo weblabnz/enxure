@@ -2,6 +2,15 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.1.0] - 2026-10-06
+
+### Added
+- Xero integration (license required): two-way sync with one Xero organisation, configured under Settings > Xero. Connects over OAuth 2.0 with your own Xero app (Client ID/Secret); tokens refresh automatically. New invoices are created in Xero as approved sales invoices (line items, discount and tax carried over, tax amounts matched to enXure's totals), voids are mirrored, client details update the Xero contact, and payments recorded in enXure (manual, Stripe, PayPal) are applied to the Xero invoice against a configurable payments account. An hourly cron entry (`run_xero_sync`, gated by the Sync enabled toggle) and a Sync Now button pull payments recorded in Xero into the payment ledger, mark invoices voided in Xero as void, and link Xero customers to existing clients by email or name, optionally creating clients for new ones. Pre-existing invoices are pushed 40 per run to respect Xero's rate limit. New columns `enxure_clients.xero_contact_id`, `enxure_invoices.xero_invoice_id`, `enxure_payments.xero_payment_id` (added automatically on upgrade) link records and dedupe payments between the two systems. Quotes are not synced.
+
+### Changed
+- The license now unlocks nine extras (Xero added; recurring expenses is now named in the README, EULA, License tab and marketing copy, where it had been left out). Existing installs need the cron container restarted once to pick up the new hourly entry.
+- Marketing site (`public/`): rebuilt with a stronger hero, how-it-works steps, highlight cards, screenshot showcases and a comparison section, and a new `features.html` page that mirrors the in-app Docs > Features cards (searchable, filterable by category). Styles and scripts moved to `assets/css/site.css` and `assets/js/site.js`; Font Awesome is self-hosted under `assets/`.
+
 ## [3.0.26] - 2026-10-04
 
 ### Fixed

@@ -197,7 +197,11 @@ if ($id > 0) {
     $stmt->bind_param("ssssssssdsisddsiis", $name, $contactName, $email, $ccEmail, $phone, $address, $aname, $anum, $rate, $recurItemsJson, $terms, $freq, $discountPct, $taxRate, $currency, $act, $test, $key);
     $stmt->execute();
     enxureLogAction($mysqli, null, '', 'client_created', $name . ' — ' . implode('; ', enxureClientFieldDiffs(array_fill_keys(array_keys(ENXURE_CLIENT_DIFF_FIELDS), ''), $newValues)));
+    $newClientId = (int) $stmt->insert_id;
 }
+global $settings;
+$xeroClientId = $id > 0 ? $id : $newClientId;
+enxureXeroTry(fn() => enxureXeroPushClient($mysqli, $settings, $xeroClientId));
 echo json_encode(['success' => true]);
 exit;
 }

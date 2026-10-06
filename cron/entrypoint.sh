@@ -48,6 +48,10 @@ if [ ! -f "$CRONTAB_FILE" ] || ! grep -q "run_auto_backup" "$CRONTAB_FILE" 2>/de
     echo "30 2 * * * curl -s -S -X POST -d \"action=run_auto_backup&cron_key=$CRON_SECRET\" http://nginx/enxure.php >> /var/log/enxure-cron.log 2>&1" >>"$CRONTAB_FILE"
 fi
 
+if [ ! -f "$CRONTAB_FILE" ] || ! grep -q "run_xero_sync" "$CRONTAB_FILE" 2>/dev/null; then
+    echo "20 * * * * curl -s -S -X POST -d \"action=run_xero_sync&cron_key=$CRON_SECRET\" http://nginx/enxure.php >> /var/log/enxure-cron.log 2>&1" >>"$CRONTAB_FILE"
+fi
+
 # The app saves schedule changes to this file as www-data, not root — fix
 # ownership on every boot so busybox crond (which refuses to load a crontab
 # it doesn't own as root) can always load it. Group is www-data's gid (33,

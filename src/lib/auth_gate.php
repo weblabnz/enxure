@@ -93,6 +93,18 @@ $hasRoleCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TAB
 if (!$hasRoleCol) {
     $mysqli->query("ALTER TABLE enxure_users ADD COLUMN role ENUM('admin','member') NOT NULL DEFAULT 'admin' AFTER email");
 }
+$hasXeroContactCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_clients' AND COLUMN_NAME = 'xero_contact_id'")->num_rows > 0;
+if (!$hasXeroContactCol) {
+    $mysqli->query("ALTER TABLE enxure_clients ADD COLUMN xero_contact_id VARCHAR(40) NULL DEFAULT NULL");
+}
+$hasXeroInvoiceCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_invoices' AND COLUMN_NAME = 'xero_invoice_id'")->num_rows > 0;
+if (!$hasXeroInvoiceCol) {
+    $mysqli->query("ALTER TABLE enxure_invoices ADD COLUMN xero_invoice_id VARCHAR(40) NULL DEFAULT NULL, ADD INDEX idx_xero_invoice_id (xero_invoice_id)");
+}
+$hasXeroPaymentCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_payments' AND COLUMN_NAME = 'xero_payment_id'")->num_rows > 0;
+if (!$hasXeroPaymentCol) {
+    $mysqli->query("ALTER TABLE enxure_payments ADD COLUMN xero_payment_id VARCHAR(40) NULL DEFAULT NULL");
+}
 $hasActionUserCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_actions' AND COLUMN_NAME = 'performed_by_user_id'")->num_rows > 0;
 if (!$hasActionUserCol) {
     $mysqli->query("ALTER TABLE enxure_actions ADD COLUMN performed_by_user_id INT NULL AFTER performed_at, ADD COLUMN performed_by_username VARCHAR(190) NULL AFTER performed_by_user_id, ADD INDEX idx_performed_by_user_id (performed_by_user_id)");
