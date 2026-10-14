@@ -715,6 +715,89 @@ function enxureIsNthWeekdayOfMonth(int $nth, int $isoWeekday, ?string $today = n
     return $day > ($nth - 1) * 7 && $day <= $nth * 7;
 }
 
+function enxureRecurringExpenseDueDate(string $frequency, ?string $startDate, string $today): ?string
+{
+    $todayTs = strtotime($today);
+    if ($startDate === null || $startDate === '') {
+        return $today;
+    }
+    $startTs = strtotime($startDate);
+    $year = (int) date('Y', $todayTs);
+    $month = (int) date('n', $todayTs);
+    $startDay = (int) date('j', $startTs);
+    $startMonth = (int) date('n', $startTs);
+    if ($frequency === 'weekly') {
+        $back = ((int) date('N', $todayTs) - (int) date('N', $startTs) + 7) % 7;
+        $dueTs = strtotime("-{$back} days", $todayTs);
+    } else {
+        if ($frequency === 'quarterly') {
+            $month = (int) (floor(($month - 1) / 3) * 3 + 1 + (($startMonth - 1) % 3));
+        } elseif ($frequency === 'annually') {
+            $month = $startMonth;
+        }
+        $lastDay = (int) date('t', mktime(0, 0, 0, $month, 1, $year));
+        $dueTs = mktime(0, 0, 0, $month, min($startDay, $lastDay), $year);
+    }
+    if ($dueTs > $todayTs || $dueTs < $startTs) {
+        return null;
+    }
+    return date('Y-m-d', $dueTs);
+}
+
+function enxureLogDueRecurringExpenses(mysqli $mysqli, array $settings, bool $bypassGuard): array
+{
+    $logged = 0;
+    $skipped = 0;
+    $errors = 0;
+    $today = date('Y-m-d');
+    $alreadySql = [
+        'weekly' => "SELECT COUNT(*) AS c FROM enxure_expenses WHERE recurring_expense_id = ? AND YEARWEEK(expense_date, 3) = YEARWEEK(?, 3)",
+        'monthly' => "SELECT COUNT(*) AS c FROM enxure_expenses WHERE recurring_expense_id = ? AND DATE_FORMAT(expense_date, '%Y-%m') = DATE_FORMAT(?, '%Y-%m')",
+        'quarterly' => "SELECT COUNT(*) AS c FROM enxure_expenses WHERE recurring_expense_id = ? AND YEAR(expense_date) = YEAR(?) AND QUARTER(expense_date) = QUARTER(?)",
+        'annually' => "SELECT COUNT(*) AS c FROM enxure_expenses WHERE recurring_expense_id = ? AND YEAR(expense_date) = YEAR(?)",
+    ];
+    $insertStmt = $mysqli->prepare("INSERT INTO enxure_expenses (expense_date, vendor, category, amount, description, recurring_expense_id, billable_client_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $taxYear = getTaxYear((int) ($settings['tax_year_start_month'] ?? 1));
+    $templates = $mysqli->prepare("SELECT * FROM enxure_recurring_expenses WHERE is_active = 1 AND tax_year = ?");
+    $templates->bind_param("i", $taxYear);
+    $templates->execute();
+    $rows = $templates->get_result();
+    while ($re = $rows->fetch_assoc()) {
+        $frequency = $re['frequency'] ?? 'monthly';
+        $dueDate = enxureRecurringExpenseDueDate($frequency, $re['start_date'] ?? null, $today);
+        if ($dueDate === null) {
+            continue;
+        }
+        if (!$bypassGuard) {
+            $alreadyStmt = $mysqli->prepare($alreadySql[$frequency] ?? $alreadySql['monthly']);
+            $id = (int) $re['id'];
+            if ($frequency === 'quarterly') {
+                $alreadyStmt->bind_param("iss", $id, $dueDate, $dueDate);
+            } else {
+                $alreadyStmt->bind_param("is", $id, $dueDate);
+            }
+            $alreadyStmt->execute();
+            $already = (int) $alreadyStmt->get_result()->fetch_assoc()['c'];
+            $alreadyStmt->close();
+            if ($already > 0) {
+                $skipped++;
+                continue;
+            }
+        }
+        $amount = (float) $re['amount'];
+        $billableClientId = $re['billable_client_id'] !== null ? (int) $re['billable_client_id'] : null;
+        $recurId = (int) $re['id'];
+        $insertStmt->bind_param("sssdsii", $dueDate, $re['vendor'], $re['category'], $amount, $re['description'], $recurId, $billableClientId);
+        if ($insertStmt->execute()) {
+            $logged++;
+            enxureLogAction($mysqli, null, '', 'expense_added', "{$re['vendor']} — " . number_format($amount, 2) . " (auto-logged from recurring template)");
+        } else {
+            $errors++;
+        }
+    }
+    return ['logged' => $logged, 'skipped' => $skipped, 'errors' => $errors];
+}
+
 // Substitutes plain {token} placeholders in editable email templates (Settings >
 // Email Templates) — deliberately not full templating (no conditionals/loops),
 // just a straight key/value swap so client-facing text stays simple to edit.

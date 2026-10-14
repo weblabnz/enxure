@@ -262,6 +262,9 @@
                             </select>
                         </div>
                     </div>
+                    <div class="form-group"><label class="form-label">First due date <span
+                                style="font-weight:400; color:var(--text-secondary);">(its day of the month is when each occurrence is logged)</span></label>
+                        <input type="date" id="recurringExpenseStartDate" class="form-control"></div>
                     <div class="form-group"><label class="form-label">Description <span
                                 style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
                         <textarea id="recurringExpenseDescription" class="form-control" rows="2"></textarea>
@@ -283,7 +286,7 @@
                             style="padding:0.5rem;">
                         <div id="recurringExpenseDocsCompress" class="img-compress-status"></div>
                     </div>
-                    <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Logged automatically as a new expense the next time recurring billing runs (Settings &gt; Billing, or the monthly cron), once per period on today's date — same guard against double-logging as recurring invoices. Attach each period's invoice or receipt to the expense it creates in the Expenses list below. When a new tax year starts, use Duplicate on the list to carry this forward into a fresh row — documents start empty again.</p>
+                    <p style="color:var(--text-secondary); font-size:0.8rem; margin:0;">Logged automatically as a new expense on its due date each period (checked daily, or when recurring billing is run by hand), with a guard against double-logging. Attach each period's invoice or receipt to the expense it creates in the Expenses list below. When a new tax year starts, use Duplicate on the list to carry this forward into a fresh row — documents start empty again.</p>
                 </div>
                 <div class="modal-footer"><button class="btn" onclick="closeModal('recurringExpenseModal')">Cancel</button><button
                         class="btn primary" id="saveRecurringExpenseBtn" onclick="saveRecurringExpense()"><i class="fa-solid fa-save"></i>

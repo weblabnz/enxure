@@ -48,6 +48,10 @@ if [ ! -f "$CRONTAB_FILE" ] || ! grep -q "run_auto_backup" "$CRONTAB_FILE" 2>/de
     echo "30 2 * * * curl -s -S -X POST -d \"action=run_auto_backup&cron_key=$CRON_SECRET\" http://nginx/enxure.php >> /var/log/enxure-cron.log 2>&1" >>"$CRONTAB_FILE"
 fi
 
+if [ ! -f "$CRONTAB_FILE" ] || ! grep -q "run_expense_templates" "$CRONTAB_FILE" 2>/dev/null; then
+    echo "15 7 * * * curl -s -S -X POST -d \"action=run_expense_templates&cron_key=$CRON_SECRET\" http://nginx/enxure.php >> /var/log/enxure-cron.log 2>&1" >>"$CRONTAB_FILE"
+fi
+
 if [ ! -f "$CRONTAB_FILE" ] || ! grep -q "run_xero_sync" "$CRONTAB_FILE" 2>/dev/null; then
     echo "20 * * * * curl -s -S -X POST -d \"action=run_xero_sync&cron_key=$CRON_SECRET\" http://nginx/enxure.php >> /var/log/enxure-cron.log 2>&1" >>"$CRONTAB_FILE"
 fi

@@ -1637,6 +1637,7 @@
                 document.getElementById('recurringExpenseCategory').value = re ? re.category : 'other';
                 document.getElementById('recurringExpenseAmount').value = re ? re.amount : '0.00';
                 document.getElementById('recurringExpenseFrequency').value = re ? re.frequency : 'monthly';
+                document.getElementById('recurringExpenseStartDate').value = re ? (re.start_date || '') : new Date().toISOString().slice(0, 10);
                 document.getElementById('recurringExpenseDescription').value = re ? (re.description || '') : '';
                 document.getElementById('recurringExpenseBillableClient').value = re ? (re.billable_client_id || '') : '';
                 document.getElementById('recurringExpenseTaxYearNote').textContent = `Tax year: ${re ? re.tax_year : CURRENT_TAX_YEAR}${re ? '' : ' (assigned automatically on save)'}`;
@@ -1691,6 +1692,7 @@
                     amount: document.getElementById('recurringExpenseAmount').value,
                     frequency: document.getElementById('recurringExpenseFrequency').value,
                     description: document.getElementById('recurringExpenseDescription').value,
+                    start_date: document.getElementById('recurringExpenseStartDate').value,
                     billable_client_id: document.getElementById('recurringExpenseBillableClient').value,
                 });
                 const res = await fetch('', { method: 'POST', body: data }); const json = await res.json();

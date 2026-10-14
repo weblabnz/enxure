@@ -61,6 +61,11 @@ $hasRecurBillableClientCol = $mysqli->query("SELECT 1 FROM information_schema.CO
 if (!$hasRecurBillableClientCol) {
     $mysqli->query("ALTER TABLE enxure_recurring_expenses ADD COLUMN billable_client_id INT DEFAULT NULL, ADD INDEX idx_billable_client_id (billable_client_id)");
 }
+$hasRecurStartDateCol = $mysqli->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enxure_recurring_expenses' AND COLUMN_NAME = 'start_date'")->num_rows > 0;
+if (!$hasRecurStartDateCol) {
+    $mysqli->query("ALTER TABLE enxure_recurring_expenses ADD COLUMN start_date DATE DEFAULT NULL");
+    $mysqli->query("UPDATE enxure_recurring_expenses SET start_date = DATE(created_at) WHERE start_date IS NULL");
+}
 foreach (['enxure_expenses', 'enxure_recurring_expenses'] as $__catTable) {
     $mysqli->query("UPDATE $__catTable SET category = CASE category WHEN 'hosting' THEN 'subscriptions' WHEN 'office' THEN 'stationery' WHEN 'travel' THEN 'motor_vehicle' WHEN 'equipment' THEN 'replacement_equipment' ELSE 'other' END WHERE category IN ('hosting', 'office', 'travel', 'equipment', 'meals', 'professional', 'marketing', 'taxes')");
 }

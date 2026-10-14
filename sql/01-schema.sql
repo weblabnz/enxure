@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS `enxure_recurring_expenses` (
   `is_active`      TINYINT(1) NOT NULL DEFAULT 1,
   `tax_year`       INT NOT NULL DEFAULT 0 COMMENT 'Calendar year the tax year containing this row starts in (see getTaxYear()) — each tax year gets its own row via Duplicate, so attachments never span years',
   `billable_client_id` INT DEFAULT NULL COMMENT 'FK to enxure_clients.id — when set, every occurrence the cron auto-logs from this template is pre-marked billable to this client',
+  `start_date`     DATE DEFAULT NULL COMMENT 'First due date — its day of month (and month, for quarterly/annual) is when each occurrence is logged',
   `created_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_tax_year` (`tax_year`),

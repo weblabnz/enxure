@@ -2,6 +2,12 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.1.1] - 2026-10-14
+
+### Added
+- Recurring expense templates have a First due date. Each occurrence is logged on that day of the month (the 12th for a template first due on the 12th; the matching month for quarterly and annual; the matching weekday for weekly), dated to the due date, and clamped to the last day of shorter months. Templates created before this upgrade take their creation date. New column `enxure_recurring_expenses.start_date` is added automatically on upgrade.
+- New `run_expense_templates` cron action, seeded as a daily 07:15 entry. Recurring expenses were previously only logged by the monthly billing run (default the 3rd), so a template could not follow its own due day. Invoicing stays on its existing schedule. Existing installs need the cron container restarted once to pick up the new entry.
+
 ## [3.1.0] - 2026-10-06
 
 ### Added
