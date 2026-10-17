@@ -2,6 +2,11 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.1.2] - 2026-10-18
+
+### Fixed
+- The invoice/quote header (Detailed and Compact templates) is now a two-cell table instead of a flex row, with the logo at a fixed width (160px Detailed, 100px Compact) and bottom-aligned with the title. The old flex header sized the logo as 20% of the page width and centred it inside a 100px-tall box, so it floated above the title and moved when the window was resized; Gmail also ignores `align-items`. The table resets the template's global table background, shadow and margin so the header does not render as a white card.
+
 ## [3.1.1] - 2026-10-14
 
 ### Added
