@@ -556,11 +556,9 @@ function enxureTestCreateClient($mysqli): array
     return [$mysqli->insert_id, $key];
 }
 
-function enxureTestCreateInvoice($mysqli, string $clientKey, float $amount, string $currency = ''): int
+function enxureTestCreateInvoice($mysqli, string $clientKey, float $amount, string $currency = '', string $invoiceNumber = ''): int
 {
-    // Must end in digits — generateInvoiceNumber()'s "highest number so far"
-    // lookup only matches a trailing run of digits (/(\d+)$/).
-    $invNum = 'ZTEST-' . strtoupper(bin2hex(random_bytes(3))) . random_int(100, 999);
+    $invNum = $invoiceNumber !== '' ? $invoiceNumber : 'ZTEST-' . strtoupper(bin2hex(random_bytes(3))) . random_int(100, 999);
     $stmt = $mysqli->prepare("INSERT INTO enxure_invoices (invoice_number, client_key, client_name, recipient_email, invoice_date, due_date, amount, currency, status) VALUES (?, ?, 'Test Suite Fixture', 'testsuite@invalid.example', NOW(), DATE_ADD(NOW(), INTERVAL 21 DAY), ?, ?, 'sent')");
     $stmt->bind_param("ssds", $invNum, $clientKey, $amount, $currency);
     $stmt->execute();
@@ -861,7 +859,7 @@ function enxureTestDefinitions($mysqli, array $settings): array
         try {
             $clientName = 'Test Suite Fixture';
             $first = generateInvoiceNumber($mysqli, $clientKey, $clientName, $settings);
-            enxureTestCreateInvoice($mysqli, $clientKey, 10.00);
+            enxureTestCreateInvoice($mysqli, $clientKey, 10.00, '', $first);
             $second = generateInvoiceNumber($mysqli, $clientKey, $clientName, $settings);
             enxureAssertTrue($first !== $second, "expected a different number, got '{$first}' both times");
         } finally {

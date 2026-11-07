@@ -2,6 +2,11 @@
 
 All notable changes to enXure are documented here. Dates are when a release was cut, not individual commit dates.
 
+## [3.1.3] - 2026-11-07
+
+### Fixed
+- Test Suite: "Invoice numbering: increases as invoices are added" failed since numbering started ignoring numbers that do not match the template. Its fixture invoice now takes the number generateInvoiceNumber() issued, so the second call returns the next sequence.
+
 ## [3.1.2] - 2026-10-18
 
 ### Fixed
